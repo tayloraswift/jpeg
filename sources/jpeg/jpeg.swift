@@ -229,6 +229,24 @@ struct HuffmanTree
     private 
     let nodes:UnsafeBufferPointer<Node> // count ~= 0 ... 4080 
     
+    var root:UnsafePointer<Node> 
+    {
+        return nodes.baseAddress!
+    }
+    
+    /*
+    static 
+    func assignEntropyCoding<Element>(_ elements:[Element]) 
+        -> ([Int], [Element]) where Element:Hashable
+    {
+        var occurrences:[Element: Int] = [:]
+        for element:Element in elements 
+        {
+            occurrences[element, default: 0] += 1
+        }
+    }
+    */
+    
     private static 
     func precalculateTreeSize(leavesPerLevel:UnsafePointer<UInt8>) 
         -> (leaves:Int, n:Int)?
@@ -266,7 +284,7 @@ struct HuffmanTree
     {
         let leavesPerLevel:UnsafePointer<UInt8> = 
             data.bindMemory(to: UInt8.self, capacity: 16)
-        guard let (n, leaves):(Int, Int) = 
+        guard let (leaves, n):(Int, Int) = 
             precalculateTreeSize(leavesPerLevel: leavesPerLevel) 
         else 
         {
@@ -339,9 +357,9 @@ struct HuffmanTree
             let newInternalNodes:UnsafeMutablePointerRange<Node> = 
                 (internalNodes.upperBound + Int(leavesPerLevel[level]), 
                  internalNodes.upperBound + expectedNodes)
-             // `nodes`     `internalNodes` `newInternalNodes`
-             //    |                   |  |       ||
-             //  [root, A, B, C, D, E, F, G, H] + []
+            // `nodes`     `internalNodes` `newInternalNodes`
+            //    |                   |  |       ||
+            //  [root, A, B, C, D, E, F, G, H] + []
             var leftChild:UnsafeMutablePointer<Node> = newInternalNodes.upperBound
             
             for internalIndex:Int in Int(leavesPerLevel[level]) ..< expectedNodes 
@@ -356,6 +374,13 @@ struct HuffmanTree
         
         return HuffmanTree(coefficientClass: coefficientClass, 
             nodes: UnsafeBufferPointer<Node>(start: nodes, count: n))
+    }
+    
+    func deallocate() 
+    {
+        // this will be fixed with SE-0184
+        UnsafeMutablePointer(mutating: self.nodes.baseAddress!)
+            .deallocate(capacity: self.nodes.count)
     }
 }
 
@@ -449,13 +474,4 @@ func decode(path:String) throws
     
     let properties = try JPEGProperties.read(from: stream) 
     print(properties)
-}
-
-do 
-{
-    try decode(path: "../../tests/oscardelarenta.jpg")
-}
-catch 
-{
-    print(error)
 }
