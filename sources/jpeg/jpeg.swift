@@ -152,7 +152,7 @@ func readUInt16(from stream:UnsafeMutablePointer<FILE>) throws -> UInt16
 
 // reads length block and allocates output buffer
 func readMarkerData(from stream:UnsafeMutablePointer<FILE>)
-    throws -> UnsafeMutableRawBufferPointer
+    throws -> UnsafeRawBufferPointer
 {
     let dest =
         UnsafeMutableRawBufferPointer.allocate(count:
@@ -164,7 +164,7 @@ func readMarkerData(from stream:UnsafeMutablePointer<FILE>)
         throw JPEGReadError.IncompleteMarkerError
     }
 
-    return dest
+    return UnsafeRawBufferPointer(dest)
 }
 
 func findNextMarker(stream:UnsafeMutablePointer<FILE>) throws -> UInt8
@@ -221,11 +221,11 @@ enum QuantizationTable
         {
         case .q8(let buffer):
             buffer.deinitialize(count: 64)
-            buffer.deallocate(capacity: 64)
+            buffer.deallocate(capacity: -1)
 
         case .q16(let buffer):
             buffer.deinitialize(count: 64)
-            buffer.deallocate(capacity: 64)
+            buffer.deallocate(capacity: -1)
         }
     }
 }
@@ -398,13 +398,15 @@ struct HuffmanTree
 
     func deallocate()
     {
+        UnsafeMutablePointer(mutating: self.nodes.baseAddress!)
+            .deinitialize(count: self.nodes.count)
         // this will be fixed with SE-0184
         UnsafeMutablePointer(mutating: self.nodes.baseAddress!)
-            .deallocate(capacity: self.nodes.count)
+            .deallocate(capacity: -1)
     }
 }
 
-struct Decoder
+struct Tables
 {
     // these must be managed manually or they will leak
     private
@@ -414,7 +416,7 @@ struct Decoder
     mutating
     func updateQuantizationTables(from stream:UnsafeMutablePointer<FILE>) throws
     {
-        let tableData:UnsafeMutableRawBufferPointer = try readMarkerData(from: stream)
+        let tableData:UnsafeRawBufferPointer = try readMarkerData(from: stream)
         defer
         {
             tableData.deallocate()
@@ -471,12 +473,168 @@ struct Decoder
     }
 }
 
+extension UnsafeRawBufferPointer
+{
+    func loadBigEndian<I>(fromByteOffset offset:Int, as _:I.Type)
+        -> I where I:FixedWidthInteger
+    {
+        var i = I()
+        withUnsafeMutablePointer(to: &i)
+        {
+            UnsafeMutableRawPointer($0).copyBytes(from: self.baseAddress! + offset,
+                count: MemoryLayout<I>.size)
+        }
+
+        return I(bigEndian: i)
+    }
+}
+
+
+// internal facing FrameHeader struct
+struct FrameHeader
+{
+    enum Encoding
+    {
+        case baselineDCT,
+             extendedDCT,
+             progressiveDCT
+    }
+
+    struct Component
+    {
+        private
+        let _sampleFactors:UInt8
+
+        let qtable:UInt8
+
+        var sampleFactors:(x:UInt8, y:UInt8)
+        {
+            return (_sampleFactors >> 4, _sampleFactors & 0x0f)
+        }
+
+        init?(sampleFactors:UInt8, qtable:UInt8)
+        {
+            guard 1 ... 4 ~= sampleFactors >> 4,
+                  1 ... 4 ~= sampleFactors & 0x0f,
+                  0 ... 3 ~= qtable
+            else
+            {
+                return nil
+            }
+
+            self._sampleFactors = sampleFactors
+            self.qtable = qtable
+        }
+    }
+
+    let encoding:Encoding,
+        precision:Int,
+        width:Int,
+        height:Int,
+        components:UnsafeBufferPointer<Component>
+
+    let indexMap:UnsafePointer<Int> // always 256 Ints long, -1 signifies hole
+
+    func deallocate()
+    {
+        UnsafeMutablePointer(mutating: self.components.baseAddress!)
+            .deinitialize(count: self.components.count)
+        UnsafeMutablePointer(mutating: self.components.baseAddress!)
+            .deallocate(capacity: -1)
+        UnsafeMutablePointer(mutating: self.indexMap)
+            .deinitialize(count: 256)
+        UnsafeMutablePointer(mutating: self.indexMap)
+            .deallocate(capacity: -1)
+    }
+
+    static
+    func create(data:UnsafeRawBufferPointer, encoding:Encoding) -> FrameHeader?
+    {
+        guard data.count >= 8
+        else
+        {
+            return nil
+        }
+
+        let precision = Int(data.load(fromByteOffset: 0, as: UInt8.self))
+        switch encoding
+        {
+        case .baselineDCT:
+            guard precision == 8
+            else
+            {
+                return nil
+            }
+
+        case .extendedDCT, .progressiveDCT:
+            guard precision == 8 || precision == 12
+            else
+            {
+                return nil
+            }
+        }
+
+        let width  = Int(data.loadBigEndian(fromByteOffset: 1, as: UInt16.self)),
+            height = Int(data.loadBigEndian(fromByteOffset: 3, as: UInt16.self))
+
+        let nf     = Int(data.load(fromByteOffset: 5, as: UInt8.self))
+
+        if encoding == .progressiveDCT
+        {
+            guard 1 ... 4 ~= nf
+            else
+            {
+                return nil
+            }
+        }
+
+        guard 3 * nf + 8 == data.count
+        else
+        {
+            return nil
+        }
+
+        let components = UnsafeMutablePointer<Component>.allocate(capacity: nf),
+            indexMap   = UnsafeMutablePointer<Int>.allocate(capacity: 256)
+            indexMap.initialize(to: -1, count: 256)
+        for i:Int in 0 ..< nf
+        {
+            let ci = Int(data.load(fromByteOffset: 8 + 3 * i, as: UInt8.self))
+            indexMap[ci] = i
+            guard let component = Component(
+                sampleFactors: data.load(fromByteOffset:  9 + 3 * i, as: UInt8.self),
+                qtable:        data.load(fromByteOffset: 10 + 3 * i, as: UInt8.self))
+            else
+            {
+                components.deinitialize(count: i)
+                components.deallocate(capacity: -1)
+                indexMap.deinitialize(count: 256)
+                indexMap.deallocate(capacity: -1)
+                return nil
+            }
+
+            (components + i).initialize(to: component)
+        }
+
+        return FrameHeader(encoding: encoding,
+            precision:  precision,
+            width:      width,
+            height:     height,
+            components: UnsafeBufferPointer(start: components, count: nf),
+            indexMap:   indexMap)
+    }
+}
+
 func decode(path:String) throws
 {
     guard let stream:UnsafeMutablePointer<FILE> = fopen(resolve_path(path), "rb")
     else
     {
         throw JPEGReadError.FileError(resolve_path(path))
+    }
+    defer
+    {
+        fclose(stream)
     }
 
     // start of image marker
@@ -494,15 +652,30 @@ func decode(path:String) throws
     }
 
     let properties = try JPEGProperties.read(from: stream)
-    print(properties)
+    let frameHeader:FrameHeader?
 
-    var decoder = Decoder()
-    switch try findNextMarker(stream: stream)
+    var tables = Tables()
+    outer: while true
     {
-    case 0xdb: // define quantization table(s)
-        try decoder.updateQuantizationTables(from: stream)
+        let marker:UInt8 = try findNextMarker(stream: stream)
+        switch marker
+        {
+        case 0xdb: // define quantization table(s)
+            try tables.updateQuantizationTables(from: stream)
 
-    default:
-        break
+        case 0xc2: // progressive DCT
+            let data:UnsafeRawBufferPointer = try readMarkerData(from: stream)
+            defer
+            {
+                data.deallocate()
+            }
+
+            frameHeader = FrameHeader.create(data: data, encoding: .progressiveDCT)
+            break outer
+
+        default:
+            print("unrecognized: \(String(marker, radix: 16))")
+            break outer
+        }
     }
 }
