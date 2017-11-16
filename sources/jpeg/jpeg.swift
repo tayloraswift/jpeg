@@ -14,102 +14,6 @@ enum JPEGReadError:Error
          InvalidScanHeader
 }
 
-func resolve_path(_ path:String) -> String
-{
-    guard let first:Character = path.first
-    else
-    {
-        return path
-    }
-
-    if first == "~"
-    {
-        let expanded:String.SubSequence = path.dropFirst()
-        if  expanded.isEmpty ||
-            expanded.first == "/"
-        {
-            return String(cString: getenv("HOME")) + expanded
-        }
-
-        return path
-    }
-
-    return path
-}
-
-func match(stream:UnsafeMutablePointer<FILE>, against expected:[UInt8]) -> Bool
-{
-    let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: expected.count)
-    defer
-    {
-        buffer.deallocate(capacity: -1)
-    }
-
-    guard fread(buffer, 1, expected.count, stream) == expected.count
-    else
-    {
-        return false;
-    }
-
-    for i:Int in 0 ..< expected.count
-    {
-        guard buffer[i] == expected[i]
-        else
-        {
-            return false
-        }
-    }
-
-    return true
-}
-
-func readUInt8(from stream:UnsafeMutablePointer<FILE>) throws -> UInt8
-{
-    var uint8:UInt8 = 0
-    return try withUnsafeMutablePointer(to: &uint8)
-    {
-        guard fread($0, 1, 1, stream) == 1
-        else
-        {
-            throw JPEGReadError.IncompleteMarkerError
-        }
-
-        return $0.pointee
-    }
-}
-
-func readUInt16(from stream:UnsafeMutablePointer<FILE>) throws -> UInt16
-{
-    var uint16:UInt16 = 0 // allocate this on the stack why not
-    return try withUnsafeMutablePointer(to: &uint16)
-    {
-        guard fread($0, 2, 1, stream) == 1
-        else
-        {
-            throw JPEGReadError.IncompleteMarkerError
-        }
-
-        return UInt16(bigEndian: $0.pointee)
-    }
-}
-
-// reads length block and allocates output buffer
-func readMarkerData(from stream:UnsafeMutablePointer<FILE>)
-    throws -> UnsafeRawBufferPointer
-{
-    let dest =
-        UnsafeMutableRawBufferPointer.allocate(count:
-            Int(try readUInt16(from: stream)) - 2)
-
-    guard fread(dest.baseAddress, 1, dest.count, stream) == dest.count
-    else
-    {
-        throw JPEGReadError.IncompleteMarkerError
-    }
-
-    return UnsafeRawBufferPointer(dest)
-}
-
 struct UnsafeRawVector
 {
     private
@@ -164,6 +68,103 @@ struct UnsafeRawVector
         self.buffer[self.count] = byte
         self.count += 1
     }
+}
+
+func resolve_path(_ path:String) -> String
+{
+    guard let first:Character = path.first
+    else
+    {
+        return path
+    }
+
+    if first == "~"
+    {
+        let expanded:String.SubSequence = path.dropFirst()
+        if  expanded.isEmpty ||
+            expanded.first == "/"
+        {
+            return String(cString: getenv("HOME")) + expanded
+        }
+
+        return path
+    }
+
+    return path
+}
+
+func match(stream:UnsafeMutablePointer<FILE>, against expected:[UInt8]) -> Bool
+{
+    let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: expected.count)
+    defer
+    {
+        buffer.deallocate(capacity: -1)
+    }
+
+    guard fread(buffer, 1, expected.count, stream) == expected.count
+    else
+    {
+        return false;
+    }
+
+    for i:Int in 0 ..< expected.count
+    {
+        guard buffer[i] == expected[i]
+        else
+        {
+            return false
+        }
+    }
+
+    return true
+}
+
+// replace with fgetc
+func readUInt8(from stream:UnsafeMutablePointer<FILE>) throws -> UInt8
+{
+    var uint8:UInt8 = 0
+    return try withUnsafeMutablePointer(to: &uint8)
+    {
+        guard fread($0, 1, 1, stream) == 1
+        else
+        {
+            throw JPEGReadError.IncompleteMarkerError
+        }
+
+        return $0.pointee
+    }
+}
+
+func readBigEndian<I>(from stream:UnsafeMutablePointer<FILE>, as:I.Type) throws -> I
+    where I:FixedWidthInteger
+{
+    var i:I = I()
+    return try withUnsafeMutablePointer(to: &i)
+    {
+        guard fread($0, MemoryLayout<I>.size, 1, stream) == 1
+        else
+        {
+            throw JPEGReadError.IncompleteMarkerError
+        }
+
+        return I(bigEndian: $0.pointee)
+    }
+}
+
+// reads length block and allocates output buffer
+func readMarkerData(from stream:UnsafeMutablePointer<FILE>)
+    throws -> UnsafeRawBufferPointer
+{
+    let length:Int = Int(try readBigEndian(from: stream, as: UInt16.self)) - 2
+    let dest = UnsafeMutableRawBufferPointer.allocate(count: length)
+
+    guard fread(dest.baseAddress, 1, length, stream) == length
+    else
+    {
+        throw JPEGReadError.IncompleteMarkerError
+    }
+
+    return UnsafeRawBufferPointer(dest)
 }
 
 func readNextMarker(from stream:UnsafeMutablePointer<FILE>) throws -> UInt8
@@ -453,7 +454,7 @@ struct JFIF
     private //todo: rewrite this with buffers and without throws
     init(stream:UnsafeMutablePointer<FILE>) throws
     {
-        let length:UInt16 = try readUInt16(from: stream)
+        let length:UInt16 = try readBigEndian(from: stream, as: UInt16.self)
         guard length >= 16
         else
         {
@@ -481,7 +482,8 @@ struct JFIF
         }
 
         self.densityUnit = densityUnit
-        self.density = (try readUInt16(from: stream), try readUInt16(from: stream))
+        self.density = (try readBigEndian(from: stream, as: UInt16.self),
+                        try readBigEndian(from: stream, as: UInt16.self))
 
         // ignore the thumbnail data
         guard fseek(stream, Int(length) - 14, SEEK_CUR) == 0
