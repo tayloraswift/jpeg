@@ -135,8 +135,8 @@ func readUInt8(from stream:UnsafeMutablePointer<FILE>) throws -> UInt8
     }
 }
 
-func readBigEndian<I>(from stream:UnsafeMutablePointer<FILE>, as:I.Type) throws -> I
-    where I:FixedWidthInteger
+func readBigEndian<I>(from stream:UnsafeMutablePointer<FILE>, as:I.Type) throws
+    -> I where I:FixedWidthInteger
 {
     var i:I = I()
     return try withUnsafeMutablePointer(to: &i)
@@ -872,6 +872,11 @@ func readMCUs(from stream:UnsafeMutablePointer<FILE>, marker:inout UInt8) throws
             marker = try readUInt8(from: stream)
             if marker != 0x00
             {
+                while marker == 0xff
+                {
+                    marker = try readUInt8(from: stream)
+                }
+
                 return vector
             }
         }
