@@ -7,68 +7,11 @@ enum JPEGReadError:Error
          MissingJFIFSegment,
          IncompleteMarkerError,
          StructuralError,
-         SyntaxError(String)
-}
-
-struct JPEGProperties
-{
-    enum DensityUnit:UInt8
-    {
-        case none = 0,
-             dpi  = 1,
-             dpcm = 2
-    }
-
-    let version:(major:UInt8, minor:UInt8),
-        densityUnit:DensityUnit,
-        density:(x:UInt16, y:UInt16)
-
-    static
-    func read(from stream:UnsafeMutablePointer<FILE>) throws -> JPEGProperties
-    {
-        return try JPEGProperties(stream: stream)
-    }
-
-    private
-    init(stream:UnsafeMutablePointer<FILE>) throws
-    {
-        let length:UInt16 = try readUInt16(from: stream)
-        guard length >= 16
-        else
-        {
-            throw JPEGReadError.SyntaxError("JFIF marker length \(length) is less than 16")
-        }
-
-        guard match(stream: stream, against: [0x4a, 0x46, 0x49, 0x46, 0x00])
-        else
-        {
-            throw JPEGReadError.SyntaxError("missing 'JFIF\\0' signature")
-        }
-
-        self.version = (try readUInt8(from: stream), try readUInt8(from: stream))
-
-        guard version.major == 1, 0 ... 2 ~= version.minor
-        else
-        {
-            throw JPEGReadError.SyntaxError("bad JFIF version number (expected 1.0 ... 1.2, got \(version.major).\(version.minor)")
-        }
-
-        guard let densityUnit = DensityUnit(rawValue: try readUInt8(from: stream))
-        else
-        {
-            throw JPEGReadError.SyntaxError("invalid JFIF density unit")
-        }
-
-        self.densityUnit = densityUnit
-        self.density = (try readUInt16(from: stream), try readUInt16(from: stream))
-
-        // ignore the thumbnail data
-        guard fseek(stream, Int(length) - 14, SEEK_CUR) == 0
-        else
-        {
-            throw JPEGReadError.IncompleteMarkerError
-        }
-    }
+         SyntaxError(String),
+         MissingFrameHeader,
+         InvalidFrameHeader,
+         MissingScanHeader,
+         InvalidScanHeader
 }
 
 func resolve_path(_ path:String) -> String
@@ -167,7 +110,63 @@ func readMarkerData(from stream:UnsafeMutablePointer<FILE>)
     return UnsafeRawBufferPointer(dest)
 }
 
-func findNextMarker(stream:UnsafeMutablePointer<FILE>) throws -> UInt8
+struct UnsafeRawVector
+{
+    private
+    var buffer = UnsafeMutableRawBufferPointer(start: nil, count: 0)
+
+    internal private(set)
+    var count:Int = 0
+
+    private
+    var capacity:Int
+    {
+        return self.buffer.count
+    }
+
+    // don’t try to call `deallocate()` on this, it will work (after SE-0184), but
+    // it is not well-defined. keep the original UnsafeRawVector object around
+    // and call `deallocate()` on that instead.
+    var dataView:UnsafeRawBufferPointer
+    {
+        return UnsafeRawBufferPointer(start: self.buffer.baseAddress, count: self.count)
+    }
+
+    subscript(i:Int) -> UInt8
+    {
+        get
+        {
+            return self.buffer[i]
+        }
+        set(v)
+        {
+            self.buffer[i] = v
+        }
+    }
+
+    func deallocate()
+    {
+        self.buffer.deallocate()
+    }
+
+    mutating
+    func append(_ byte:UInt8)
+    {
+        if self.count == self.capacity
+        {
+            let newCapacity:Int = max(1, self.capacity << 1)
+            let newBuffer = UnsafeMutableRawBufferPointer.allocate(count: newCapacity)
+            newBuffer.copyBytes(from: self.buffer)
+            self.buffer.deallocate()
+            self.buffer = newBuffer
+        }
+
+        self.buffer[self.count] = byte
+        self.count += 1
+    }
+}
+
+func readNextMarker(from stream:UnsafeMutablePointer<FILE>) throws -> UInt8
 {
     guard try readUInt8(from: stream) == 0xff
     else
@@ -406,14 +405,388 @@ struct HuffmanTree
     }
 }
 
-struct Tables
+extension UnsafeRawBufferPointer
 {
+    func loadBigEndian<I>(fromByteOffset offset:Int, as _:I.Type)
+        -> I where I:FixedWidthInteger
+    {
+        var i = I()
+        withUnsafeMutablePointer(to: &i)
+        {
+            UnsafeMutableRawPointer($0).copyBytes(from: self.baseAddress! + offset,
+                count: MemoryLayout<I>.size)
+        }
+
+        return I(bigEndian: i)
+    }
+}
+
+struct JFIF
+{
+    enum DensityUnit:UInt8
+    {
+        case none = 0,
+             dpi  = 1,
+             dpcm = 2
+    }
+
+    let version:(major:UInt8, minor:UInt8),
+        densityUnit:DensityUnit,
+        density:(x:UInt16, y:UInt16)
+
+    static
+    func read(from stream:UnsafeMutablePointer<FILE>, marker:inout UInt8)
+        throws -> JFIF
+    {
+        guard marker == 0xe0
+        else
+        {
+            throw JPEGReadError.MissingJFIFSegment
+        }
+
+        // todo: this rewrite with buffers and this will no longer be necessary
+        let ret = try JFIF(stream: stream)
+        marker  = try readNextMarker(from: stream)
+        return ret
+    }
+
+    private //todo: rewrite this with buffers and without throws
+    init(stream:UnsafeMutablePointer<FILE>) throws
+    {
+        let length:UInt16 = try readUInt16(from: stream)
+        guard length >= 16
+        else
+        {
+            throw JPEGReadError.SyntaxError("JFIF marker length \(length) is less than 16")
+        }
+
+        guard match(stream: stream, against: [0x4a, 0x46, 0x49, 0x46, 0x00])
+        else
+        {
+            throw JPEGReadError.SyntaxError("missing 'JFIF\\0' signature")
+        }
+
+        self.version = (try readUInt8(from: stream), try readUInt8(from: stream))
+
+        guard version.major == 1, 0 ... 2 ~= version.minor
+        else
+        {
+            throw JPEGReadError.SyntaxError("bad JFIF version number (expected 1.0 ... 1.2, got \(version.major).\(version.minor)")
+        }
+
+        guard let densityUnit = DensityUnit(rawValue: try readUInt8(from: stream))
+        else
+        {
+            throw JPEGReadError.SyntaxError("invalid JFIF density unit")
+        }
+
+        self.densityUnit = densityUnit
+        self.density = (try readUInt16(from: stream), try readUInt16(from: stream))
+
+        // ignore the thumbnail data
+        guard fseek(stream, Int(length) - 14, SEEK_CUR) == 0
+        else
+        {
+            throw JPEGReadError.IncompleteMarkerError
+        }
+    }
+}
+
+struct FrameHeader
+{
+    enum Encoding
+    {
+        case baselineDCT,
+             extendedDCT,
+             progressiveDCT
+    }
+
+    struct Component
+    {
+        private
+        let _sampleFactors:UInt8
+
+        let qtable:UInt8
+
+        var sampleFactors:(x:UInt8, y:UInt8)
+        {
+            return (_sampleFactors >> 4, _sampleFactors & 0x0f)
+        }
+
+        init?(sampleFactors:UInt8, qtable:UInt8)
+        {
+            guard 1 ... 4 ~= sampleFactors >> 4,
+                  1 ... 4 ~= sampleFactors & 0x0f,
+                  0 ... 3 ~= qtable
+            else
+            {
+                return nil
+            }
+
+            self._sampleFactors = sampleFactors
+            self.qtable = qtable
+        }
+    }
+
+    let encoding:Encoding,
+        precision:Int,
+        width:Int
+
+    internal private(set)
+    var height:Int
+
+    let components:UnsafeBufferPointer<Component>
+
+    let indexMap:UnsafePointer<Int> // always 256 Ints long, -1 signifies hole
+
+    func deallocate()
+    {
+        UnsafeMutablePointer(mutating: self.components.baseAddress!)
+            .deinitialize(count: self.components.count)
+        UnsafeMutablePointer(mutating: self.components.baseAddress!)
+            .deallocate(capacity: -1)
+        UnsafeMutablePointer(mutating: self.indexMap)
+            .deinitialize(count: 256)
+        UnsafeMutablePointer(mutating: self.indexMap)
+            .deallocate(capacity: -1)
+    }
+
+    static
+    func read(from stream:UnsafeMutablePointer<FILE>, marker:inout UInt8) throws
+        -> FrameHeader?
+    {
+        let data:UnsafeRawBufferPointer,
+            encoding:Encoding
+
+        switch marker
+        {
+        case 0xc0:
+            data     = try readMarkerData(from: stream)
+            encoding = .baselineDCT
+
+        case 0xc1:
+            data     = try readMarkerData(from: stream)
+            encoding = .extendedDCT
+
+        case 0xc2:
+            data     = try readMarkerData(from: stream)
+            encoding = .progressiveDCT
+
+        case 0xc3:
+            print("unsupported")
+            return nil
+
+        default:
+            throw JPEGReadError.MissingFrameHeader
+        }
+
+        defer
+        {
+            data.deallocate()
+        }
+
+        marker = try readNextMarker(from: stream)
+        return create(from: data, encoding: encoding)
+    }
+
+    private static
+    func create(from data:UnsafeRawBufferPointer, encoding:Encoding) -> FrameHeader?
+    {
+        guard data.count >= 8
+        else
+        {
+            return nil
+        }
+
+        let precision = Int(data.load(fromByteOffset: 0, as: UInt8.self))
+        switch encoding
+        {
+        case .baselineDCT:
+            guard precision == 8
+            else
+            {
+                return nil
+            }
+
+        case .extendedDCT, .progressiveDCT:
+            guard precision == 8 || precision == 12
+            else
+            {
+                return nil
+            }
+        }
+
+        let width  = Int(data.loadBigEndian(fromByteOffset: 1, as: UInt16.self)),
+            height = Int(data.loadBigEndian(fromByteOffset: 3, as: UInt16.self))
+
+        let nf     = Int(data.load(fromByteOffset: 5, as: UInt8.self))
+
+        if encoding == .progressiveDCT
+        {
+            guard 1 ... 4 ~= nf
+            else
+            {
+                return nil
+            }
+        }
+
+        guard 3 * nf + 6 == data.count
+        else
+        {
+            return nil
+        }
+
+        let components = UnsafeMutablePointer<Component>.allocate(capacity: nf),
+            indexMap   = UnsafeMutablePointer<Int>.allocate(capacity: 256)
+            indexMap.initialize(to: -1, count: 256)
+        for i:Int in 0 ..< nf
+        {
+            let ci = Int(data.load(fromByteOffset: 6 + 3 * i, as: UInt8.self))
+            indexMap[ci] = i
+            guard let component = Component(
+                sampleFactors: data.load(fromByteOffset: 7 + 3 * i, as: UInt8.self),
+                qtable:        data.load(fromByteOffset: 8 + 3 * i, as: UInt8.self))
+            else
+            {
+                components.deinitialize(count: i)
+                components.deallocate(capacity: -1)
+                indexMap.deinitialize(count: 256)
+                indexMap.deallocate(capacity: -1)
+                return nil
+            }
+
+            (components + i).initialize(to: component)
+        }
+
+        return FrameHeader(encoding: encoding,
+            precision:  precision,
+            width:      width,
+            height:     height,
+            components: UnsafeBufferPointer(start: components, count: nf),
+            indexMap:   indexMap)
+    }
+
+    mutating
+    func updateHeight(from stream:UnsafeMutablePointer<FILE>, marker:inout UInt8)
+        throws
+    {
+        guard marker == 0xdc
+        else
+        {
+            return
+        }
+
+        let data:UnsafeRawBufferPointer = try readMarkerData(from: stream)
+        defer
+        {
+            data.deallocate()
+        }
+
+        guard data.count == 2
+        else
+        {
+            throw JPEGReadError.SyntaxError("define number of lines segment has length \(data.count) but it should be 2")
+        }
+
+        self.height = Int(data.loadBigEndian(fromByteOffset: 0, as: UInt16.self))
+    }
+}
+
+struct ScanHeader
+{
+    // the marker parameter is not a reference because this function does not
+    // update the `marker` variable because scan headers are followed by MCU data
+    static
+    func read(from stream:UnsafeMutablePointer<FILE>, marker:UInt8) throws
+        -> ScanHeader?
+    {
+        guard marker == 0xda
+        else
+        {
+            throw JPEGReadError.MissingScanHeader
+        }
+
+        let data:UnsafeRawBufferPointer = try readMarkerData(from: stream)
+        defer
+        {
+            data.deallocate()
+        }
+
+        return create(from: data)
+    }
+
+    private static
+    func create(from _:UnsafeRawBufferPointer) -> ScanHeader?
+    {
+        return ScanHeader()
+    }
+}
+
+struct Context
+{
+    var restartInterval:Int = 0
+
     // these must be managed manually or they will leak
     private
     var qtables:(QuantizationTable?, QuantizationTable?,
                  QuantizationTable?, QuantizationTable?) = (nil, nil, nil, nil)
 
-    mutating
+    func deallocate()
+    {
+        qtables.0?.deallocate()
+        qtables.1?.deallocate()
+        qtables.2?.deallocate()
+        qtables.3?.deallocate()
+    }
+
+    // restart is a naked marker so it takes no `stream` parameter. just like
+    // ScanHeader.read(from:marker:) this function does not update the `marker`
+    // variable because restart markers are followed by MCU data
+    func restart(marker:UInt8) -> Bool
+    {
+        return 0xd0 ... 0xd7 ~= marker
+    }
+
+    mutating // todo: rewrite with buffers and no throws
+    func update(from stream:UnsafeMutablePointer<FILE>, marker:inout UInt8) throws
+    {
+        while true
+        {
+            switch marker
+            {
+            case 0xdb: // define quantization table(s)
+                print("quantization table")
+                try self.updateQuantizationTables(from: stream)
+
+            case 0xc4: // define huffman table(s)
+                print("huffman table")
+                try self.updateHuffmanTrees(from: stream)
+
+            case 0xdd: // define restart interval
+                print("DRI")
+                let tableData:UnsafeRawBufferPointer = try readMarkerData(from: stream)
+                defer
+                {
+                    tableData.deallocate()
+                }
+
+            case 0xfe: // comment
+                print("comment")
+                let tableData:UnsafeRawBufferPointer = try readMarkerData(from: stream)
+                defer
+                {
+                    tableData.deallocate()
+                }
+
+            default:
+                return
+            }
+
+            marker = try readNextMarker(from: stream)
+        }
+    }
+
+    private mutating
     func updateQuantizationTables(from stream:UnsafeMutablePointer<FILE>) throws
     {
         let tableData:UnsafeRawBufferPointer = try readMarkerData(from: stream)
@@ -471,157 +844,38 @@ struct Tables
             }
         }
     }
-}
 
-extension UnsafeRawBufferPointer
-{
-    func loadBigEndian<I>(fromByteOffset offset:Int, as _:I.Type)
-        -> I where I:FixedWidthInteger
+    private mutating
+    func updateHuffmanTrees(from stream:UnsafeMutablePointer<FILE>) throws
     {
-        var i = I()
-        withUnsafeMutablePointer(to: &i)
+        let tableData:UnsafeRawBufferPointer = try readMarkerData(from: stream)
+        defer
         {
-            UnsafeMutableRawPointer($0).copyBytes(from: self.baseAddress! + offset,
-                count: MemoryLayout<I>.size)
+            tableData.deallocate()
         }
-
-        return I(bigEndian: i)
     }
 }
 
-
-// internal facing FrameHeader struct
-struct FrameHeader
+func readMCUs(from stream:UnsafeMutablePointer<FILE>, marker:inout UInt8) throws
+    -> UnsafeRawVector
 {
-    enum Encoding
+    var vector     = UnsafeRawVector(),
+        byte:UInt8 = try readUInt8(from: stream)
+    while true
     {
-        case baselineDCT,
-             extendedDCT,
-             progressiveDCT
-    }
-
-    struct Component
-    {
-        private
-        let _sampleFactors:UInt8
-
-        let qtable:UInt8
-
-        var sampleFactors:(x:UInt8, y:UInt8)
+        if byte == 0xff
         {
-            return (_sampleFactors >> 4, _sampleFactors & 0x0f)
-        }
-
-        init?(sampleFactors:UInt8, qtable:UInt8)
-        {
-            guard 1 ... 4 ~= sampleFactors >> 4,
-                  1 ... 4 ~= sampleFactors & 0x0f,
-                  0 ... 3 ~= qtable
-            else
+            // this is the only exit point from this function so why not reuse
+            // the `inout marker` variable
+            marker = try readUInt8(from: stream)
+            if marker != 0x00
             {
-                return nil
-            }
-
-            self._sampleFactors = sampleFactors
-            self.qtable = qtable
-        }
-    }
-
-    let encoding:Encoding,
-        precision:Int,
-        width:Int,
-        height:Int,
-        components:UnsafeBufferPointer<Component>
-
-    let indexMap:UnsafePointer<Int> // always 256 Ints long, -1 signifies hole
-
-    func deallocate()
-    {
-        UnsafeMutablePointer(mutating: self.components.baseAddress!)
-            .deinitialize(count: self.components.count)
-        UnsafeMutablePointer(mutating: self.components.baseAddress!)
-            .deallocate(capacity: -1)
-        UnsafeMutablePointer(mutating: self.indexMap)
-            .deinitialize(count: 256)
-        UnsafeMutablePointer(mutating: self.indexMap)
-            .deallocate(capacity: -1)
-    }
-
-    static
-    func create(data:UnsafeRawBufferPointer, encoding:Encoding) -> FrameHeader?
-    {
-        guard data.count >= 8
-        else
-        {
-            return nil
-        }
-
-        let precision = Int(data.load(fromByteOffset: 0, as: UInt8.self))
-        switch encoding
-        {
-        case .baselineDCT:
-            guard precision == 8
-            else
-            {
-                return nil
-            }
-
-        case .extendedDCT, .progressiveDCT:
-            guard precision == 8 || precision == 12
-            else
-            {
-                return nil
+                return vector
             }
         }
 
-        let width  = Int(data.loadBigEndian(fromByteOffset: 1, as: UInt16.self)),
-            height = Int(data.loadBigEndian(fromByteOffset: 3, as: UInt16.self))
-
-        let nf     = Int(data.load(fromByteOffset: 5, as: UInt8.self))
-
-        if encoding == .progressiveDCT
-        {
-            guard 1 ... 4 ~= nf
-            else
-            {
-                return nil
-            }
-        }
-
-        guard 3 * nf + 8 == data.count
-        else
-        {
-            return nil
-        }
-
-        let components = UnsafeMutablePointer<Component>.allocate(capacity: nf),
-            indexMap   = UnsafeMutablePointer<Int>.allocate(capacity: 256)
-            indexMap.initialize(to: -1, count: 256)
-        for i:Int in 0 ..< nf
-        {
-            let ci = Int(data.load(fromByteOffset: 8 + 3 * i, as: UInt8.self))
-            indexMap[ci] = i
-            guard let component = Component(
-                sampleFactors: data.load(fromByteOffset:  9 + 3 * i, as: UInt8.self),
-                qtable:        data.load(fromByteOffset: 10 + 3 * i, as: UInt8.self))
-            else
-            {
-                components.deinitialize(count: i)
-                components.deallocate(capacity: -1)
-                indexMap.deinitialize(count: 256)
-                indexMap.deallocate(capacity: -1)
-                return nil
-            }
-
-            (components + i).initialize(to: component)
-        }
-
-        return FrameHeader(encoding: encoding,
-            precision:  precision,
-            width:      width,
-            height:     height,
-            components: UnsafeBufferPointer(start: components, count: nf),
-            indexMap:   indexMap)
+        vector.append(byte)
+        byte = try readUInt8(from: stream)
     }
 }
 
@@ -644,38 +898,58 @@ func decode(path:String) throws
         throw JPEGReadError.FiletypeError
     }
 
-    // JFIF marker
-    guard match(stream: stream, against: [0xff, 0xe0])
+    var context = Context()
+    defer
+    {
+        context.deallocate()
+    }
+
+    var marker:UInt8 = try readNextMarker(from: stream)
+    let jfif         = try JFIF.read(from: stream, marker: &marker)
+
+    try context.update(from: stream, marker: &marker)
+    guard var frameHeader = try FrameHeader.read(from: stream, marker: &marker)
     else
     {
-        throw JPEGReadError.MissingJFIFSegment
+        throw JPEGReadError.InvalidFrameHeader
     }
 
-    let properties = try JPEGProperties.read(from: stream)
-    let frameHeader:FrameHeader?
+    var firstScan:Bool = true
 
-    var tables = Tables()
-    outer: while true
+    while marker != 0xd9 // end of image
     {
-        let marker:UInt8 = try findNextMarker(stream: stream)
-        switch marker
+        try context.update(from: stream, marker: &marker)
+        guard let scanHeader = try ScanHeader.read(from: stream, marker: marker)
+        else
         {
-        case 0xdb: // define quantization table(s)
-            try tables.updateQuantizationTables(from: stream)
+            throw JPEGReadError.InvalidScanHeader
+        }
 
-        case 0xc2: // progressive DCT
-            let data:UnsafeRawBufferPointer = try readMarkerData(from: stream)
-            defer
+        let mcuVector:UnsafeRawVector = try readMCUs(from: stream, marker: &marker)
+        defer
+        {
+            mcuVector.deallocate()
+        }
+
+        if context.restartInterval > 0
+        {
+            while context.restart(marker: marker)
             {
-                data.deallocate()
+                let mcuVector:UnsafeRawVector =
+                    try readMCUs(from: stream, marker: &marker)
+                defer
+                {
+                    mcuVector.deallocate()
+                }
             }
+        }
 
-            frameHeader = FrameHeader.create(data: data, encoding: .progressiveDCT)
-            break outer
-
-        default:
-            print("unrecognized: \(String(marker, radix: 16))")
-            break outer
+        if firstScan
+        {
+            try frameHeader.updateHeight(from: stream, marker: &marker)
+            firstScan = false
         }
     }
+
+    // the while loop already scanned the EOI marker
 }
