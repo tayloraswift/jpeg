@@ -183,13 +183,13 @@ func readNextMarker(from stream:UnsafeMutablePointer<FILE>) throws -> UInt8
     }
 }
 
-enum QuantizationTable
+enum UnsafeQuantizationTable
 {
     case q8 (UnsafeMutablePointer<UInt8>),
          q16(UnsafeMutablePointer<UInt16>)
 
     static
-    func create_q8(data:UnsafeRawPointer) -> QuantizationTable
+    func create_q8(data:UnsafeRawPointer) -> UnsafeQuantizationTable
     {
         let cells = UnsafeMutablePointer<UInt8>.allocate(capacity: 64),
             u8    =
@@ -199,7 +199,7 @@ enum QuantizationTable
     }
 
     static
-    func create_q16(data:UnsafeRawPointer) -> QuantizationTable
+    func create_q16(data:UnsafeRawPointer) -> UnsafeQuantizationTable
     {
         let cells = UnsafeMutablePointer<UInt16>.allocate(capacity: 64),
             u16   =
@@ -228,7 +228,7 @@ enum QuantizationTable
     }
 }
 
-struct HuffmanTree
+struct UnsafeHuffmanTree
 {
     enum CoefficientClass
     {
@@ -265,6 +265,15 @@ struct HuffmanTree
     }
     */
 
+    func deallocate()
+    {
+        UnsafeMutablePointer(mutating: self.nodes.baseAddress!)
+            .deinitialize(count: self.nodes.count)
+        // this will be fixed with SE-0184
+        UnsafeMutablePointer(mutating: self.nodes.baseAddress!)
+            .deallocate(capacity: -1)
+    }
+
     private static
     func precalculateTreeSize(leavesPerLevel:UnsafePointer<UInt8>)
         -> (leaves:Int, n:Int)?
@@ -298,7 +307,7 @@ struct HuffmanTree
 
     static
     func create(data:UnsafeRawPointer, coefficientClass:CoefficientClass)
-        -> HuffmanTree?
+        -> UnsafeHuffmanTree?
     {
         let leavesPerLevel:UnsafePointer<UInt8> =
             data.bindMemory(to: UInt8.self, capacity: 16)
@@ -390,17 +399,8 @@ struct HuffmanTree
             internalNodes = newInternalNodes
         }
 
-        return HuffmanTree(coefficientClass: coefficientClass,
+        return UnsafeHuffmanTree(coefficientClass: coefficientClass,
             nodes: UnsafeBufferPointer<Node>(start: nodes, count: n))
-    }
-
-    func deallocate()
-    {
-        UnsafeMutablePointer(mutating: self.nodes.baseAddress!)
-            .deinitialize(count: self.nodes.count)
-        // this will be fixed with SE-0184
-        UnsafeMutablePointer(mutating: self.nodes.baseAddress!)
-            .deallocate(capacity: -1)
     }
 }
 
@@ -480,7 +480,7 @@ struct JFIF
     }
 }
 
-struct FrameHeader
+struct UnsafeFrameHeader
 {
     enum Encoding
     {
@@ -541,7 +541,7 @@ struct FrameHeader
 
     static
     func read(from stream:UnsafeMutablePointer<FILE>, marker:inout UInt8) throws
-        -> FrameHeader?
+        -> UnsafeFrameHeader?
     {
         let data:UnsafeRawBufferPointer,
             encoding:Encoding
@@ -577,7 +577,8 @@ struct FrameHeader
     }
 
     private static
-    func create(from data:UnsafeRawBufferPointer, encoding:Encoding) -> FrameHeader?
+    func create(from data:UnsafeRawBufferPointer, encoding:Encoding)
+        -> UnsafeFrameHeader?
     {
         guard data.count >= 8
         else
@@ -645,7 +646,7 @@ struct FrameHeader
             (components + i).initialize(to: component)
         }
 
-        return FrameHeader(encoding: encoding,
+        return UnsafeFrameHeader(encoding: encoding,
             precision:  precision,
             width:      width,
             height:     height,
@@ -709,15 +710,16 @@ struct ScanHeader
     }
 }
 
-struct Context
+struct UnsafeContext
 {
     internal private(set)
     var restartInterval:Int = 0
 
     // these must be managed manually or they will leak
     private
-    var qtables:(QuantizationTable?, QuantizationTable?,
-                 QuantizationTable?, QuantizationTable?) = (nil, nil, nil, nil)
+    var qtables:(UnsafeQuantizationTable?, UnsafeQuantizationTable?,
+                 UnsafeQuantizationTable?, UnsafeQuantizationTable?) =
+        (nil, nil, nil, nil)
 
     func deallocate()
     {
@@ -788,7 +790,7 @@ struct Context
         var i:Int = 0
         while (i < data.count)
         {
-            let table:QuantizationTable,
+            let table:UnsafeQuantizationTable,
                 flags:UInt8 = data[i]
             // `i` gets incremented halfway through so it’s easier to just store
             // the `flags` byte
@@ -801,7 +803,7 @@ struct Context
                     return nil
                 }
 
-                table = QuantizationTable.create_q8(data: data.baseAddress! + i + 1)
+                table = UnsafeQuantizationTable.create_q8(data: data.baseAddress! + i + 1)
                 i += 64 + 1
 
             case 0x10:
@@ -811,7 +813,7 @@ struct Context
                     return nil
                 }
 
-                table = QuantizationTable.create_q16(data: data.baseAddress! + i + 1)
+                table = UnsafeQuantizationTable.create_q16(data: data.baseAddress! + i + 1)
                 i += 128 + 1
 
             default:
@@ -864,8 +866,8 @@ func readMCUs(from stream:UnsafeMutablePointer<FILE>, marker:inout UInt8) throws
     {
         if byte == 0xff
         {
-            // this is the only exit point from this function so why not reuse
-            // the `inout marker` variable
+            // this is the only exit point from this function so we can just
+            // reuse the `inout marker` variable
             marker = try readUInt8(from: stream)
             if marker != 0x00
             {
@@ -911,15 +913,15 @@ func decode(path:String) throws
         throw JPEGReadError.InvalidJFIFHeader
     }
 
-    var context = Context()
+    var context = UnsafeContext()
     defer
     {
         context.deallocate()
     }
     try context.update(from: stream, marker: &marker)
 
-    guard var frameHeader:FrameHeader =
-        try FrameHeader.read(from: stream, marker: &marker)
+    guard var frameHeader:UnsafeFrameHeader =
+        try UnsafeFrameHeader.read(from: stream, marker: &marker)
     else
     {
         throw JPEGReadError.InvalidFrameHeader
