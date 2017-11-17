@@ -4,14 +4,16 @@ enum JPEGReadError:Error
 {
     case FileError(String),
          FiletypeError,
-         MissingJFIFSegment,
-         IncompleteMarkerError,
-         StructuralError,
-         SyntaxError(String),
+         FilestreamError,
+         MissingJFIFHeader,
+         InvalidJFIFHeader,
          MissingFrameHeader,
          InvalidFrameHeader,
          MissingScanHeader,
-         InvalidScanHeader
+         InvalidScanHeader,
+
+         StructuralError,
+         SyntaxError(String)
 }
 
 struct UnsafeRawVector
@@ -119,6 +121,22 @@ func match(stream:UnsafeMutablePointer<FILE>, against expected:[UInt8]) -> Bool
     return true
 }
 
+extension UnsafeRawBufferPointer
+{
+    func loadBigEndian<I>(fromByteOffset offset:Int, as _:I.Type)
+        -> I where I:FixedWidthInteger
+    {
+        var i = I()
+        withUnsafeMutablePointer(to: &i)
+        {
+            UnsafeMutableRawPointer($0).copyBytes(from: self.baseAddress! + offset,
+                count: MemoryLayout<I>.size)
+        }
+
+        return I(bigEndian: i)
+    }
+}
+
 // replace with fgetc
 func readUInt8(from stream:UnsafeMutablePointer<FILE>) throws -> UInt8
 {
@@ -128,7 +146,7 @@ func readUInt8(from stream:UnsafeMutablePointer<FILE>) throws -> UInt8
         guard fread($0, 1, 1, stream) == 1
         else
         {
-            throw JPEGReadError.IncompleteMarkerError
+            throw JPEGReadError.FilestreamError
         }
 
         return $0.pointee
@@ -144,7 +162,7 @@ func readBigEndian<I>(from stream:UnsafeMutablePointer<FILE>, as:I.Type) throws
         guard fread($0, MemoryLayout<I>.size, 1, stream) == 1
         else
         {
-            throw JPEGReadError.IncompleteMarkerError
+            throw JPEGReadError.FilestreamError
         }
 
         return I(bigEndian: $0.pointee)
@@ -161,7 +179,7 @@ func readMarkerData(from stream:UnsafeMutablePointer<FILE>)
     guard fread(dest.baseAddress, 1, length, stream) == length
     else
     {
-        throw JPEGReadError.IncompleteMarkerError
+        throw JPEGReadError.FilestreamError
     }
 
     return UnsafeRawBufferPointer(dest)
@@ -406,22 +424,6 @@ struct HuffmanTree
     }
 }
 
-extension UnsafeRawBufferPointer
-{
-    func loadBigEndian<I>(fromByteOffset offset:Int, as _:I.Type)
-        -> I where I:FixedWidthInteger
-    {
-        var i = I()
-        withUnsafeMutablePointer(to: &i)
-        {
-            UnsafeMutableRawPointer($0).copyBytes(from: self.baseAddress! + offset,
-                count: MemoryLayout<I>.size)
-        }
-
-        return I(bigEndian: i)
-    }
-}
-
 struct JFIF
 {
     enum DensityUnit:UInt8
@@ -437,60 +439,64 @@ struct JFIF
 
     static
     func read(from stream:UnsafeMutablePointer<FILE>, marker:inout UInt8)
-        throws -> JFIF
+        throws -> JFIF?
     {
         guard marker == 0xe0
         else
         {
-            throw JPEGReadError.MissingJFIFSegment
+            throw JPEGReadError.MissingJFIFHeader
         }
 
-        // todo: this rewrite with buffers and this will no longer be necessary
-        let ret = try JFIF(stream: stream)
+        let data:UnsafeRawBufferPointer = try readMarkerData(from: stream)
         marker  = try readNextMarker(from: stream)
-        return ret
+        return JFIF.create(from: data)
     }
 
-    private //todo: rewrite this with buffers and without throws
-    init(stream:UnsafeMutablePointer<FILE>) throws
+    private static //todo: rewrite this with buffers and without throws
+    func create(from data:UnsafeRawBufferPointer) -> JFIF?
     {
-        let length:UInt16 = try readBigEndian(from: stream, as: UInt16.self)
-        guard length >= 16
+        guard data.count >= 14
         else
         {
-            throw JPEGReadError.SyntaxError("JFIF marker length \(length) is less than 16")
+            return nil
         }
 
-        guard match(stream: stream, against: [0x4a, 0x46, 0x49, 0x46, 0x00])
-        else
+        for (b1, b2):(UInt8, UInt8) in zip(data[0 ..< 5], [0x4a, 0x46, 0x49, 0x46, 0x00])
         {
-            throw JPEGReadError.SyntaxError("missing 'JFIF\\0' signature")
+            guard b1 == b2
+            else
+            {
+                // missing 'JFIF' signature"
+                return nil
+            }
         }
 
-        self.version = (try readUInt8(from: stream), try readUInt8(from: stream))
+        let version:(major:UInt8, minor:UInt8) =
+            (data.load(fromByteOffset: 5, as: UInt8.self),
+             data.load(fromByteOffset: 6, as: UInt8.self))
 
         guard version.major == 1, 0 ... 2 ~= version.minor
         else
         {
-            throw JPEGReadError.SyntaxError("bad JFIF version number (expected 1.0 ... 1.2, got \(version.major).\(version.minor)")
+            // bad JFIF version number (expected 1.0 ... 1.2)
+            return nil
         }
 
-        guard let densityUnit = DensityUnit(rawValue: try readUInt8(from: stream))
+        guard let densityUnit =
+            DensityUnit(rawValue: data.load(fromByteOffset: 7, as: UInt8.self))
         else
         {
-            throw JPEGReadError.SyntaxError("invalid JFIF density unit")
+            // invalid JFIF density unit
+            return nil
         }
 
-        self.densityUnit = densityUnit
-        self.density = (try readBigEndian(from: stream, as: UInt16.self),
-                        try readBigEndian(from: stream, as: UInt16.self))
+        let density:(x:UInt16, y:UInt16) =
+            (data.loadBigEndian(fromByteOffset:  8, as: UInt16.self),
+             data.loadBigEndian(fromByteOffset: 10, as: UInt16.self))
 
-        // ignore the thumbnail data
-        guard fseek(stream, Int(length) - 14, SEEK_CUR) == 0
-        else
-        {
-            throw JPEGReadError.IncompleteMarkerError
-        }
+        // we ignore the thumbnail data
+
+        return JFIF(version: version, densityUnit: densityUnit, density: density)
     }
 }
 
@@ -912,10 +918,15 @@ func decode(path:String) throws
     }
 
     var marker:UInt8 = try readNextMarker(from: stream)
-    let jfif         = try JFIF.read(from: stream, marker: &marker)
+    guard let jfif:JFIF = try JFIF.read(from: stream, marker: &marker)
+    else
+    {
+        throw JPEGReadError.InvalidJFIFHeader
+    }
 
     try context.update(from: stream, marker: &marker)
-    guard var frameHeader = try FrameHeader.read(from: stream, marker: &marker)
+    guard var frameHeader:FrameHeader =
+        try FrameHeader.read(from: stream, marker: &marker)
     else
     {
         throw JPEGReadError.InvalidFrameHeader
