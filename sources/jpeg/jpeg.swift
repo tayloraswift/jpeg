@@ -12,8 +12,15 @@ enum JPEGReadError:Error
          MissingScanHeader,
          InvalidScanHeader,
 
+         InvalidQuantizationTable,
+         InvalidHuffmanTable,
+
+         InvalidDNLSegment,
+
          StructuralError,
-         SyntaxError(String)
+         SyntaxError(String),
+
+         Unsupported(String)
 }
 
 struct UnsafeRawVector
@@ -111,7 +118,6 @@ extension UnsafeRawBufferPointer
     }
 }
 
-// replace with fgetc
 func readUInt8(from stream:UnsafeMutablePointer<FILE>) throws -> UInt8
 {
     var uint8:UInt8 = 0
@@ -555,8 +561,7 @@ struct FrameHeader
             encoding = .progressiveDCT
 
         case 0xc3:
-            print("unsupported")
-            return nil
+            throw JPEGReadError.Unsupported("hierarchical jpegs are unsupported")
 
         default:
             throw JPEGReadError.MissingFrameHeader
@@ -667,7 +672,7 @@ struct FrameHeader
         guard data.count == 2
         else
         {
-            throw JPEGReadError.SyntaxError("define number of lines segment has length \(data.count) but it should be 2")
+            throw JPEGReadError.InvalidDNLSegment
         }
 
         self.height = Int(data.loadBigEndian(fromByteOffset: 0, as: UInt16.self))
@@ -706,6 +711,7 @@ struct ScanHeader
 
 struct Context
 {
+    internal private(set)
     var restartInterval:Int = 0
 
     // these must be managed manually or they will leak
@@ -734,34 +740,42 @@ struct Context
     {
         while true
         {
+            let data:UnsafeRawBufferPointer
             switch marker
             {
             case 0xdb: // define quantization table(s)
                 print("quantization table")
-                try self.updateQuantizationTables(from: stream)
+                data = try readMarkerData(from: stream)
+                guard let _:Void = self.updateQuantizationTables(from: data)
+                else
+                {
+                    throw JPEGReadError.InvalidQuantizationTable
+                }
 
             case 0xc4: // define huffman table(s)
                 print("huffman table")
-                try self.updateHuffmanTrees(from: stream)
+                data = try readMarkerData(from: stream)
+                guard let _:Void = self.updateHuffmanTrees(from: data)
+                else
+                {
+                    throw JPEGReadError.InvalidHuffmanTable
+                }
 
             case 0xdd: // define restart interval
                 print("DRI")
-                let tableData:UnsafeRawBufferPointer = try readMarkerData(from: stream)
-                defer
-                {
-                    tableData.deallocate()
-                }
+                data = try readMarkerData(from: stream)
 
             case 0xfe: // comment
                 print("comment")
-                let tableData:UnsafeRawBufferPointer = try readMarkerData(from: stream)
-                defer
-                {
-                    tableData.deallocate()
-                }
+                data = try readMarkerData(from: stream)
 
             default:
                 return
+            }
+
+            defer
+            {
+                data.deallocate()
             }
 
             marker = try readNextMarker(from: stream)
@@ -769,41 +783,43 @@ struct Context
     }
 
     private mutating
-    func updateQuantizationTables(from stream:UnsafeMutablePointer<FILE>) throws
+    func updateQuantizationTables(from data:UnsafeRawBufferPointer) -> Void?
     {
-        let tableData:UnsafeRawBufferPointer = try readMarkerData(from: stream)
-        defer
-        {
-            tableData.deallocate()
-        }
-
         var i:Int = 0
-        while (i < tableData.count)
+        while (i < data.count)
         {
-            let bindingIndex:UInt8 = tableData[i] & 0x0f
-
-            guard bindingIndex < 4
-            else
-            {
-                throw JPEGReadError.SyntaxError("quantization table has invalid binding index \(bindingIndex) (index must be in 0 ... 3)")
-            }
-
-            let table:QuantizationTable
-            switch tableData[i] & 0xf0
+            let table:QuantizationTable,
+                flags:UInt8 = data[i]
+            // `i` gets incremented halfway through so it’s easier to just store
+            // the `flags` byte
+            switch flags & 0xf0
             {
             case 0x00:
-                table = QuantizationTable.create_q8(data: tableData.baseAddress! + i + 1)
+                guard i + 64 + 1 <= data.count
+                else
+                {
+                    return nil
+                }
+
+                table = QuantizationTable.create_q8(data: data.baseAddress! + i + 1)
                 i += 64 + 1
 
             case 0x10:
-                table = QuantizationTable.create_q16(data: tableData.baseAddress! + i + 1)
+                guard i + 128 + 1 <= data.count
+                else
+                {
+                    return nil
+                }
+
+                table = QuantizationTable.create_q16(data: data.baseAddress! + i + 1)
                 i += 128 + 1
 
             default:
-                throw JPEGReadError.SyntaxError("quantization table has invalid precision (code: \(tableData[i] >> 4))")
+                // quantization table has invalid precision
+                return nil
             }
 
-            switch bindingIndex
+            switch flags & 0x0f
             {
             case 0:
                 qtables.0?.deallocate()
@@ -822,19 +838,20 @@ struct Context
                 qtables.3 = table
 
             default:
-                fatalError("unreachable")
+                // quantization table has invalid binding index (index must be in 0 ... 3)
+                table.deallocate()
+                return nil
             }
         }
+
+        return ()
     }
 
     private mutating
-    func updateHuffmanTrees(from stream:UnsafeMutablePointer<FILE>) throws
+    func updateHuffmanTrees(from data:UnsafeRawBufferPointer) -> Void?
     {
-        let tableData:UnsafeRawBufferPointer = try readMarkerData(from: stream)
-        defer
-        {
-            tableData.deallocate()
-        }
+        // todo
+        return ()
     }
 }
 
