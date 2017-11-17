@@ -95,32 +95,6 @@ func resolve_path(_ path:String) -> String
     return path
 }
 
-func match(stream:UnsafeMutablePointer<FILE>, against expected:[UInt8]) -> Bool
-{
-    let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: expected.count)
-    defer
-    {
-        buffer.deallocate(capacity: -1)
-    }
-
-    guard fread(buffer, 1, expected.count, stream) == expected.count
-    else
-    {
-        return false;
-    }
-
-    for i:Int in 0 ..< expected.count
-    {
-        guard buffer[i] == expected[i]
-        else
-        {
-            return false
-        }
-    }
-
-    return true
-}
-
 extension UnsafeRawBufferPointer
 {
     func loadBigEndian<I>(fromByteOffset offset:Int, as _:I.Type)
@@ -904,11 +878,20 @@ func decode(path:String) throws
         fclose(stream)
     }
 
+    var marker:UInt8 = try readNextMarker(from: stream)
     // start of image marker
-    guard match(stream: stream, against: [0xff, 0xd8])
+    guard marker == 0xd8
     else
     {
         throw JPEGReadError.FiletypeError
+    }
+
+    marker = try readNextMarker(from: stream)
+
+    guard let jfif:JFIF = try JFIF.read(from: stream, marker: &marker)
+    else
+    {
+        throw JPEGReadError.InvalidJFIFHeader
     }
 
     var context = Context()
@@ -916,15 +899,8 @@ func decode(path:String) throws
     {
         context.deallocate()
     }
-
-    var marker:UInt8 = try readNextMarker(from: stream)
-    guard let jfif:JFIF = try JFIF.read(from: stream, marker: &marker)
-    else
-    {
-        throw JPEGReadError.InvalidJFIFHeader
-    }
-
     try context.update(from: stream, marker: &marker)
+
     guard var frameHeader:FrameHeader =
         try FrameHeader.read(from: stream, marker: &marker)
     else
@@ -933,7 +909,6 @@ func decode(path:String) throws
     }
 
     var firstScan:Bool = true
-
     while marker != 0xd9 // end of image
     {
         try context.update(from: stream, marker: &marker)
@@ -968,6 +943,5 @@ func decode(path:String) throws
             firstScan = false
         }
     }
-
     // the while loop already scanned the EOI marker
 }
