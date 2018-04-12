@@ -243,7 +243,7 @@ struct UnsafeHuffmanTable
     
     // number of level 0 entries
     private 
-    var n0:Int 
+    var n:Int 
     {
         return 256 - self.s
     }
@@ -257,8 +257,6 @@ struct UnsafeHuffmanTable
     
     // determine the value of k, explained in create(leafCounts:leafValues:coefficientClass),
     // also validates leaf counts to make sure they define a valid 16-bit tree
-    
-    // PARANOIA: what if we get bad data and leafCounts isn't long enough??
     private static
     func countSubtrees(_ leafCounts:UnsafePointer<UInt8>) -> Int?
     {
@@ -273,7 +271,7 @@ struct UnsafeHuffmanTable
             
             // every internal node on the level above generates two new nodes.
             // some of the new nodes are leaf nodes, the rest are internal nodes.
-            internalNodes = internalNodes << 1 - Int(leafCounts[l])
+            internalNodes = internalNodes &<< 1 - Int(leafCounts[l])
         }
         
         // the number of internal nodes remaining is the number of child trees, with 
@@ -297,7 +295,7 @@ struct UnsafeHuffmanTable
                 return subtrees
             }
             
-            internalNodes = internalNodes << 1 - Int(leafCounts[l])
+            internalNodes = internalNodes &<< 1 - Int(leafCounts[l])
         }
         
         guard internalNodes == 1 
@@ -313,7 +311,6 @@ struct UnsafeHuffmanTable
     func create(leafCounts:UnsafePointer<UInt8>, leafValues:UnsafePointer<UInt8>, 
         coefficientClass:CoefficientClass) -> UnsafeHuffmanTable?
     {
-    /*
         // idea:    jpeg huffman tables are encoded gzip style, as sequences of
         //          leaf counts and leaf values. the leaf counts tell you the
         //          number of leaf nodes at each level of the tree. combined with
@@ -385,7 +382,73 @@ struct UnsafeHuffmanTable
         //          tree, and k 8-bit child trees rooted on the internal nodes
         //          at level 8 of the original tree.
         //
-        //          how big can k be? well, remember that there are only 256
+        //          so far, we’ve looked at the huffman tree as a tree. however 
+        //          it actually makes more sense to look at it as a table, just 
+        //          like its implementation. remember that the tree is right-heavy, 
+        //          so the first 8 levels will look something like 
+        //
+        //          +———————————————————+ 0
+        //          |                   |
+        //          |                   |
+        //          |                   |
+        //          |                   |
+        //          |                   |
+        //          |                   |
+        //          |                   |
+        //          +———————————————————+
+        //          |                   |
+        //          |                   |
+        //          |                   |
+        //          +———————————————————+
+        //          |                   |
+        //          |                   |
+        //          |                   |
+        //          +———————————————————+ -
+        //          |                   |
+        //          +———————————————————+
+        //          |                   |
+        //          +———————————————————+
+        //          |                   |
+        //          +———————————————————+
+        //          |                   |
+        //          +———————————————————+ -
+        //          |                   |
+        //          +———————————————————+
+        //          +———————————————————+
+        //        n +———————————————————+ -    —    +———————————————————+ s = 0
+        //          +-------------------+      ↑    |                   |
+        //          +-------------------+      s    |                   |
+        //          +-------------------+      ↓    |                   |
+        //    n + s +-------------------+ 256  —    +———————————————————+
+        //                                          |                   |
+        //                                          |                   |
+        //                                          |                   |
+        //                                          +———————————————————+
+        //                                          |                   |
+        //                                          |                   |
+        //                                          |                   |
+        //                                          +———————————————————+
+        //                                          |                   |
+        //                                          +———————————————————+
+        //                                          |                   |
+        //                                          /////////////////////
+        //
+        //          this is awesome because we don’t need to store anything in 
+        //          the table entries themselves to know if they are direct entries 
+        //          or indirect entries. if the index of the entry is greater than 
+        //          or equal to `n` (the number of direct entries), it is an 
+        //          indirect entry, and its indirect index is given by the first 
+        //          byte of the codeword with `n` subtracted from it. 
+        //          level-1 subtables are always 256 entries long since they are 
+        //          leaf tables. this means their positions can be computed in 
+        //          constant time, given `n`, which is also the position of the 
+        //          first level-1 table.
+        //          
+        //          (for computational ease, we store `s = 256 - n` instead. 
+        //          `s` can be interpreted as the number of level-1 subtables 
+        //          trail the level-0 table in the storage buffer)
+        //
+        //          how big can `s` be? well, remember that there are only 256
         //          different encoded values which means the original tree can
         //          only have 256 leaves. any full binary tree with height at
         //          least 1 *must* contain at least 2 leaf nodes (why?). since
@@ -395,33 +458,20 @@ struct UnsafeHuffmanTable
         //          tree is an exception because in jpeg, the all-ones codeword
         //          does not represent any value, so the right-most tree can
         //          possibly only contain one “real” leaf node. we can pigeonhole
-        //          this shit to show that we can only have up to k ≤ 129 child
-        //          trees. in fact, we can reduce this even further to k ≤ 128
-        //          because if the rightmost tree only contains 1 leaf, there
-        //          has to be at least one other tree with an odd number of leaves
-        //          to make the total add up to 256, and that number has to be at
-        //          least 3. in reality, k is rarely bigger than 7 or 8 yielding
-        //          a significant size savings.
+        //          this to show that we can only have up to k ≤ 129 child trees.
+        //          in fact, we can reduce this even further to k ≤ 128 because
+        //          if the rightmost tree only contains 1 leaf, there has to be at
+        //          least one other tree with an odd number of leaves to make the  
+        //          total add up to 256, and that number has to be at least 3. 
+        //          in reality, k is rarely bigger than 7 or 8 yielding a significant 
+        //          size savings.
         //
-        //          now we have one primary table with 256 entries of type
+        //          because we don’t need to store pointers, each table entry can 
+        //          be just 2 bytes long — 1 byte for the encoded value, and 1 byte 
+        //          to store the length of the codeword.
         //
-        //      (value:UInt8, length:UInt8, childIndex:UInt8?) = primaryTable[code >> 8] ,
-        //
-        //          and k child tables of type
-        //
-        //      (value:UInt8, length:UInt8) = childTables[childIndex][code & 0xff] .
-        //
-        //          as it turns out, some of the primary table entry fields are
-        //          redundant. no primary table leaf can have a length > 8 (or
-        //          a length 0 for that matter), so we can use that as a sentinel
-        //          for a child table and interpret the value field as a child
-        //          table index should `1 ... 8 ~= length == false`. this means
-        //          all of our tables can be stored as contigous UInt8 pairs of
-        //          type
-        //                   (valueOrChild:UInt8, lengthAndFlags:UInt8) .
-        //
-        //          such a buffer will never have size greater than
-        //          2 × 256 × (1 + 128) = 66_048 bytes, compared with
+        //          a buffer like this will never have size greater than
+        //          2 * 256 × (128 + 1) = 65_792 bytes, compared with
         //          2 × (1 << 16)  = 131_072 bytes for the 16-bit table. in
         //          reality the 2 layer table is usually on the order of 2–4 kB.
         //
@@ -433,7 +483,6 @@ struct UnsafeHuffmanTable
         //          byte offset where the variable-length child table lives, and
         //          perform a conditional bit shift to transform the input bits
         //          into an appropriate index into the table. not a good look.
-    */
         
         guard let s:Int = countSubtrees(leafCounts) 
         else 
@@ -482,8 +531,8 @@ struct UnsafeHuffmanTable
     subscript(codeword:UInt16) -> Entry 
     {
         // [ level 0 index  |    offset    ]
-        let l0:Int = .init(codeword >> 8)
-        return self.storage[l0 < self.n0 ? l0 : (l0 - 255) << 8 + 255 * self.s + Int(codeword & 0xff)]
+        let i:Int = .init(codeword >> 8)
+        return self.storage[i < self.n ? i : (i - 255) << 8 + 255 * self.s + Int(codeword & 0xff)]
     }
 }
 
