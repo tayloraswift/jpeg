@@ -11,24 +11,28 @@ func testHuffmanTable()
     //                                           /           \
     //                                         [d]           [e]
 
-    let table:[UInt8] = [0, 3, 2, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,
-                         0x61, 0x62, 0x63, 0x64, 0x65]
+    let leafCounts:[UInt8] = [0, 3, 2, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0],
+        leafValues:[UInt8] = [0x61, 0x62, 0x63, 0x64, 0x65]
 
-    let tree = UnsafeHuffmanTree.create(data: table, coefficientClass: .AC)!
-    printHuffmanTree(root: tree.root)
-
-    tree.deallocate()
-}
-
-func printHuffmanTree(root:UnsafePointer<UnsafeHuffmanTree.Node>, path:String = "")
-{
-    switch root.pointee
+    guard let table:UnsafeHuffmanTable = .create(leafCounts: leafCounts, leafValues: leafValues, coefficientClass: .AC)
+    else 
     {
-    case .leafNode(let value):
-        print("'\(Unicode.Scalar(value))': \(path)")
-
-    case .internalNode(let left, let right):
-        printHuffmanTree(root: left,  path: path + "0")
-        printHuffmanTree(root: right, path: path + "1")
+        fatalError()
     }
+    defer 
+    {
+        table.destroy()
+    }
+    
+    var message:UInt16 = 0b110_111_10_00_01_00_10, // decabac
+        shifts:Int     = 0
+    while (shifts < 16) 
+    {
+        let entry:UnsafeHuffmanTable.Entry = table[message]
+        print(entry.length, Unicode.Scalar(entry.value))
+        message = message &<< Int(entry.length)
+        shifts += Int(entry.length)
+    }
+    
+    print(shifts)
 }

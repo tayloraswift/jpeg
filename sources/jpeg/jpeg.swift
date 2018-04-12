@@ -26,7 +26,7 @@ enum JPEGReadError:Error
 struct UnsafeRawVector
 {
     private
-    var buffer = UnsafeMutableRawBufferPointer(start: nil, count: 0)
+    var buffer:UnsafeMutableRawBufferPointer = .init(start: nil, count: 0)
 
     internal private(set)
     var count:Int = 0
@@ -67,19 +67,19 @@ struct UnsafeRawVector
     {
         if self.count == self.capacity
         {
-            let newCapacity:Int = max(1, self.capacity << 1)
-            let newBuffer = UnsafeMutableRawBufferPointer.allocate(count: newCapacity)
+            let newCapacity:Int                         = max(1, self.capacity << 1)
+            let newBuffer:UnsafeMutableRawBufferPointer = .allocate(count: newCapacity)
             newBuffer.copyBytes(from: self.buffer)
             self.buffer.deallocate()
             self.buffer = newBuffer
         }
 
         self.buffer[self.count] = byte
-        self.count += 1
+        self.count             += 1
     }
 }
 
-func resolve_path(_ path:String) -> String
+func resolvePath(_ path:String) -> String
 {
     guard let first:Character = path.first
     else
@@ -107,7 +107,7 @@ extension UnsafeRawBufferPointer
     func loadBigEndian<I>(fromByteOffset offset:Int, as _:I.Type)
         -> I where I:FixedWidthInteger
     {
-        var i = I()
+        var i:I = .init()
         withUnsafeMutablePointer(to: &i)
         {
             UnsafeMutableRawPointer($0).copyBytes(from: self.baseAddress! + offset,
@@ -118,6 +118,7 @@ extension UnsafeRawBufferPointer
     }
 }
 
+// TODO: implement buffering
 func readUInt8(from stream:UnsafeMutablePointer<FILE>) throws -> UInt8
 {
     var uint8:UInt8 = 0
@@ -136,7 +137,7 @@ func readUInt8(from stream:UnsafeMutablePointer<FILE>) throws -> UInt8
 func readBigEndian<I>(from stream:UnsafeMutablePointer<FILE>, as:I.Type) throws
     -> I where I:FixedWidthInteger
 {
-    var i:I = I()
+    var i:I = .init()
     return try withUnsafeMutablePointer(to: &i)
     {
         guard fread($0, MemoryLayout<I>.size, 1, stream) == 1
@@ -189,21 +190,19 @@ enum UnsafeQuantizationTable
          q16(UnsafeMutablePointer<UInt16>)
 
     static
-    func create_q8(data:UnsafeRawPointer) -> UnsafeQuantizationTable
+    func createQ8(data:UnsafeRawPointer) -> UnsafeQuantizationTable
     {
-        let cells = UnsafeMutablePointer<UInt8>.allocate(capacity: 64),
-            u8    =
-            UnsafePointer<UInt8>(data.bindMemory(to: UInt8.self, capacity: 64))
+        let cells:UnsafeMutablePointer<UInt8> = .allocate(capacity: 64),
+            u8:UnsafePointer<UInt8> = data.bindMemory(to: UInt8.self, capacity: 64)
         cells.initialize(from: u8, count: 64)
         return .q8(cells)
     }
 
     static
-    func create_q16(data:UnsafeRawPointer) -> UnsafeQuantizationTable
+    func createQ16(data:UnsafeRawPointer) -> UnsafeQuantizationTable
     {
-        let cells = UnsafeMutablePointer<UInt16>.allocate(capacity: 64),
-            u16   =
-            UnsafePointer<UInt16>(data.bindMemory(to: UInt16.self, capacity: 64))
+        let cells:UnsafeMutablePointer<UInt16> = .allocate(capacity: 64),
+            u16:UnsafePointer<UInt16> = data.bindMemory(to: UInt16.self, capacity: 64)
 
         for cell:Int in 0 ..< 64
         {
@@ -213,194 +212,278 @@ enum UnsafeQuantizationTable
         return .q16(cells)
     }
 
-    func deallocate()
+    func destroy()
     {
         switch self
         {
-        case .q8(let buffer):
-            buffer.deinitialize(count: 64)
-            buffer.deallocate(capacity: -1)
+        case .q8 (let buffer):
+            buffer.deinitialize (count: 64)
+            buffer.deallocate(capacity: 64)
 
         case .q16(let buffer):
-            buffer.deinitialize(count: 64)
-            buffer.deallocate(capacity: -1)
+            buffer.deinitialize (count: 64)
+            buffer.deallocate(capacity: 64)
         }
     }
 }
 
-struct UnsafeHuffmanTree
+struct UnsafeHuffmanTable
 {
     enum CoefficientClass
     {
         case DC, AC
     }
 
-    // storage *could* be optimized to 16 bytes instead of 24
-    enum Node
+    typealias Entry = (value:UInt8, length:UInt8)
+    
+    private 
+    let coefficientClass:CoefficientClass, 
+        storage:UnsafeMutablePointer<Entry>, 
+        s:Int // s is the number of subtrees, not including the root 
+    
+    // number of level 0 entries
+    private 
+    var n0:Int 
     {
-        case leafNode(UInt8),
-             internalNode(UnsafePointer<Node>, UnsafePointer<Node>)
+        return 256 - self.s
     }
-
-    let coefficientClass:CoefficientClass
-
-    private
-    let nodes:UnsafeBufferPointer<Node> // count ~= 0 ... 4080
-
-    var root:UnsafePointer<Node>
+    
+    @inline(__always)
+    private static 
+    func size(s:Int) -> Int 
     {
-        return nodes.baseAddress!
+        return 256 + 255 * s
     }
-
-    /*
-    static
-    func assignEntropyCoding<Element>(_ elements:[Element])
-        -> ([Int], [Element]) where Element:Hashable
-    {
-        var occurrences:[Element: Int] = [:]
-        for element:Element in elements
-        {
-            occurrences[element, default: 0] += 1
-        }
-    }
-    */
-
-    func deallocate()
-    {
-        UnsafeMutablePointer(mutating: self.nodes.baseAddress!)
-            .deinitialize(count: self.nodes.count)
-        // this will be fixed with SE-0184
-        UnsafeMutablePointer(mutating: self.nodes.baseAddress!)
-            .deallocate(capacity: -1)
-    }
-
+    
+    // determine the value of k, explained in create(leafCounts:leafValues:coefficientClass),
+    // also validates leaf counts to make sure they define a valid 16-bit tree
+    
+    // PARANOIA: what if we get bad data and leafCounts isn't long enough??
     private static
-    func precalculateTreeSize(leavesPerLevel:UnsafePointer<UInt8>)
-        -> (leaves:Int, n:Int)?
+    func countSubtrees(_ leafCounts:UnsafePointer<UInt8>) -> Int?
     {
-        var leaves:Int        = 0,
-            n:Int             = 1,
-            internalNodes:Int = 1 // count the root
-
-        for level:Int in 0 ..< 16
+        var internalNodes:Int = 1 // count the root 
+        for l:Int in 0 ..< 8 
         {
-            guard internalNodes > 0
-            else
+            guard internalNodes > 0 
+            else 
             {
-                break
+                return 0 // no subtrees
             }
-
-            leaves       += Int(leavesPerLevel[level])
-            n            += internalNodes << 1
-            internalNodes = internalNodes << 1 - Int(leavesPerLevel[level])
+            
+            // every internal node on the level above generates two new nodes.
+            // some of the new nodes are leaf nodes, the rest are internal nodes.
+            internalNodes = internalNodes << 1 - Int(leafCounts[l])
         }
-
-        guard internalNodes == 0
-        else
+        
+        // the number of internal nodes remaining is the number of child trees, with 
+        // the possible exception of a fake all-ones branch 
+        let subtrees:Int = internalNodes 
+        
+        // finish validating the tree 
+        for l:Int in 8 ..< 16 
         {
-            // invalid huffman tree (h ≤ 16)
+            guard internalNodes > 0 
+            else 
+            {
+                // if we reached level 16, internalNodes must be 1 since the all-ones 
+                // pattern is reserved 
+                guard l < 15 
+                else 
+                {
+                    return nil
+                }
+
+                return subtrees
+            }
+            
+            internalNodes = internalNodes << 1 - Int(leafCounts[l])
+        }
+        
+        guard internalNodes == 1 
+        else 
+        {
             return nil
         }
-
-        return (leaves, n)
+        
+        return subtrees
     }
 
-    static
-    func create(data:UnsafeRawPointer, coefficientClass:CoefficientClass)
-        -> UnsafeHuffmanTree?
+    static 
+    func create(leafCounts:UnsafePointer<UInt8>, leafValues:UnsafePointer<UInt8>, 
+        coefficientClass:CoefficientClass) -> UnsafeHuffmanTable?
     {
-        let leavesPerLevel:UnsafePointer<UInt8> =
-            data.bindMemory(to: UInt8.self, capacity: 16)
-        guard let (leaves, n):(Int, Int) =
-            precalculateTreeSize(leavesPerLevel: leavesPerLevel)
-        else
+    /*
+        // idea:    jpeg huffman tables are encoded gzip style, as sequences of
+        //          leaf counts and leaf values. the leaf counts tell you the
+        //          number of leaf nodes at each level of the tree. combined with
+        //          a rule that says that leaf nodes always occur on the “leftmost”
+        //          side of the tree, this uniquely determines a huffman tree.
+        //
+        //          Given: leaves per level = [0, 3, 2, ... ]
+        //
+        //                     ___0___[root]___1___
+        //                   /                      \
+        //            __0__[ ]__1__            __0__[ ]__1__
+        //          /              \         /               \
+        //         [a]            [b]      [c]            _0_[ ]_1_
+        //                                              /           \
+        //                                            [d]           [e]
+        //
+        //          note that in a huffman tree, level 0 always contains 0 leaf
+        //          nodes (why?) so the huffman table omits level 0 in the leaf
+        //          counts list.
+        //
+        //          we *could* build a tree data structure, and traverse it as
+        //          we read in the coded bits, but that would be slow and require
+        //          a shift for every bit. instead we extend the huffman tree
+        //          into a perfect tree, and assign the new leaf nodes the
+        //          values of their parents.
+        //
+        //                      ________[root]________
+        //                    /                        \
+        //            _____[ ]_____                _____[ ]_____
+        //           /             \             /               \
+        //          [a]           [b]          [c]            ___[ ]___
+        //        /     \       /     \       /   \         /           \
+        //      (a)     (a)   (b)     (b)   (c)   (c)      [d]          [e]
+        //
+        //          this lets us make a table of huffman codes where all the
+        //          codes are “padded” to the same length. note that codewords
+        //          that occur higher up the tree occur multiple times because
+        //          they have multiple children. of course, since the extra bits
+        //          aren’t actually part of the code, we have to store separately
+        //          the length of the original code so we know how many bits
+        //          we should advance the current bit position by once we match
+        //          a code.
+        //
+        //            code       value     length
+        //          —————————  —————————  ————————
+        //             000        'a'         2
+        //             001        'a'         2
+        //             010        'b'         2
+        //             011        'b'         2
+        //             100        'c'         2
+        //             101        'c'         2
+        //             110        'd'         3
+        //             111        'e'         3
+        //
+        //          decoding coded data then becomes a matter of matching a fixed
+        //          length bitstream against the table (the code works as an integer
+        //          index!) since all possible combinations of trailing “padding”
+        //          bits are represented in the table.
+        //
+        //          in jpeg, codewords can be a maximum of 16 bits long. this
+        //          means in theory we need a table with 2^16 entries. that’s a
+        //          huge table considering there are only 256 actual encoded
+        //          values, and since this is the kind of thing that really needs
+        //          to be optimized for speed, this needs to be as cache friendly
+        //          as possible.
+        //
+        //          we can reduce the table size by splitting the 16-bit table
+        //          into two 8-bit levels. this means we have one 8-bit “root”
+        //          tree, and k 8-bit child trees rooted on the internal nodes
+        //          at level 8 of the original tree.
+        //
+        //          how big can k be? well, remember that there are only 256
+        //          different encoded values which means the original tree can
+        //          only have 256 leaves. any full binary tree with height at
+        //          least 1 *must* contain at least 2 leaf nodes (why?). since
+        //          the child trees must have a height > 0 (otherwise they would
+        //          be 0-bit trees), every child tree except possibly the right-
+        //          most one must have at least 2 leaf nodes. the rightmost child
+        //          tree is an exception because in jpeg, the all-ones codeword
+        //          does not represent any value, so the right-most tree can
+        //          possibly only contain one “real” leaf node. we can pigeonhole
+        //          this shit to show that we can only have up to k ≤ 129 child
+        //          trees. in fact, we can reduce this even further to k ≤ 128
+        //          because if the rightmost tree only contains 1 leaf, there
+        //          has to be at least one other tree with an odd number of leaves
+        //          to make the total add up to 256, and that number has to be at
+        //          least 3. in reality, k is rarely bigger than 7 or 8 yielding
+        //          a significant size savings.
+        //
+        //          now we have one primary table with 256 entries of type
+        //
+        //      (value:UInt8, length:UInt8, childIndex:UInt8?) = primaryTable[code >> 8] ,
+        //
+        //          and k child tables of type
+        //
+        //      (value:UInt8, length:UInt8) = childTables[childIndex][code & 0xff] .
+        //
+        //          as it turns out, some of the primary table entry fields are
+        //          redundant. no primary table leaf can have a length > 8 (or
+        //          a length 0 for that matter), so we can use that as a sentinel
+        //          for a child table and interpret the value field as a child
+        //          table index should `1 ... 8 ~= length == false`. this means
+        //          all of our tables can be stored as contigous UInt8 pairs of
+        //          type
+        //                   (valueOrChild:UInt8, lengthAndFlags:UInt8) .
+        //
+        //          such a buffer will never have size greater than
+        //          2 × 256 × (1 + 128) = 66_048 bytes, compared with
+        //          2 × (1 << 16)  = 131_072 bytes for the 16-bit table. in
+        //          reality the 2 layer table is usually on the order of 2–4 kB.
+        //
+        //          why not compact the child trees further, since not all of them
+        //          actually have height 8? we could do that, and get some serious
+        //          worst-case memory savings, but then we couldn’t access the
+        //          child tables at constant offsets from the buffer base. we’d
+        //          need to store whole ass ≥16-bit pointers to the specific
+        //          byte offset where the variable-length child table lives, and
+        //          perform a conditional bit shift to transform the input bits
+        //          into an appropriate index into the table. not a good look.
+    */
+        
+        guard let s:Int = countSubtrees(leafCounts) 
+        else 
         {
             return nil
         }
-
-        let nodes = UnsafeMutablePointer<Node>.allocate(capacity: n),
-            leafValues:UnsafePointer<UInt8> =
-            (data + 16).bindMemory(to: UInt8.self, capacity: leaves)
-
-        // algorithm:   keep a list (range) of all the nodes in the previous level,
-        //              append leaf nodes into the buffer, then append internal
-        //              nodes into the buffer.
-        //
-        //          Given: leavesPerLevel = [0, 3, 2, ... ]
-        //
-        //                  ___0___[root]___1___
-        //                /                      \
-        //         __0__[A]__1__            __0__[B]__1__
-        //       /              \         /               \
-        //      [C]            [D]      [E]            _0_[F]_1_
-        //                                           /           \
-        //                                         [G]           [H]
-        //
-        //                                          [root]
-        //          the root counts as 1 internal node (huffman trees always
-        //          have a height > 0), so we expect 2 nodes in the next level.
-        //          these two nodes will come immediately after the root, so
-        //          their positions in the array are already known.
-        //
-        //      (        0 leaf nodes added)        [root]
-        //      (2 - 0 = 2 internal nodes added)    [root, A, B]
-        //          2 internal nodes were added, so we expect 4 nodes in the
-        //          next level (huffman trees are always full). As before, the
-        //          4 children come immediately after in the array.
-        //
-        //      (        3 leaf nodes added)        [root, A, B, C, D, E]
-        //      (4 - 3 = 1 internal node added)     [root, A, B, C, D, E, F]
-        //          1 internal node was added, so we expect 2 nodes in the
-        //          next level
-        //      (        2 leaf nodes added)        [root, A, B, C, D, E, F, G, H]
-        //          0 internal nodes were added, so we are finished.
-
-        typealias UnsafeMutablePointerRange<T> =
-            (lowerBound:UnsafeMutablePointer<T>, upperBound:UnsafeMutablePointer<T>)
-
-        nodes.initialize(to: .internalNode(nodes + 1, nodes + 2))
-        var internalNodes:UnsafeMutablePointerRange<Node> = (nodes, nodes + 1),
-            leavesGenerated:Int = 0
-
-        for level:Int in 0 ..< 16
+        
+        let count:Int                           = size(s: s),
+            storage:UnsafeMutablePointer<Entry> = .allocate(capacity: count)
+        
+        var value:UnsafePointer<UInt8> = leafValues, 
+            shadow:Int                 = 0x100100, 
+            i:Int                      = 0
+        for l:Int in 0 ..< 16
         {
-            guard internalNodes.lowerBound < internalNodes.upperBound
-            else
+            guard i < count 
+            else 
             {
                 break
             }
-            // `nodes`            `internalNodes`
-            //    |                   |     |
-            //  [root, A, B, C, D, E, F] + [G, H] ← new leaf nodes
-            for leafIndex:Int in 0 ..< Int(leavesPerLevel[level])
+            
+            shadow >>= 1
+            
+            for _ in 0 ..< leafCounts[l]
             {
-                (internalNodes.upperBound + leafIndex)
-                    .initialize(to: .leafNode(leafValues[leavesGenerated]))
-                leavesGenerated += 1
+                let limit:Int = i + shadow & 0x1ff
+                while (i < limit)
+                {
+                    storage[i] = (value: value.pointee, length: UInt8(truncatingIfNeeded: l + 1))
+                    i             += 1
+                }
+                
+                value += 1
             }
-
-            let expectedNodes:Int =
-                (internalNodes.upperBound - internalNodes.lowerBound) << 1
-            let newInternalNodes:UnsafeMutablePointerRange<Node> =
-                (internalNodes.upperBound + Int(leavesPerLevel[level]),
-                 internalNodes.upperBound + expectedNodes)
-            // `nodes`     `internalNodes` `newInternalNodes`
-            //    |                   |  |       ||
-            //  [root, A, B, C, D, E, F, G, H] + []
-            var leftChild:UnsafeMutablePointer<Node> = newInternalNodes.upperBound
-
-            for internalIndex:Int in Int(leavesPerLevel[level]) ..< expectedNodes
-            {
-                (internalNodes.upperBound + internalIndex)
-                    .initialize(to: .internalNode(leftChild, leftChild + 1))
-                leftChild += 2
-            }
-
-            internalNodes = newInternalNodes
         }
-
-        return UnsafeHuffmanTree(coefficientClass: coefficientClass,
-            nodes: UnsafeBufferPointer<Node>(start: nodes, count: n))
+        
+        return .init(coefficientClass: coefficientClass, storage: storage, s: s)
+    }
+    
+    func destroy() 
+    {
+        // no deinitialization because the buffer can be slightly underinitialized
+        self.storage.deallocate(capacity: UnsafeHuffmanTable.size(s: self.s))
+    }
+    
+    subscript(codeword:UInt16) -> Entry 
+    {
+        // [ level 0 index  |    offset    ]
+        let l0:Int = .init(codeword >> 8)
+        return self.storage[l0 < self.n0 ? l0 : (l0 - 255) << 8 + 255 * self.s + Int(codeword & 0xff)]
     }
 }
 
@@ -717,16 +800,28 @@ struct UnsafeContext
 
     // these must be managed manually or they will leak
     private
-    var qtables:(UnsafeQuantizationTable?, UnsafeQuantizationTable?,
-                 UnsafeQuantizationTable?, UnsafeQuantizationTable?) =
-        (nil, nil, nil, nil)
+    var qtables:(UnsafeQuantizationTable?,
+                 UnsafeQuantizationTable?,
+                 UnsafeQuantizationTable?,
+                 UnsafeQuantizationTable?) = (nil, nil, nil, nil)
 
-    func deallocate()
+    private
+    var htables:(UnsafeHuffmanTable?,
+                 UnsafeHuffmanTable?,
+                 UnsafeHuffmanTable?,
+                 UnsafeHuffmanTable?) = (nil, nil, nil, nil)
+
+    func destroy()
     {
-        qtables.0?.deallocate()
-        qtables.1?.deallocate()
-        qtables.2?.deallocate()
-        qtables.3?.deallocate()
+        qtables.0?.destroy()
+        qtables.1?.destroy()
+        qtables.2?.destroy()
+        qtables.3?.destroy()
+
+        htables.0?.destroy()
+        htables.1?.destroy()
+        htables.2?.destroy()
+        htables.3?.destroy()
     }
 
     // restart is a naked marker so it takes no `stream` parameter. just like
@@ -757,7 +852,7 @@ struct UnsafeContext
             case 0xc4: // define huffman table(s)
                 print("huffman table")
                 data = try readMarkerData(from: stream)
-                guard let _:Void = self.updateHuffmanTrees(from: data)
+                guard let _:Void = self.updateHuffmanTables(from: data)
                 else
                 {
                     throw JPEGReadError.InvalidHuffmanTable
@@ -803,7 +898,7 @@ struct UnsafeContext
                     return nil
                 }
 
-                table = UnsafeQuantizationTable.create_q8(data: data.baseAddress! + i + 1)
+                table = .createQ8(data: data.baseAddress! + i + 1)
                 i += 64 + 1
 
             case 0x10:
@@ -813,7 +908,7 @@ struct UnsafeContext
                     return nil
                 }
 
-                table = UnsafeQuantizationTable.create_q16(data: data.baseAddress! + i + 1)
+                table = .createQ16(data: data.baseAddress! + i + 1)
                 i += 128 + 1
 
             default:
@@ -824,24 +919,24 @@ struct UnsafeContext
             switch flags & 0x0f
             {
             case 0:
-                qtables.0?.deallocate()
+                qtables.0?.destroy()
                 qtables.0 = table
 
             case 1:
-                qtables.1?.deallocate()
+                qtables.1?.destroy()
                 qtables.1 = table
 
             case 2:
-                qtables.2?.deallocate()
+                qtables.2?.destroy()
                 qtables.2 = table
 
             case 3:
-                qtables.3?.deallocate()
+                qtables.3?.destroy()
                 qtables.3 = table
 
             default:
                 // quantization table has invalid binding index (index must be in 0 ... 3)
-                table.deallocate()
+                table.destroy()
                 return nil
             }
         }
@@ -850,9 +945,96 @@ struct UnsafeContext
     }
 
     private mutating
-    func updateHuffmanTrees(from data:UnsafeRawBufferPointer) -> Void?
+    func updateHuffmanTables(from data:UnsafeRawBufferPointer) -> Void?
     {
-        // todo
+        guard var it:UnsafeRawPointer = data.baseAddress
+        else
+        {
+            // only possible in an (invalid) malicious jpeg containing an empty
+            // huffman marker
+            return nil
+        }
+
+        let end:UnsafeRawPointer = it + data.count
+        while (it < end)
+        {
+            guard it + 17 <= end
+            else
+            {
+                // data buffer does not contain enough data
+                return nil
+            }
+
+            let coefficientClass:UnsafeHuffmanTable.CoefficientClass,
+                flags:UInt8 = it.load(as: UInt8.self)
+            // `it` gets incremented halfway through so it’s easier to just store
+            // the `flags` byte
+            switch flags & 0xf0
+            {
+            case 0x00:
+                coefficientClass = .DC
+
+            case 0x10:
+                coefficientClass = .AC
+
+            default:
+                // huffman table has invalid class
+                return nil
+            }
+
+            it += 1
+
+            // huffman tables have variable length that can only be determined
+            // by examining the first 17 bytes of each table which means checks
+            // have to be done midway through the parsing
+            let leafCounts:UnsafePointer<UInt8> = it.bindMemory(to: UInt8.self, capacity: 16)
+            it += 16
+            
+            // count the number of expected leaves 
+            let leaves:Int = (0 ..< 16).reduce(0){ $0 + Int(leafCounts[$1]) }
+
+            guard it + leaves <= end
+            else
+            {
+                // data buffer does not contain enough data
+                return nil
+            }
+
+            let leafValues:UnsafePointer<UInt8> = it.bindMemory(to: UInt8.self, capacity: leaves)
+
+            guard let table:UnsafeHuffmanTable = .create(leafCounts: leafCounts,
+                    leafValues: leafValues,
+                    coefficientClass: coefficientClass)
+            else 
+            {
+                return nil 
+            }
+
+            switch flags & 0x0f
+            {
+            case 0:
+                htables.0?.destroy()
+                htables.0 = table
+
+            case 1:
+                htables.1?.destroy()
+                htables.1 = table
+
+            case 2:
+                htables.2?.destroy()
+                htables.2 = table
+
+            case 3:
+                htables.3?.destroy()
+                htables.3 = table
+
+            default:
+                // huffman table has invalid binding index (index must be in 0 ... 3)
+                table.destroy()
+                return nil
+            }
+        }
+
         return ()
     }
 }
@@ -887,41 +1069,40 @@ func readMCUs(from stream:UnsafeMutablePointer<FILE>, marker:inout UInt8) throws
 
 func decode(path:String) throws
 {
-    guard let stream:UnsafeMutablePointer<FILE> = fopen(resolve_path(path), "rb")
+    guard let stream:UnsafeMutablePointer<FILE> = fopen(resolvePath(path), "rb")
     else
     {
-        throw JPEGReadError.FileError(resolve_path(path))
+        throw JPEGReadError.FileError(resolvePath(path))
     }
     defer
     {
         fclose(stream)
     }
-
-    var marker:UInt8 = try readNextMarker(from: stream)
+    
     // start of image marker
-    guard marker == 0xd8
+    guard try readNextMarker(from: stream) == 0xd8
     else
     {
         throw JPEGReadError.FiletypeError
     }
 
-    marker = try readNextMarker(from: stream)
+    var marker:UInt8 = try readNextMarker(from: stream)
 
-    guard let jfif:JFIF = try JFIF.read(from: stream, marker: &marker)
+    guard let _:JFIF = try .read(from: stream, marker: &marker)
     else
     {
         throw JPEGReadError.InvalidJFIFHeader
     }
 
-    var context = UnsafeContext()
+    var context:UnsafeContext = .init()
     defer
     {
-        context.deallocate()
+        context.destroy()
     }
+    
     try context.update(from: stream, marker: &marker)
 
-    guard var frameHeader:UnsafeFrameHeader =
-        try UnsafeFrameHeader.read(from: stream, marker: &marker)
+    guard var frameHeader:UnsafeFrameHeader = try .read(from: stream, marker: &marker)
     else
     {
         throw JPEGReadError.InvalidFrameHeader
