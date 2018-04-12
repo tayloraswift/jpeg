@@ -494,7 +494,7 @@ struct UnsafeHuffmanTable
             storage:UnsafeMutablePointer<Entry> = .allocate(capacity: count)
         
         var value:UnsafePointer<UInt8> = leafValues, 
-            shadow:Int                 = 0x100100, 
+            shadow:Int                 = 0x8080, 
             i:Int                      = 0
         for l:Int in 0 ..< 16
         {
@@ -502,13 +502,11 @@ struct UnsafeHuffmanTable
             else 
             {
                 break
-            }
-            
-            shadow >>= 1
+            }            
             
             for _ in 0 ..< leafCounts[l]
             {
-                let limit:Int = i + shadow & 0x1ff
+                let limit:Int = i + shadow & 0xff
                 while (i < limit)
                 {
                     storage[i] = (value: value.pointee, length: UInt8(truncatingIfNeeded: l + 1))
@@ -517,6 +515,8 @@ struct UnsafeHuffmanTable
                 
                 value += 1
             }
+            
+            shadow >>= 1
         }
         
         return .init(coefficientClass: coefficientClass, storage: storage, s: s)
