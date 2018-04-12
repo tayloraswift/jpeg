@@ -1,15 +1,14 @@
-@testable import JPEG 
 import JPEGTests
 
-/*
-do 
-{
-    try decode(path: "tests/oscardelarenta.jpg")
-}
-catch 
-{
-    print(error)
-}
-*/
+let cases:[(group:String, cases:[Case])] = 
+[
+    (
+        "huffman", 
+        [            
+            (true, "single-level table", testHuffmanTableSingle), 
+            (true, "double-level table", testHuffmanTableDouble)
+        ]
+    )
+]
 
-testHuffmanTable()
+runTests(cases)
