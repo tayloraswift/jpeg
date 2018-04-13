@@ -266,7 +266,7 @@ struct UnsafeHuffmanTable
             guard internalNodes > 0 
             else 
             {
-                return 0 // no subtrees
+                return nil
             }
             
             // every internal node on the level above generates two new nodes.
@@ -284,21 +284,13 @@ struct UnsafeHuffmanTable
             guard internalNodes > 0 
             else 
             {
-                // if we reached level 16, internalNodes must be 1 since the all-ones 
-                // pattern is reserved 
-                guard l < 15 
-                else 
-                {
-                    return nil
-                }
-
-                return subtrees
+                return nil
             }
             
             internalNodes = internalNodes &<< 1 - Int(leafCounts[l])
         }
         
-        guard internalNodes == 1 
+        guard internalNodes > 0
         else 
         {
             return nil
@@ -317,15 +309,17 @@ struct UnsafeHuffmanTable
         //          a rule that says that leaf nodes always occur on the “leftmost”
         //          side of the tree, this uniquely determines a huffman tree.
         //
-        //          Given: leaves per level = [0, 3, 2, ... ]
+        //          Given: leaves per level = [0, 3, 1, 1, ... ]
         //
-        //                     ___0___[root]___1___
-        //                   /                      \
-        //            __0__[ ]__1__            __0__[ ]__1__
-        //          /              \         /               \
-        //         [a]            [b]      [c]            _0_[ ]_1_
-        //                                              /           \
-        //                                            [d]           [e]
+        //                  ___0___[root]___1___
+        //                /                      \
+        //         __0__[ ]__1__            __0__[ ]__1__
+        //       /              \         /               \
+        //      [a]            [b]      [c]            _0_[ ]_1_
+        //                                           /           \
+        //                                         [d]        _0_[ ]_1_
+        //                                                  /           \
+        //                                                [e]        reserved
         //
         //          note that in a huffman tree, level 0 always contains 0 leaf
         //          nodes (why?) so the huffman table omits level 0 in the leaf
@@ -343,7 +337,7 @@ struct UnsafeHuffmanTable
         //           /             \             /               \
         //          [a]           [b]          [c]            ___[ ]___
         //        /     \       /     \       /   \         /           \
-        //      (a)     (a)   (b)     (b)   (c)   (c)      [d]          [e]
+        //      (a)     (a)   (b)     (b)   (c)   (c)      [d]          ...
         //
         //          this lets us make a table of huffman codes where all the
         //          codes are “padded” to the same length. note that codewords
@@ -363,7 +357,7 @@ struct UnsafeHuffmanTable
         //             100        'c'         2
         //             101        'c'         2
         //             110        'd'         3
-        //             111        'e'         3
+        //             111        ...        >3
         //
         //          decoding coded data then becomes a matter of matching a fixed
         //          length bitstream against the table (the code works as an integer
@@ -510,7 +504,7 @@ struct UnsafeHuffmanTable
                 while (i < limit)
                 {
                     storage[i] = (value: value.pointee, length: UInt8(truncatingIfNeeded: l + 1))
-                    i             += 1
+                    i         += 1
                 }
                 
                 value += 1
@@ -890,7 +884,6 @@ struct UnsafeContext
             switch marker
             {
             case 0xdb: // define quantization table(s)
-                print("quantization table")
                 data = try readMarkerData(from: stream)
                 guard let _:Void = self.updateQuantizationTables(from: data)
                 else
@@ -899,7 +892,6 @@ struct UnsafeContext
                 }
 
             case 0xc4: // define huffman table(s)
-                print("huffman table")
                 data = try readMarkerData(from: stream)
                 guard let _:Void = self.updateHuffmanTables(from: data)
                 else
@@ -908,11 +900,9 @@ struct UnsafeContext
                 }
 
             case 0xdd: // define restart interval
-                print("DRI")
                 data = try readMarkerData(from: stream)
 
             case 0xfe: // comment
-                print("comment")
                 data = try readMarkerData(from: stream)
 
             default:
@@ -1050,6 +1040,7 @@ struct UnsafeContext
             }
 
             let leafValues:UnsafePointer<UInt8> = it.bindMemory(to: UInt8.self, capacity: leaves)
+            it += leaves 
 
             guard let table:UnsafeHuffmanTable = .create(leafCounts: leafCounts,
                     leafValues: leafValues,

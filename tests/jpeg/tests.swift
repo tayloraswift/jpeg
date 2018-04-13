@@ -1,5 +1,26 @@
 @testable import JPEG
 
+#if os(macOS)
+import Darwin
+#elseif os(Linux)
+import Glibc
+#endif
+
+public 
+func testDecode() -> String? 
+{
+    do 
+    {
+        try decode(path: "tests/oscardelarenta.jpg")
+    }
+    catch 
+    {
+        return .init(describing: error)
+    }
+    
+    return nil
+}
+
 public
 func testHuffmanTableSingle() -> String?
 {
@@ -9,11 +30,12 @@ func testHuffmanTableSingle() -> String?
     //       /              \         /               \
     //      [a]            [b]      [c]            _0_[ ]_1_
     //                                           /           \
-    //                                         [d]           [e]
+    //                                         [d]        _0_[ ]_1_
+    //                                                  /           \
+    //                                                [e]        reserved
 
-    let leafCounts:[UInt8] = [0, 3, 2, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0],
+    let leafCounts:[UInt8] = [0, 3, 1, 1,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0],
         leafValues:[UInt8] = [0x61, 0x62, 0x63, 0x64, 0x65]
-
     guard let table:UnsafeHuffmanTable = .create(leafCounts: leafCounts, leafValues: leafValues, coefficientClass: .AC)
     else 
     {
@@ -24,7 +46,7 @@ func testHuffmanTableSingle() -> String?
         table.destroy()
     }
     
-    var message:UInt16 = 0b110_111_10_00_01_00_10, // decabac
+    var message:UInt16 = 0b110_1110_00_01_10_110, // deabcd
         shifts:Int     = 0, 
         decoded:String = ""
     while (shifts < 16) 
@@ -35,11 +57,12 @@ func testHuffmanTableSingle() -> String?
         shifts += Int(entry.length)
     }
     
-    guard decoded == "decabac", 
+    let key:String = "deabcd"
+    guard decoded == key, 
           shifts == 16 
     else 
     {
-        return "message decoded incorrectly"
+        return "message decoded incorrectly (expected '\(key)', got '\(decoded)')"
     }
     
     return nil
@@ -74,11 +97,12 @@ func testHuffmanTableDouble() -> String?
         shifts += Int(entry.length)
     }
 
-    guard decoded == "kapd", 
+    let key:String = "kapd"
+    guard decoded == key, 
           shifts == 32 
     else 
     {
-        return "message decoded incorrectly"
+        return "message decoded incorrectly (expected '\(key)', got '\(decoded)')"
     }
     
     return nil
@@ -87,7 +111,7 @@ func testHuffmanTableDouble() -> String?
 public 
 typealias Case = (expectation:Bool, name:String, f:() -> String?)
 public 
-func runTests(_ cases:[(group:String, cases:[Case])])
+func runTests(_ cases:[(group:String, cases:[Case])]) -> Never
 {
     var passed:Int   = 0, 
         failed:Int   = 0, 
@@ -135,9 +159,16 @@ func runTests(_ cases:[(group:String, cases:[Case])])
     upline()
     printCentered("\(Colors.lightCyan.1)\(passed) passed, \(failed) failed\(Colors.off.0)")
     printProgress(1)
-
+    
+    print()
     if passed == expected
     {
-        printCentered("\(Colors.pink.1)<13\(Colors.off.0)")
+        printCentered("\(Colors.pink.1)<3\(Colors.off.0)")
+        exit(0)
+    }
+    else 
+    {
+        printCentered("\(Colors.pink.1)</3\(Colors.off.0)")
+        exit(-1)
     }
 }

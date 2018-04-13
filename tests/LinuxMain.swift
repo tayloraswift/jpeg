@@ -8,6 +8,12 @@ let cases:[(group:String, cases:[Case])] =
             (true, "single-level table", testHuffmanTableSingle), 
             (true, "double-level table", testHuffmanTableDouble)
         ]
+    ), 
+    (
+        "decode",
+        [
+            (true, "oscardelarenta.jpg", testDecode)
+        ]
     )
 ]
 
