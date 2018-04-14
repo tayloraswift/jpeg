@@ -239,26 +239,21 @@ struct UnsafeHuffmanTable
     private 
     let coefficientClass:CoefficientClass, 
         storage:UnsafeMutablePointer<Entry>, 
-        s:Int // s is the number of subtrees, not including the root 
+        n:Int, // number of level 0 entries
+        ζ:Int  // logical size of the table (where the n level 0 entries are each 256 units big)
     
-    // number of level 0 entries
     private 
-    var n:Int 
+    var z:Int  // the physical size of the table in memory
     {
-        return 256 - self.s
+        return self.ζ - self.n * 255
     }
-    
-    @inline(__always)
-    private static 
-    func size(s:Int) -> Int 
-    {
-        return 256 + 255 * s
-    }
-    
-    // determine the value of k, explained in create(leafCounts:leafValues:coefficientClass),
+
+    // determine the value of n, explained in create(leafCounts:leafValues:coefficientClass),
+    // as well as the useful size of the table (often, a large region of the high codeword 
+    // space is unused so it can be excluded)
     // also validates leaf counts to make sure they define a valid 16-bit tree
     private static
-    func countSubtrees(_ leafCounts:UnsafePointer<UInt8>) -> Int?
+    func precalculateSizeParameters(_ leafCounts:UnsafePointer<UInt8>) -> (n:Int, z:Int)?
     {
         var internalNodes:Int = 1 // count the root 
         for l:Int in 0 ..< 8 
@@ -276,7 +271,9 @@ struct UnsafeHuffmanTable
         
         // the number of internal nodes remaining is the number of child trees, with 
         // the possible exception of a fake all-ones branch 
-        let subtrees:Int = internalNodes 
+        let n:Int      = 256 - internalNodes 
+        var z:Int      = n, 
+            shadow:Int = 0x80
         
         // finish validating the tree 
         for l:Int in 8 ..< 16 
@@ -287,7 +284,11 @@ struct UnsafeHuffmanTable
                 return nil
             }
             
-            internalNodes = internalNodes &<< 1 - Int(leafCounts[l])
+            let leaves:Int = .init(leafCounts[l])
+            z             += leaves * shadow
+            
+            internalNodes = internalNodes &<< 1 - leaves 
+            shadow      >>= 1
         }
         
         guard internalNodes > 0
@@ -296,203 +297,204 @@ struct UnsafeHuffmanTable
             return nil
         }
         
-        return subtrees
+        return (n, z)
     }
 
     static 
     func create(leafCounts:UnsafePointer<UInt8>, leafValues:UnsafePointer<UInt8>, 
         coefficientClass:CoefficientClass) -> UnsafeHuffmanTable?
     {
-        // idea:    jpeg huffman tables are encoded gzip style, as sequences of
-        //          leaf counts and leaf values. the leaf counts tell you the
-        //          number of leaf nodes at each level of the tree. combined with
-        //          a rule that says that leaf nodes always occur on the “leftmost”
-        //          side of the tree, this uniquely determines a huffman tree.
-        //
-        //          Given: leaves per level = [0, 3, 1, 1, ... ]
-        //
-        //                  ___0___[root]___1___
-        //                /                      \
-        //         __0__[ ]__1__            __0__[ ]__1__
-        //       /              \         /               \
-        //      [a]            [b]      [c]            _0_[ ]_1_
-        //                                           /           \
-        //                                         [d]        _0_[ ]_1_
-        //                                                  /           \
-        //                                                [e]        reserved
-        //
-        //          note that in a huffman tree, level 0 always contains 0 leaf
-        //          nodes (why?) so the huffman table omits level 0 in the leaf
-        //          counts list.
-        //
-        //          we *could* build a tree data structure, and traverse it as
-        //          we read in the coded bits, but that would be slow and require
-        //          a shift for every bit. instead we extend the huffman tree
-        //          into a perfect tree, and assign the new leaf nodes the
-        //          values of their parents.
-        //
-        //                      ________[root]________
-        //                    /                        \
-        //            _____[ ]_____                _____[ ]_____
-        //           /             \             /               \
-        //          [a]           [b]          [c]            ___[ ]___
-        //        /     \       /     \       /   \         /           \
-        //      (a)     (a)   (b)     (b)   (c)   (c)      [d]          ...
-        //
-        //          this lets us make a table of huffman codes where all the
-        //          codes are “padded” to the same length. note that codewords
-        //          that occur higher up the tree occur multiple times because
-        //          they have multiple children. of course, since the extra bits
-        //          aren’t actually part of the code, we have to store separately
-        //          the length of the original code so we know how many bits
-        //          we should advance the current bit position by once we match
-        //          a code.
-        //
-        //            code       value     length
-        //          —————————  —————————  ————————
-        //             000        'a'         2
-        //             001        'a'         2
-        //             010        'b'         2
-        //             011        'b'         2
-        //             100        'c'         2
-        //             101        'c'         2
-        //             110        'd'         3
-        //             111        ...        >3
-        //
-        //          decoding coded data then becomes a matter of matching a fixed
-        //          length bitstream against the table (the code works as an integer
-        //          index!) since all possible combinations of trailing “padding”
-        //          bits are represented in the table.
-        //
-        //          in jpeg, codewords can be a maximum of 16 bits long. this
-        //          means in theory we need a table with 2^16 entries. that’s a
-        //          huge table considering there are only 256 actual encoded
-        //          values, and since this is the kind of thing that really needs
-        //          to be optimized for speed, this needs to be as cache friendly
-        //          as possible.
-        //
-        //          we can reduce the table size by splitting the 16-bit table
-        //          into two 8-bit levels. this means we have one 8-bit “root”
-        //          tree, and k 8-bit child trees rooted on the internal nodes
-        //          at level 8 of the original tree.
-        //
-        //          so far, we’ve looked at the huffman tree as a tree. however 
-        //          it actually makes more sense to look at it as a table, just 
-        //          like its implementation. remember that the tree is right-heavy, 
-        //          so the first 8 levels will look something like 
-        //
-        //          +———————————————————+ 0
-        //          |                   |
-        //          |                   |
-        //          |                   |
-        //          |                   |
-        //          |                   |
-        //          |                   |
-        //          |                   |
-        //          +———————————————————+
-        //          |                   |
-        //          |                   |
-        //          |                   |
-        //          +———————————————————+
-        //          |                   |
-        //          |                   |
-        //          |                   |
-        //          +———————————————————+ -
-        //          |                   |
-        //          +———————————————————+
-        //          |                   |
-        //          +———————————————————+
-        //          |                   |
-        //          +———————————————————+
-        //          |                   |
-        //          +———————————————————+ -
-        //          |                   |
-        //          +———————————————————+
-        //          +———————————————————+
-        //        n +———————————————————+ -    —    +———————————————————+ s = 0
-        //          +-------------------+      ↑    |                   |
-        //          +-------------------+      s    |                   |
-        //          +-------------------+      ↓    |                   |
-        //    n + s +-------------------+ 256  —    +———————————————————+
-        //                                          |                   |
-        //                                          |                   |
-        //                                          |                   |
-        //                                          +———————————————————+
-        //                                          |                   |
-        //                                          |                   |
-        //                                          |                   |
-        //                                          +———————————————————+
-        //                                          |                   |
-        //                                          +———————————————————+
-        //                                          |                   |
-        //                                          /////////////////////
-        //
-        //          this is awesome because we don’t need to store anything in 
-        //          the table entries themselves to know if they are direct entries 
-        //          or indirect entries. if the index of the entry is greater than 
-        //          or equal to `n` (the number of direct entries), it is an 
-        //          indirect entry, and its indirect index is given by the first 
-        //          byte of the codeword with `n` subtracted from it. 
-        //          level-1 subtables are always 256 entries long since they are 
-        //          leaf tables. this means their positions can be computed in 
-        //          constant time, given `n`, which is also the position of the 
-        //          first level-1 table.
-        //          
-        //          (for computational ease, we store `s = 256 - n` instead. 
-        //          `s` can be interpreted as the number of level-1 subtables 
-        //          trail the level-0 table in the storage buffer)
-        //
-        //          how big can `s` be? well, remember that there are only 256
-        //          different encoded values which means the original tree can
-        //          only have 256 leaves. any full binary tree with height at
-        //          least 1 *must* contain at least 2 leaf nodes (why?). since
-        //          the child trees must have a height > 0 (otherwise they would
-        //          be 0-bit trees), every child tree except possibly the right-
-        //          most one must have at least 2 leaf nodes. the rightmost child
-        //          tree is an exception because in jpeg, the all-ones codeword
-        //          does not represent any value, so the right-most tree can
-        //          possibly only contain one “real” leaf node. we can pigeonhole
-        //          this to show that we can only have up to k ≤ 129 child trees.
-        //          in fact, we can reduce this even further to k ≤ 128 because
-        //          if the rightmost tree only contains 1 leaf, there has to be at
-        //          least one other tree with an odd number of leaves to make the  
-        //          total add up to 256, and that number has to be at least 3. 
-        //          in reality, k is rarely bigger than 7 or 8 yielding a significant 
-        //          size savings.
-        //
-        //          because we don’t need to store pointers, each table entry can 
-        //          be just 2 bytes long — 1 byte for the encoded value, and 1 byte 
-        //          to store the length of the codeword.
-        //
-        //          a buffer like this will never have size greater than
-        //          2 * 256 × (128 + 1) = 65_792 bytes, compared with
-        //          2 × (1 << 16)  = 131_072 bytes for the 16-bit table. in
-        //          reality the 2 layer table is usually on the order of 2–4 kB.
-        //
-        //          why not compact the child trees further, since not all of them
-        //          actually have height 8? we could do that, and get some serious
-        //          worst-case memory savings, but then we couldn’t access the
-        //          child tables at constant offsets from the buffer base. we’d
-        //          need to store whole ass ≥16-bit pointers to the specific
-        //          byte offset where the variable-length child table lives, and
-        //          perform a conditional bit shift to transform the input bits
-        //          into an appropriate index into the table. not a good look.
+        /*
+        idea:    jpeg huffman tables are encoded gzip style, as sequences of
+                 leaf counts and leaf values. the leaf counts tell you the
+                 number of leaf nodes at each level of the tree. combined with
+                 a rule that says that leaf nodes always occur on the “leftmost”
+                 side of the tree, this uniquely determines a huffman tree.
         
-        guard let s:Int = countSubtrees(leafCounts) 
+                 Given: leaves per level = [0, 3, 1, 1, ... ]
+        
+                         ___0___[root]___1___
+                       /                      \
+                __0__[ ]__1__            __0__[ ]__1__
+              /              \         /               \
+             [a]            [b]      [c]            _0_[ ]_1_
+                                                  /           \
+                                                [d]        _0_[ ]_1_
+                                                         /           \
+                                                       [e]        reserved
+        
+                 note that in a huffman tree, level 0 always contains 0 leaf
+                 nodes (why?) so the huffman table omits level 0 in the leaf
+                 counts list.
+        
+                 we *could* build a tree data structure, and traverse it as
+                 we read in the coded bits, but that would be slow and require
+                 a shift for every bit. instead we extend the huffman tree
+                 into a perfect tree, and assign the new leaf nodes the
+                 values of their parents.
+        
+                             ________[root]________
+                           /                        \
+                   _____[ ]_____                _____[ ]_____
+                  /             \             /               \
+                 [a]           [b]          [c]            ___[ ]___
+               /     \       /     \       /   \         /           \
+             (a)     (a)   (b)     (b)   (c)   (c)      [d]          ...
+        
+                 this lets us make a table of huffman codes where all the
+                 codes are “padded” to the same length. note that codewords
+                 that occur higher up the tree occur multiple times because
+                 they have multiple children. of course, since the extra bits
+                 aren’t actually part of the code, we have to store separately
+                 the length of the original code so we know how many bits
+                 we should advance the current bit position by once we match
+                 a code.
+        
+                   code       value     length
+                 —————————  —————————  ————————
+                    000        'a'         2
+                    001        'a'         2
+                    010        'b'         2
+                    011        'b'         2
+                    100        'c'         2
+                    101        'c'         2
+                    110        'd'         3
+                    111        ...        >3
+        
+                 decoding coded data then becomes a matter of matching a fixed
+                 length bitstream against the table (the code works as an integer
+                 index!) since all possible combinations of trailing “padding”
+                 bits are represented in the table.
+        
+                 in jpeg, codewords can be a maximum of 16 bits long. this
+                 means in theory we need a table with 2^16 entries. that’s a
+                 huge table considering there are only 256 actual encoded
+                 values, and since this is the kind of thing that really needs
+                 to be optimized for speed, this needs to be as cache friendly
+                 as possible.
+        
+                 we can reduce the table size by splitting the 16-bit table
+                 into two 8-bit levels. this means we have one 8-bit “root”
+                 tree, and k 8-bit child trees rooted on the internal nodes
+                 at level 8 of the original tree.
+        
+                 so far, we’ve looked at the huffman tree as a tree. however 
+                 it actually makes more sense to look at it as a table, just 
+                 like its implementation. remember that the tree is right-heavy, 
+                 so the first 8 levels will look something like 
+        
+                 +———————————————————+ 0
+                 |                   |
+                 |                   |
+                 |                   |
+                 |                   |
+                 |                   |
+                 |                   |
+                 |                   |
+                 +———————————————————+
+                 |                   |
+                 |                   |
+                 |                   |
+                 +———————————————————+
+                 |                   |
+                 |                   |
+                 |                   |
+                 +———————————————————+ -
+                 |                   |
+                 +———————————————————+
+                 |                   |
+                 +———————————————————+
+                 |                   |
+                 +———————————————————+
+                 |                   |
+                 +———————————————————+ -
+                 |                   |
+                 +———————————————————+
+                 +———————————————————+
+               n +———————————————————+ -    —    +———————————————————+ s = 0
+                 +-------------------+      ↑    |                   |
+                 +-------------------+      s    |                   |
+                 +-------------------+      ↓    |                   |
+           n + s +-------------------+ 256  —    +———————————————————+
+                                                 |                   |
+                                                 |                   |
+                                                 |                   |
+                                                 +———————————————————+
+                                                 |                   |
+                                                 |                   |
+                                                 |                   |
+                                                 +———————————————————+
+                                                 |                   |
+                                                 +———————————————————+
+                                                 |                   |
+                                                 /////////////////////
+        
+                 this is awesome because we don’t need to store anything in 
+                 the table entries themselves to know if they are direct entries 
+                 or indirect entries. if the index of the entry is greater than 
+                 or equal to `n` (the number of direct entries), it is an 
+                 indirect entry, and its indirect index is given by the first 
+                 byte of the codeword with `n` subtracted from it. 
+                 level-1 subtables are always 256 entries long since they are 
+                 leaf tables. this means their positions can be computed in 
+                 constant time, given `n`, which is also the position of the 
+                 first level-1 table.
+                 
+                 (for computational ease, we store `s = 256 - n` instead. 
+                 `s` can be interpreted as the number of level-1 subtables 
+                 trail the level-0 table in the storage buffer)
+        
+                 how big can `s` be? well, remember that there are only 256
+                 different encoded values which means the original tree can
+                 only have 256 leaves. any full binary tree with height at
+                 least 1 *must* contain at least 2 leaf nodes (why?). since
+                 the child trees must have a height > 0 (otherwise they would
+                 be 0-bit trees), every child tree except possibly the right-
+                 most one must have at least 2 leaf nodes. the rightmost child
+                 tree is an exception because in jpeg, the all-ones codeword
+                 does not represent any value, so the right-most tree can
+                 possibly only contain one “real” leaf node. we can pigeonhole
+                 this to show that we can only have up to k ≤ 129 child trees.
+                 in fact, we can reduce this even further to k ≤ 128 because
+                 if the rightmost tree only contains 1 leaf, there has to be at
+                 least one other tree with an odd number of leaves to make the  
+                 total add up to 256, and that number has to be at least 3. 
+                 in reality, k is rarely bigger than 7 or 8 yielding a significant 
+                 size savings.
+        
+                 because we don’t need to store pointers, each table entry can 
+                 be just 2 bytes long — 1 byte for the encoded value, and 1 byte 
+                 to store the length of the codeword.
+        
+                 a buffer like this will never have size greater than
+                 2 * 256 × (128 + 1) = 65_792 bytes, compared with
+                 2 × (1 << 16)  = 131_072 bytes for the 16-bit table. in
+                 reality the 2 layer table is usually on the order of 2–4 kB.
+        
+                 why not compact the child trees further, since not all of them
+                 actually have height 8? we could do that, and get some serious
+                 worst-case memory savings, but then we couldn’t access the
+                 child tables at constant offsets from the buffer base. we’d
+                 need to store whole ass ≥16-bit pointers to the specific
+                 byte offset where the variable-length child table lives, and
+                 perform a conditional bit shift to transform the input bits
+                 into an appropriate index into the table. not a good look.
+        */
+        
+        guard let (n, z):(Int, Int) = precalculateSizeParameters(leafCounts) 
         else 
         {
             return nil
         }
         
-        let count:Int                           = size(s: s),
-            storage:UnsafeMutablePointer<Entry> = .allocate(capacity: count)
+        let storage:UnsafeMutablePointer<Entry> = .allocate(capacity: z)
         
         var value:UnsafePointer<UInt8> = leafValues, 
             shadow:Int                 = 0x8080, 
             i:Int                      = 0
         for l:Int in 0 ..< 16
         {
-            guard i < count 
+            guard i < z 
             else 
             {
                 break
@@ -513,20 +515,36 @@ struct UnsafeHuffmanTable
             shadow >>= 1
         }
         
-        return .init(coefficientClass: coefficientClass, storage: storage, s: s)
+        assert(i == z)
+        
+        return .init(coefficientClass: coefficientClass, storage: storage, n: n, ζ: z + n * 255)
     }
     
     func destroy() 
     {
         // no deinitialization because the buffer can be slightly underinitialized
-        self.storage.deallocate(capacity: UnsafeHuffmanTable.size(s: self.s))
+        self.storage.deallocate(capacity: self.z)
     }
     
+    // codeword is big-endian
     subscript(codeword:UInt16) -> Entry 
     {
         // [ level 0 index  |    offset    ]
         let i:Int = .init(codeword >> 8)
-        return self.storage[i < self.n ? i : (i - 255) << 8 + 255 * self.s + Int(codeword & 0xff)]
+        if i < self.n 
+        {
+            return self.storage[i]
+        }
+        else 
+        {
+            guard Int(codeword) < self.ζ 
+            else 
+            {
+                return (0, 16)
+            }
+            
+            return self.storage[Int(codeword) - self.n * 255]
+        }
     }
 }
 

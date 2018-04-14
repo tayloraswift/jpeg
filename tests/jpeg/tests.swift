@@ -20,6 +20,39 @@ func testDecode() -> String?
     
     return nil
 }
+ 
+func testHuffmanTable(leafCounts:[UInt8], leafValues:[UInt8], message:UInt64, length:Int, key:String) -> String?
+{
+    guard let table:UnsafeHuffmanTable = .create(leafCounts: leafCounts, leafValues: leafValues, coefficientClass: .AC)
+    else 
+    {
+        return "failed to generate huffman table"
+    }
+    defer 
+    {
+        table.destroy()
+    }
+    
+    var message:UInt64 = message << (64 - length),
+        shifts:Int     = 0, 
+        decoded:String = ""
+    while (shifts < length) 
+    {
+        let entry:UnsafeHuffmanTable.Entry = table[UInt16(truncatingIfNeeded: message >> 48)]
+        decoded.append(Character(Unicode.Scalar(entry.value)))
+        message = message &<< entry.length
+        shifts += Int(entry.length)
+    }
+
+    guard decoded == key, 
+          shifts == length 
+    else 
+    {
+        return "message decoded incorrectly (expected '\(key)', got '\(decoded)')"
+    }
+    
+    return nil
+}
 
 public
 func testHuffmanTableSingle() -> String?
@@ -33,79 +66,34 @@ func testHuffmanTableSingle() -> String?
     //                                         [d]        _0_[ ]_1_
     //                                                  /           \
     //                                                [e]        reserved
-
-    let leafCounts:[UInt8] = [0, 3, 1, 1,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0],
-        leafValues:[UInt8] = [0x61, 0x62, 0x63, 0x64, 0x65]
-    guard let table:UnsafeHuffmanTable = .create(leafCounts: leafCounts, leafValues: leafValues, coefficientClass: .AC)
-    else 
-    {
-        return "failed to generate huffman table"
-    }
-    defer 
-    {
-        table.destroy()
-    }
     
-    var message:UInt16 = 0b110_1110_00_01_10_110, // deabcd
-        shifts:Int     = 0, 
-        decoded:String = ""
-    while (shifts < 16) 
-    {
-        let entry:UnsafeHuffmanTable.Entry = table[message]
-        decoded.append(Character(Unicode.Scalar(entry.value)))
-        message = message &<< Int(entry.length)
-        shifts += Int(entry.length)
-    }
-    
-    let key:String = "deabcd"
-    guard decoded == key, 
-          shifts == 16 
-    else 
-    {
-        return "message decoded incorrectly (expected '\(key)', got '\(decoded)')"
-    }
-    
-    return nil
+    return testHuffmanTable(leafCounts: [0, 3, 1, 1,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0], 
+        leafValues  : .init(0x61 ..< 0x61 + 5), 
+        message     : 0b110_1110_00_01_10_110, 
+        length      : 16, 
+        key         : "deabcd")
 }
 
 public 
 func testHuffmanTableDouble() -> String?
 {
     // test really skewed tree 
-    
-    let leafCounts:[UInt8] = [1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1], 
-        leafValues:[UInt8] = .init(0x61 ..< 0x61 + 16)
-        
-    guard let table:UnsafeHuffmanTable = .create(leafCounts: leafCounts, leafValues: leafValues, coefficientClass: .AC)
-    else 
-    {
-        return "failed to generate huffman table"
-    }
-    defer 
-    {
-        table.destroy()
-    }
-    
-    var message:UInt32 = 0b1111_1111_1100__1111_1111_1111_1110__1110,
-        shifts:Int     = 0, 
-        decoded:String = ""
-    while (shifts < 32) 
-    {
-        let entry:UnsafeHuffmanTable.Entry = table[UInt16(truncatingIfNeeded: message >> 16)]
-        decoded.append(Character(Unicode.Scalar(entry.value)))
-        message = message &<< Int(entry.length)
-        shifts += Int(entry.length)
-    }
+    return testHuffmanTable(leafCounts: [1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1], 
+        leafValues  : .init(0x61 ..< 0x61 + 16), 
+        message     : 0b1111_1111_1100__1111_1111_1111_1110__1110, 
+        length      : 32, 
+        key         : "kapd")
+}
 
-    let key:String = "kapd"
-    guard decoded == key, 
-          shifts == 32 
-    else 
-    {
-        return "message decoded incorrectly (expected '\(key)', got '\(decoded)')"
-    }
-    
-    return nil
+public 
+func testHuffmanTableUndefined() -> String?
+{
+    // test codewords that do not correspond to encoded leaf nodes
+    return testHuffmanTable(leafCounts: [1, 1, 1, 1,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0], 
+        leafValues  : .init(0x61 ..< 0x61 + 4), 
+        message     : 0b11110_110_11111110_10_10_1110_11111111_11111111, 
+        length      : 40, 
+        key         : "\0bbd\0")
 }
 
 public 

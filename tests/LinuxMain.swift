@@ -6,7 +6,8 @@ let cases:[(group:String, cases:[Case])] =
         "huffman", 
         [            
             (true, "single-level table", testHuffmanTableSingle), 
-            (true, "double-level table", testHuffmanTableDouble)
+            (true, "double-level table", testHuffmanTableDouble), 
+            (true, "undefined codewords", testHuffmanTableUndefined)
         ]
     ), 
     (
