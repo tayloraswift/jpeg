@@ -68,7 +68,9 @@ struct UnsafeRawVector
         if self.count == self.capacity
         {
             let newCapacity:Int                         = max(1, self.capacity << 1)
-            let newBuffer:UnsafeMutableRawBufferPointer = .allocate(count: newCapacity)
+            let newBuffer:UnsafeMutableRawBufferPointer = 
+                .allocate(byteCount: newCapacity, alignment: MemoryLayout<UInt>.alignment)
+            
             newBuffer.copyBytes(from: self.buffer)
             self.buffer.deallocate()
             self.buffer = newBuffer
@@ -110,8 +112,8 @@ extension UnsafeRawBufferPointer
         var i:I = .init()
         withUnsafeMutablePointer(to: &i)
         {
-            UnsafeMutableRawPointer($0).copyBytes(from: self.baseAddress! + offset,
-                count: MemoryLayout<I>.size)
+            UnsafeMutableRawPointer($0).copyMemory(from: self.baseAddress! + offset,
+                byteCount: MemoryLayout<I>.size)
         }
 
         return I(bigEndian: i)
@@ -155,7 +157,8 @@ func readMarkerData(from stream:UnsafeMutablePointer<FILE>)
     throws -> UnsafeRawBufferPointer
 {
     let length:Int = Int(try readBigEndian(from: stream, as: UInt16.self)) - 2
-    let dest = UnsafeMutableRawBufferPointer.allocate(count: length)
+    let dest:UnsafeMutableRawBufferPointer = 
+        .allocate(byteCount: length, alignment: MemoryLayout<UInt>.alignment)
 
     guard fread(dest.baseAddress, 1, length, stream) == length
     else
@@ -217,12 +220,12 @@ enum UnsafeQuantizationTable
         switch self
         {
         case .q8 (let buffer):
-            buffer.deinitialize (count: 64)
-            buffer.deallocate(capacity: 64)
+            buffer.deinitialize(count: 64)
+            buffer.deallocate()
 
         case .q16(let buffer):
-            buffer.deinitialize (count: 64)
-            buffer.deallocate(capacity: 64)
+            buffer.deinitialize(count: 64)
+            buffer.deallocate()
         }
     }
 }
@@ -241,12 +244,6 @@ struct UnsafeHuffmanTable
         storage:UnsafeMutablePointer<Entry>, 
         n:Int, // number of level 0 entries
         ζ:Int  // logical size of the table (where the n level 0 entries are each 256 units big)
-    
-    private 
-    var z:Int  // the physical size of the table in memory
-    {
-        return self.ζ - self.n * 255
-    }
 
     // determine the value of n, explained in create(leafCounts:leafValues:coefficientClass),
     // as well as the useful size of the table (often, a large region of the high codeword 
@@ -481,6 +478,7 @@ struct UnsafeHuffmanTable
                  into an appropriate index into the table. not a good look.
         */
         
+        // z is the physical size of the table in memory
         guard let (n, z):(Int, Int) = precalculateSizeParameters(leafCounts) 
         else 
         {
@@ -523,7 +521,7 @@ struct UnsafeHuffmanTable
     func destroy() 
     {
         // no deinitialization because the buffer can be slightly underinitialized
-        self.storage.deallocate(capacity: self.z)
+        self.storage.deallocate()
     }
     
     // codeword is big-endian
@@ -675,12 +673,8 @@ struct UnsafeFrameHeader
     {
         UnsafeMutablePointer(mutating: self.components.baseAddress!)
             .deinitialize(count: self.components.count)
-        UnsafeMutablePointer(mutating: self.components.baseAddress!)
-            .deallocate(capacity: -1)
-        UnsafeMutablePointer(mutating: self.indexMap)
-            .deinitialize(count: 256)
-        UnsafeMutablePointer(mutating: self.indexMap)
-            .deallocate(capacity: -1)
+        self.components.deallocate()
+        self.indexMap.deallocate()
     }
 
     static
@@ -768,9 +762,8 @@ struct UnsafeFrameHeader
             return nil
         }
 
-        let components = UnsafeMutablePointer<Component>.allocate(capacity: nf),
-            indexMap   = UnsafeMutablePointer<Int>.allocate(capacity: 256)
-            indexMap.initialize(to: -1, count: 256)
+        let components:UnsafeMutablePointer<Component> = .allocate(capacity: nf),
+            indexMap:UnsafeMutablePointer<Int>         = .allocate(capacity: 256)
         for i:Int in 0 ..< nf
         {
             let ci = Int(data.load(fromByteOffset: 6 + 3 * i, as: UInt8.self))
@@ -781,9 +774,8 @@ struct UnsafeFrameHeader
             else
             {
                 components.deinitialize(count: i)
-                components.deallocate(capacity: -1)
-                indexMap.deinitialize(count: 256)
-                indexMap.deallocate(capacity: -1)
+                components.deallocate()
+                indexMap.deallocate()
                 return nil
             }
 
