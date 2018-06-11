@@ -742,8 +742,8 @@ struct UnsafeFrameHeader
             }
         }
 
-        let width  = Int(data.loadBigEndian(fromByteOffset: 1, as: UInt16.self)),
-            height = Int(data.loadBigEndian(fromByteOffset: 3, as: UInt16.self))
+        let height = Int(data.loadBigEndian(fromByteOffset: 1, as: UInt16.self)),
+            width  = Int(data.loadBigEndian(fromByteOffset: 3, as: UInt16.self))
 
         let nf     = Int(data.load(fromByteOffset: 5, as: UInt8.self))
 
