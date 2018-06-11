@@ -622,7 +622,7 @@ struct JFIF
     }
 }
 
-struct UnsafeFrameHeader
+struct FrameHeader
 {
     enum Encoding
     {
@@ -640,7 +640,7 @@ struct UnsafeFrameHeader
 
         var sampleFactors:(x:UInt8, y:UInt8)
         {
-            return (_sampleFactors >> 4, _sampleFactors & 0x0f)
+            return (self._sampleFactors >> 4, self._sampleFactors & 0x0f)
         }
 
         init?(sampleFactors:UInt8, qtable:UInt8)
@@ -654,7 +654,7 @@ struct UnsafeFrameHeader
             }
 
             self._sampleFactors = sampleFactors
-            self.qtable = qtable
+            self.qtable         = qtable
         }
     }
 
@@ -662,24 +662,14 @@ struct UnsafeFrameHeader
         precision:Int,
         width:Int
 
-    internal private(set)
+    internal private(set) // DNL segment may change this later on
     var height:Int
 
-    let components:UnsafeBufferPointer<Component>
-
-    let indexMap:UnsafePointer<Int> // always 256 Ints long, -1 signifies hole
-
-    func deallocate()
-    {
-        UnsafeMutablePointer(mutating: self.components.baseAddress!)
-            .deinitialize(count: self.components.count)
-        self.components.deallocate()
-        self.indexMap.deallocate()
-    }
+    let components:[Component?]
 
     static
     func read(from stream:UnsafeMutablePointer<FILE>, marker:inout UInt8) throws
-        -> UnsafeFrameHeader?
+        -> FrameHeader?
     {
         let data:UnsafeRawBufferPointer,
             encoding:Encoding
@@ -698,8 +688,8 @@ struct UnsafeFrameHeader
             data     = try readMarkerData(from: stream)
             encoding = .progressiveDCT
 
-        case 0xc3:
-            throw JPEGReadError.Unsupported("hierarchical jpegs are unsupported")
+        case 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf:
+            throw JPEGReadError.Unsupported("unsupported frame encoding (encoding type \(marker & 0xf))")
 
         default:
             throw JPEGReadError.MissingFrameHeader
@@ -716,15 +706,15 @@ struct UnsafeFrameHeader
 
     private static
     func create(from data:UnsafeRawBufferPointer, encoding:Encoding)
-        -> UnsafeFrameHeader?
+        -> FrameHeader?
     {
-        guard data.count >= 8
+        guard data.count >= 6
         else
         {
             return nil
         }
 
-        let precision = Int(data.load(fromByteOffset: 0, as: UInt8.self))
+        let precision:UInt8 = data.load(fromByteOffset: 0, as: UInt8.self)
         switch encoding
         {
         case .baselineDCT:
@@ -742,52 +732,62 @@ struct UnsafeFrameHeader
             }
         }
 
-        let height = Int(data.loadBigEndian(fromByteOffset: 1, as: UInt16.self)),
-            width  = Int(data.loadBigEndian(fromByteOffset: 3, as: UInt16.self))
+        let height:UInt16 = data.loadBigEndian(fromByteOffset: 1, as: UInt16.self),
+            width:UInt16  = data.loadBigEndian(fromByteOffset: 3, as: UInt16.self)
 
-        let nf     = Int(data.load(fromByteOffset: 5, as: UInt8.self))
+        let count:Int     = .init(data.load(fromByteOffset: 5, as: UInt8.self))
 
         if encoding == .progressiveDCT
         {
-            guard 1 ... 4 ~= nf
+            guard 1 ... 4 ~= count
+            else
+            {
+                return nil
+            }
+        }
+        else 
+        {
+            guard count > 0
             else
             {
                 return nil
             }
         }
 
-        guard 3 * nf + 6 == data.count
+        guard 3 * count == data.count - 6
         else
         {
             return nil
         }
 
-        let components:UnsafeMutablePointer<Component> = .allocate(capacity: nf),
-            indexMap:UnsafeMutablePointer<Int>         = .allocate(capacity: 256)
-        for i:Int in 0 ..< nf
+        var components:[Component?] = .init(repeating: nil, count: 256)
+        for i:Int in 0 ..< count
         {
-            let ci = Int(data.load(fromByteOffset: 6 + 3 * i, as: UInt8.self))
-            indexMap[ci] = i
-            guard let component = Component(
+            let ci:Int = .init(data.load(fromByteOffset: 6 + 3 * i, as: UInt8.self))
+            
+            // make sure no duplicate component indices are used 
+            guard components[ci] == nil 
+            else 
+            {
+                return nil
+            }
+            
+            guard let component:Component = Component.init(
                 sampleFactors: data.load(fromByteOffset: 7 + 3 * i, as: UInt8.self),
                 qtable:        data.load(fromByteOffset: 8 + 3 * i, as: UInt8.self))
             else
             {
-                components.deinitialize(count: i)
-                components.deallocate()
-                indexMap.deallocate()
                 return nil
             }
 
-            (components + i).initialize(to: component)
+            components[ci] = component
         }
 
-        return UnsafeFrameHeader(encoding: encoding,
-            precision:  precision,
-            width:      width,
-            height:     height,
-            components: UnsafeBufferPointer(start: components, count: nf),
-            indexMap:   indexMap)
+        return FrameHeader(encoding: encoding,
+            precision:  Int(precision),
+            width:      Int(width),
+            height:     Int(height),
+            components: components)
     }
 
     mutating
@@ -1152,7 +1152,7 @@ func decode(path:String) throws
     
     try context.update(from: stream, marker: &marker)
 
-    guard var frameHeader:UnsafeFrameHeader = try .read(from: stream, marker: &marker)
+    guard var frameHeader:FrameHeader = try .read(from: stream, marker: &marker)
     else
     {
         throw JPEGReadError.InvalidFrameHeader
