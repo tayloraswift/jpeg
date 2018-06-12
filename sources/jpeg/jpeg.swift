@@ -570,11 +570,11 @@ struct JFIF
         }
 
         let data:UnsafeRawBufferPointer = try readMarkerData(from: stream)
-        marker  = try readNextMarker(from: stream)
+        marker = try readNextMarker(from: stream)
         return JFIF.create(from: data)
     }
 
-    private static //todo: rewrite this with buffers and without throws
+    private static 
     func create(from data:UnsafeRawBufferPointer) -> JFIF?
     {
         guard data.count >= 14
@@ -583,19 +583,20 @@ struct JFIF
             return nil
         }
 
-        for (b1, b2):(UInt8, UInt8) in zip(data[0 ..< 5], [0x4a, 0x46, 0x49, 0x46, 0x00])
+        guard   data[0] == 0x4a, 
+                data[1] == 0x46, 
+                data[2] == 0x49, 
+                data[3] == 0x46, 
+                data[4] == 0x00
+        else 
         {
-            guard b1 == b2
-            else
-            {
-                // missing 'JFIF' signature"
-                return nil
-            }
+            // missing 'JFIF' signature"
+            return nil
         }
 
-        let version:(major:UInt8, minor:UInt8) =
-            (data.load(fromByteOffset: 5, as: UInt8.self),
-             data.load(fromByteOffset: 6, as: UInt8.self))
+        let version:(major:UInt8, minor:UInt8)
+        version.major = data.load(fromByteOffset: 5, as: UInt8.self)
+        version.minor = data.load(fromByteOffset: 6, as: UInt8.self)
 
         guard version.major == 1, 0 ... 2 ~= version.minor
         else
@@ -604,20 +605,19 @@ struct JFIF
             return nil
         }
 
-        guard let densityUnit =
-            DensityUnit(rawValue: data.load(fromByteOffset: 7, as: UInt8.self))
+        guard let densityUnit:DensityUnit =
+            DensityUnit.init(rawValue: data.load(fromByteOffset: 7, as: UInt8.self))
         else
         {
             // invalid JFIF density unit
             return nil
         }
 
-        let density:(x:UInt16, y:UInt16) =
-            (data.loadBigEndian(fromByteOffset:  8, as: UInt16.self),
-             data.loadBigEndian(fromByteOffset: 10, as: UInt16.self))
+        let density:(x:UInt16, y:UInt16)
+        density.x = data.loadBigEndian(fromByteOffset:  8, as: UInt16.self)
+        density.y = data.loadBigEndian(fromByteOffset: 10, as: UInt16.self)
 
         // we ignore the thumbnail data
-
         return JFIF(version: version, densityUnit: densityUnit, density: density)
     }
 }
