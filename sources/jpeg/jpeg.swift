@@ -820,6 +820,43 @@ struct FrameHeader
 
 struct ScanHeader
 {
+    struct Component 
+    {
+        let component:Int, 
+            selector:(dc:Int, ac:Int)
+        
+        init(raw:(UInt8, UInt8) = (0, 0))
+        {
+            self.component   = Int(raw.0)
+            self.selector.dc = Int(raw.1 >> 4)
+            self.selector.ac = Int(raw.1 & 0xf)
+        }
+        
+        init(data:UnsafeRawBufferPointer, offset:Int)
+        {
+            self.init(raw: (data.load(fromByteOffset: offset    , as: UInt8.self), 
+                            data.load(fromByteOffset: offset + 1, as: UInt8.self)))
+        }
+        
+        static 
+        let cleared:Component = .init()
+    }
+    
+    struct Components
+    {
+        let count:Int, 
+            storage:(Component, Component, Component, Component)
+        
+        var capacity:Int 
+        {
+            return 4
+        }
+    }
+    
+    let spectrum:(start:Int, end:Int), 
+        approximationBit:(high:Int, low:Int), 
+        components:Components
+    
     // the marker parameter is not a reference because this function does not
     // update the `marker` variable because scan headers are followed by MCU data
     static
@@ -841,10 +878,63 @@ struct ScanHeader
         return create(from: data)
     }
 
-    private static
-    func create(from _:UnsafeRawBufferPointer) -> ScanHeader?
+    private static 
+    func create(from data:UnsafeRawBufferPointer) -> ScanHeader?
     {
-        return ScanHeader()
+        guard data.count >= 4 
+        else 
+        {
+            return nil
+        }
+        
+        let count:UInt8 = data.load(fromByteOffset: 0, as: UInt8.self)
+        
+        guard data.count - 4 >= count * 2 
+        else 
+        {
+            return nil
+        }
+        
+        // thomas had never seen such a mess
+        let components:Components
+        switch count 
+        {
+        case 1:
+            components = .init(count: 1, storage:  (.init(data: data, offset: 1), 
+                                                    .cleared, 
+                                                    .cleared, 
+                                                    .cleared))
+        case 2:
+            components = .init(count: 2, storage:  (.init(data: data, offset: 1), 
+                                                    .init(data: data, offset: 3), 
+                                                    .cleared, 
+                                                    .cleared))
+        case 3:
+            components = .init(count: 3, storage:  (.init(data: data, offset: 1), 
+                                                    .init(data: data, offset: 3), 
+                                                    .init(data: data, offset: 5), 
+                                                    .cleared))
+        case 4:
+            components = .init(count: 4, storage:  (.init(data: data, offset: 1), 
+                                                    .init(data: data, offset: 3), 
+                                                    .init(data: data, offset: 5), 
+                                                    .init(data: data, offset: 7)))
+        
+        default:
+            return nil
+        }
+        
+        // TODO: validate sampling factor sum 
+        
+        let spectrum:(UInt8, UInt8) = 
+            (data.load(fromByteOffset: data.count - 3, as: UInt8.self), 
+             data.load(fromByteOffset: data.count - 2, as: UInt8.self))
+        let approximationBits:UInt8 = data.load(fromByteOffset: data.count - 1, as: UInt8.self)
+        
+        return ScanHeader(
+            spectrum:         (Int(spectrum.0)            , Int(spectrum.1)), 
+            approximationBit: (Int(approximationBits >> 4), Int(approximationBits & 0xf)), 
+            components:        components)
     }
 }
 
@@ -912,11 +1002,14 @@ struct UnsafeContext
                     data.deallocate()
                     throw JPEGReadError.InvalidHuffmanTable
                 }
+            
+            case 0xcc:
+                throw JPEGReadError.Unsupported("arithmetic encoding is unsupported")
 
             case 0xdd: // define restart interval
                 throw JPEGReadError.Unimplemented("restart intervals not implemented")
             
-            case 0xfe: // comment
+            case 0xfe, 0xe0 ..< 0xf0: // comment, or application data
                 data = try readMarkerData(from: stream)
 
             default:
@@ -968,7 +1061,9 @@ struct UnsafeContext
                 // quantization table has invalid precision
                 return nil
             }
-
+            
+            print(flags & 0x0f)
+            
             switch flags & 0x0f
             {
             case 0:
@@ -1063,6 +1158,8 @@ struct UnsafeContext
             {
                 return nil 
             }
+            
+            print(flags & 0x0f, coefficientClass)
 
             switch flags & 0x0f
             {
@@ -1133,6 +1230,84 @@ func decode(path:String) throws
         fclose(stream)
     }
     
+    // the kaylor jpeg (a typical jpeg) is laid out like this 
+    // 
+    // {
+    //     start of image, 
+    //     {
+    //         [
+    //             quantization table definition ([0]), 
+    //             quantization table definition ([1])
+    //         ], 
+    //         frame header, 
+    //         [
+    //             {
+    //                 [
+    //                     huffman table definition ([0]: DC), 
+    //                     huffman table definition ([1]: DC)
+    //                 ], 
+    //                 scan header, 
+    //                 [MCU, MCU, MCU, ...]
+    //             }, 
+    //             dnl segment (not present), 
+    //             {
+    //                 [
+    //                     huffman table definition ([0]: AC)
+    //                 ], 
+    //                 scan header, 
+    //                 [MCU, MCU, MCU, ...]
+    //             }, 
+    //             {
+    //                 [
+    //                     huffman table definition ([1]: AC)
+    //                 ], 
+    //                 scan header, 
+    //                 [MCU, MCU, MCU, ...]
+    //             }, 
+    //             {
+    //                 [
+    //                     huffman table definition ([1]: AC)
+    //                 ], 
+    //                 scan header, 
+    //                 [MCU, MCU, MCU, ...]
+    //             }, 
+    //             {
+    //                 [
+    //                     huffman table definition ([0]: AC)
+    //                 ], 
+    //                 scan header, 
+    //                 [MCU, MCU, MCU, ...]
+    //             }, 
+    //             {
+    //                 [
+    //                     huffman table definition ([0]: AC)
+    //                 ], 
+    //                 scan header, 
+    //                 [MCU, MCU, MCU, ...]
+    //             }, 
+    //             {
+    //                 scan header, 
+    //                 [MCU, MCU, MCU, ...]
+    //             }, 
+    //             {
+    //                 [
+    //                     huffman table definition ([1]: AC)
+    //                 ], 
+    //                 scan header, 
+    //                 [MCU, MCU, MCU, ...]
+    //             }, 
+    //             {
+    //                 [
+    //                     huffman table definition ([1]: AC)
+    //                 ], 
+    //                 scan header, 
+    //                 [MCU, MCU, MCU, ...]
+    //             }
+    //         ]
+    //     }
+    //     end of image
+    // }
+    
     // start of image marker
     guard try readNextMarker(from: stream) == 0xd8
     else
@@ -1161,6 +1336,8 @@ func decode(path:String) throws
     {
         throw JPEGReadError.InvalidFrameHeader
     }
+    
+    print(frameHeader)
 
     var firstScan:Bool = true
     while marker != 0xd9 // end of image
@@ -1171,6 +1348,8 @@ func decode(path:String) throws
         {
             throw JPEGReadError.InvalidScanHeader
         }
+        
+        print("scan header", scanHeader)
 
         let mcuVector:UnsafeRawVector = try readMCUs(from: stream, marker: &marker)
         defer
