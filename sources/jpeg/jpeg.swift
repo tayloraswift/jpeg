@@ -20,7 +20,9 @@ enum JPEGReadError:Error
          StructuralError,
          SyntaxError(String),
 
-         Unsupported(String)
+         Unsupported(String), 
+         
+         Unimplemented(String)
 }
 
 struct UnsafeRawVector
@@ -898,6 +900,7 @@ struct UnsafeContext
                 guard let _:Void = self.updateQuantizationTables(from: data)
                 else
                 {
+                    data.deallocate()
                     throw JPEGReadError.InvalidQuantizationTable
                 }
 
@@ -906,12 +909,13 @@ struct UnsafeContext
                 guard let _:Void = self.updateHuffmanTables(from: data)
                 else
                 {
+                    data.deallocate()
                     throw JPEGReadError.InvalidHuffmanTable
                 }
 
             case 0xdd: // define restart interval
-                data = try readMarkerData(from: stream)
-
+                throw JPEGReadError.Unimplemented("restart intervals not implemented")
+            
             case 0xfe: // comment
                 data = try readMarkerData(from: stream)
 
@@ -1162,7 +1166,7 @@ func decode(path:String) throws
     while marker != 0xd9 // end of image
     {
         try context.update(from: stream, marker: &marker)
-        guard let scanHeader = try ScanHeader.read(from: stream, marker: marker)
+        guard let scanHeader:ScanHeader = try .read(from: stream, marker: marker)
         else
         {
             throw JPEGReadError.InvalidScanHeader
@@ -1178,8 +1182,7 @@ func decode(path:String) throws
         {
             while context.restart(marker: marker)
             {
-                let mcuVector:UnsafeRawVector =
-                    try readMCUs(from: stream, marker: &marker)
+                let mcuVector:UnsafeRawVector = try readMCUs(from: stream, marker: &marker)
                 defer
                 {
                     mcuVector.deallocate()
