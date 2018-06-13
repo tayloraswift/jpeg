@@ -23,21 +23,18 @@ func testDecode() -> String?
  
 func testHuffmanTable(leafCounts:[UInt8], leafValues:[UInt8], message:[UInt8], key:String) -> String?
 {
-    guard let table:UnsafeHuffmanTable = .create(leafCounts: leafCounts, leafValues: leafValues, coefficientClass: .AC)
+    guard let table:HuffmanTable = 
+        .create(leafCounts: leafCounts, leafValues: leafValues, coefficient: .AC)
     else 
     {
         return "failed to generate huffman table"
-    }
-    defer 
-    {
-        table.destroy()
     }
     
     var bitstream:Bitstream = .init(message), 
         decoded:String = ""
     while let path:UInt16 = bitstream.front
     {
-        let entry:UnsafeHuffmanTable.Entry = table[path]
+        let entry:HuffmanTable.Entry = table[path]
         bitstream.pop(entry.length)
         decoded.append(Character(Unicode.Scalar(entry.value)))
     }

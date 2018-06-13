@@ -131,52 +131,28 @@ func readNextMarker(from stream:UnsafeMutablePointer<FILE>) throws -> UInt8
     }
 }
 
-enum UnsafeQuantizationTable
+enum QuantizationTable
 {
-    case q8 (UnsafeMutablePointer<UInt8>),
-         q16(UnsafeMutablePointer<UInt16>)
+    case q8 ([UInt8]),
+         q16([UInt16])
 
     static
-    func createQ8(data:UnsafeRawPointer) -> UnsafeQuantizationTable
+    func createQ8(data:UnsafeRawPointer) -> QuantizationTable
     {
-        let cells:UnsafeMutablePointer<UInt8> = .allocate(capacity: 64),
-            u8:UnsafePointer<UInt8> = data.bindMemory(to: UInt8.self, capacity: 64)
-        cells.initialize(from: u8, count: 64)
-        return .q8(cells)
+        return .q8([UInt8](UnsafeRawBufferPointer(start: data, count: 64)))
     }
 
     static
-    func createQ16(data:UnsafeRawPointer) -> UnsafeQuantizationTable
+    func createQ16(data:UnsafeRawPointer) -> QuantizationTable
     {
-        let cells:UnsafeMutablePointer<UInt16> = .allocate(capacity: 64),
-            u16:UnsafePointer<UInt16> = data.bindMemory(to: UInt16.self, capacity: 64)
-
-        for cell:Int in 0 ..< 64
-        {
-            (cells + cell).initialize(to: UInt16(bigEndian: u16[cell]))
-        }
-
-        return .q16(cells)
-    }
-
-    func destroy()
-    {
-        switch self
-        {
-        case .q8 (let buffer):
-            buffer.deinitialize(count: 64)
-            buffer.deallocate()
-
-        case .q16(let buffer):
-            buffer.deinitialize(count: 64)
-            buffer.deallocate()
-        }
+        let u16:UnsafePointer<UInt16> = data.bindMemory(to: UInt16.self, capacity: 64)
+        return .q16(UnsafeBufferPointer<UInt16>(start: u16, count: 64).map(UInt16.init(bigEndian:)))
     }
 }
 
-struct UnsafeHuffmanTable
+struct HuffmanTable
 {
-    enum CoefficientClass
+    enum Coefficient
     {
         case DC, AC
     }
@@ -184,8 +160,8 @@ struct UnsafeHuffmanTable
     typealias Entry = (value:UInt8, length:UInt8)
     
     private 
-    let coefficientClass:CoefficientClass, 
-        storage:UnsafeMutablePointer<Entry>, 
+    let coefficient:Coefficient, 
+        storage:[Entry], 
         n:Int, // number of level 0 entries
         ζ:Int  // logical size of the table (where the n level 0 entries are each 256 units big)
 
@@ -243,7 +219,7 @@ struct UnsafeHuffmanTable
 
     static 
     func create(leafCounts:UnsafePointer<UInt8>, leafValues:UnsafePointer<UInt8>, 
-        coefficientClass:CoefficientClass) -> UnsafeHuffmanTable?
+        coefficient:Coefficient) -> HuffmanTable?
     {
         /*
         idea:    jpeg huffman tables are encoded gzip style, as sequences of
@@ -429,26 +405,26 @@ struct UnsafeHuffmanTable
             return nil
         }
         
-        let storage:UnsafeMutablePointer<Entry> = .allocate(capacity: z)
+        var storage:[Entry] = []
+            storage.reserveCapacity(z)
         
         var value:UnsafePointer<UInt8> = leafValues, 
-            shadow:Int                 = 0x8080, 
-            i:Int                      = 0
+            shadow:Int                 = 0x8080
         for l:Int in 0 ..< 16
         {
-            guard i < z 
+            guard storage.count < z 
             else 
             {
                 break
             }            
             
+            let length:UInt8 = .init(truncatingIfNeeded: l + 1)
             for _ in 0 ..< leafCounts[l]
             {
-                let limit:Int = i + shadow & 0xff
-                while (i < limit)
+                let limit:Int = storage.count + shadow & 0xff
+                while (storage.count < limit)
                 {
-                    storage[i] = (value: value.pointee, length: UInt8(truncatingIfNeeded: l + 1))
-                    i         += 1
+                    storage.append((value: value.pointee, length: length))
                 }
                 
                 value += 1
@@ -457,15 +433,9 @@ struct UnsafeHuffmanTable
             shadow >>= 1
         }
         
-        assert(i == z)
+        assert(storage.count == z)
         
-        return .init(coefficientClass: coefficientClass, storage: storage, n: n, ζ: z + n * 255)
-    }
-    
-    func destroy() 
-    {
-        // no deinitialization because the buffer can be slightly underinitialized
-        self.storage.deallocate()
+        return .init(coefficient: coefficient, storage: storage, n: n, ζ: z + n * 255)
     }
     
     // codeword is big-endian
@@ -880,36 +850,23 @@ struct ScanHeader
     }
 }
 
-struct UnsafeContext
+struct Context
 {
     internal private(set)
     var restartInterval:Int = 0
 
     // these must be managed manually or they will leak
     private
-    var qtables:(UnsafeQuantizationTable?,
-                 UnsafeQuantizationTable?,
-                 UnsafeQuantizationTable?,
-                 UnsafeQuantizationTable?) = (nil, nil, nil, nil)
+    var qtables:(QuantizationTable?,
+                 QuantizationTable?,
+                 QuantizationTable?,
+                 QuantizationTable?) = (nil, nil, nil, nil)
 
     private
-    var htables:(UnsafeHuffmanTable?,
-                 UnsafeHuffmanTable?,
-                 UnsafeHuffmanTable?,
-                 UnsafeHuffmanTable?) = (nil, nil, nil, nil)
-
-    func destroy()
-    {
-        qtables.0?.destroy()
-        qtables.1?.destroy()
-        qtables.2?.destroy()
-        qtables.3?.destroy()
-
-        htables.0?.destroy()
-        htables.1?.destroy()
-        htables.2?.destroy()
-        htables.3?.destroy()
-    }
+    var htables:(HuffmanTable?,
+                 HuffmanTable?,
+                 HuffmanTable?,
+                 HuffmanTable?) = (nil, nil, nil, nil)
 
     // restart is a naked marker so it takes no `stream` parameter. just like
     // ScanHeader.read(from:marker:) this function does not update the `marker`
@@ -973,7 +930,7 @@ struct UnsafeContext
         var i:Int = 0
         while (i < data.count)
         {
-            let table:UnsafeQuantizationTable,
+            let table:QuantizationTable,
                 flags:UInt8 = data[i]
             // `i` gets incremented halfway through so it’s easier to just store
             // the `flags` byte
@@ -1007,24 +964,18 @@ struct UnsafeContext
             switch flags & 0x0f
             {
             case 0:
-                qtables.0?.destroy()
                 qtables.0 = table
 
             case 1:
-                qtables.1?.destroy()
                 qtables.1 = table
 
             case 2:
-                qtables.2?.destroy()
                 qtables.2 = table
 
             case 3:
-                qtables.3?.destroy()
                 qtables.3 = table
 
             default:
-                // quantization table has invalid binding index (index must be in 0 ... 3)
-                table.destroy()
                 return nil
             }
         }
@@ -1053,17 +1004,17 @@ struct UnsafeContext
                 return nil
             }
 
-            let coefficientClass:UnsafeHuffmanTable.CoefficientClass,
+            let coefficient:HuffmanTable.Coefficient,
                 flags:UInt8 = it.load(as: UInt8.self)
             // `it` gets incremented halfway through so it’s easier to just store
             // the `flags` byte
             switch flags & 0xf0
             {
             case 0x00:
-                coefficientClass = .DC
+                coefficient = .DC
 
             case 0x10:
-                coefficientClass = .AC
+                coefficient = .AC
 
             default:
                 // huffman table has invalid class
@@ -1091,9 +1042,8 @@ struct UnsafeContext
             let leafValues:UnsafePointer<UInt8> = it.bindMemory(to: UInt8.self, capacity: leaves)
             it += leaves 
 
-            guard let table:UnsafeHuffmanTable = .create(leafCounts: leafCounts,
-                    leafValues: leafValues,
-                    coefficientClass: coefficientClass)
+            guard let table:HuffmanTable = 
+                .create(leafCounts: leafCounts, leafValues: leafValues, coefficient: coefficient)
             else 
             {
                 return nil 
@@ -1102,24 +1052,19 @@ struct UnsafeContext
             switch flags & 0x0f
             {
             case 0:
-                htables.0?.destroy()
                 htables.0 = table
 
             case 1:
-                htables.1?.destroy()
                 htables.1 = table
 
             case 2:
-                htables.2?.destroy()
                 htables.2 = table
 
             case 3:
-                htables.3?.destroy()
                 htables.3 = table
 
             default:
                 // huffman table has invalid binding index (index must be in 0 ... 3)
-                table.destroy()
                 return nil
             }
         }
@@ -1130,9 +1075,9 @@ struct UnsafeContext
 
 struct Codebook 
 {
-    let dc:UnsafeHuffmanTable, 
-        ac:UnsafeHuffmanTable, 
-        quantizer:UnsafeQuantizationTable
+    let dc:HuffmanTable, 
+        ac:HuffmanTable, 
+        quantizer:QuantizationTable
 }
 
 struct Bitstream 
@@ -1320,11 +1265,7 @@ func decode(path:String) throws
         throw JPEGReadError.InvalidJFIFHeader
     }
 
-    var context:UnsafeContext = .init()
-    defer
-    {
-        context.destroy()
-    }
+    var context:Context = .init()
     
     try context.update(from: stream, marker: &marker)
 
