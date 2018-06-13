@@ -25,64 +25,6 @@ enum JPEGReadError:Error
          Unimplemented(String)
 }
 
-struct UnsafeRawVector
-{
-    private
-    var buffer:UnsafeMutableRawBufferPointer = .init(start: nil, count: 0)
-
-    internal private(set)
-    var count:Int = 0
-
-    private
-    var capacity:Int
-    {
-        return self.buffer.count
-    }
-
-    // don’t try to call `deallocate()` on this, it will work (after SE-0184), but
-    // it is not well-defined. keep the original UnsafeRawVector object around
-    // and call `deallocate()` on that instead.
-    var dataView:UnsafeRawBufferPointer
-    {
-        return UnsafeRawBufferPointer(start: self.buffer.baseAddress, count: self.count)
-    }
-
-    subscript(i:Int) -> UInt8
-    {
-        get
-        {
-            return self.buffer[i]
-        }
-        set(v)
-        {
-            self.buffer[i] = v
-        }
-    }
-
-    func deallocate()
-    {
-        self.buffer.deallocate()
-    }
-
-    mutating
-    func append(_ byte:UInt8)
-    {
-        if self.count == self.capacity
-        {
-            let newCapacity:Int                         = max(1, self.capacity << 1)
-            let newBuffer:UnsafeMutableRawBufferPointer = 
-                .allocate(byteCount: newCapacity, alignment: MemoryLayout<UInt>.alignment)
-            
-            newBuffer.copyBytes(from: self.buffer)
-            self.buffer.deallocate()
-            self.buffer = newBuffer
-        }
-
-        self.buffer[self.count] = byte
-        self.count             += 1
-    }
-}
-
 func resolvePath(_ path:String) -> String
 {
     guard let first:Character = path.first
@@ -1062,8 +1004,6 @@ struct UnsafeContext
                 return nil
             }
             
-            print(flags & 0x0f)
-            
             switch flags & 0x0f
             {
             case 0:
@@ -1159,8 +1099,6 @@ struct UnsafeContext
                 return nil 
             }
             
-            print(flags & 0x0f, coefficientClass)
-
             switch flags & 0x0f
             {
             case 0:
@@ -1190,11 +1128,69 @@ struct UnsafeContext
     }
 }
 
-func readMCUs(from stream:UnsafeMutablePointer<FILE>, marker:inout UInt8) throws
-    -> UnsafeRawVector
+struct Codebook 
 {
-    var vector     = UnsafeRawVector(),
-        byte:UInt8 = try readUInt8(from: stream)
+    let dc:UnsafeHuffmanTable, 
+        ac:UnsafeHuffmanTable, 
+        quantizer:UnsafeQuantizationTable
+}
+
+struct Bitstream 
+{
+    let atoms:[UInt16]
+    var position:Int = 0, 
+        bit:UInt8    = 0
+    
+    init(_ data:[UInt8])
+    {
+        // convert byte array to big-endian UInt16 array 
+        var atoms:[UInt16] = stride(from: 0, to: data.count - 1, by: 2).map
+        {
+            UInt16(data[$0]) << 8 | UInt16(data[$0 | 1])
+        }
+        
+        if data.count & 1 != 0
+        {
+            atoms.append(UInt16(data[data.count - 1]) << 8 | 0x00ff)
+        }
+        
+        // insert two more 0xffff atoms to serve as a barrier
+        atoms.append(0xffff)
+        atoms.append(0xffff)
+        
+        self.atoms = atoms
+    }
+    
+    var front:UInt16?
+    {
+        // can optimize with two shifts and &>> ?
+        let atom:UInt16 = self.atoms[self.position] << bit | self.atoms[self.position + 1] >> (16 - bit)
+        
+        guard atom != 0xffff 
+        else 
+        {
+            return nil
+        }
+        
+        return atom
+    }
+    
+    mutating 
+    func pop(_ bits:UInt8)
+    {
+        self.bit += bits 
+        if self.bit > 15 
+        {
+            self.bit      &= 0x0f
+            self.position += 1
+        }
+    }
+}
+
+func decodeEntropicSegment(from stream:UnsafeMutablePointer<FILE>, marker:inout UInt8) throws
+{
+    var data:[UInt8] = [],
+        byte:UInt8   = try readUInt8(from: stream) // if not buffered, we could at least read in pairs
     while true
     {
         if byte == 0xff
@@ -1209,11 +1205,12 @@ func readMCUs(from stream:UnsafeMutablePointer<FILE>, marker:inout UInt8) throws
                     marker = try readUInt8(from: stream)
                 }
 
-                return vector
+                
+                return 
             }
         }
 
-        vector.append(byte)
+        data.append(byte)
         byte = try readUInt8(from: stream)
     }
 }
@@ -1351,21 +1348,13 @@ func decode(path:String) throws
         
         print("scan header", scanHeader)
 
-        let mcuVector:UnsafeRawVector = try readMCUs(from: stream, marker: &marker)
-        defer
-        {
-            mcuVector.deallocate()
-        }
+        try decodeEntropicSegment(from: stream, marker: &marker)
 
         if context.restartInterval > 0
         {
             while context.restart(marker: marker)
             {
-                let mcuVector:UnsafeRawVector = try readMCUs(from: stream, marker: &marker)
-                defer
-                {
-                    mcuVector.deallocate()
-                }
+                try decodeEntropicSegment(from: stream, marker: &marker)
             }
         }
 
