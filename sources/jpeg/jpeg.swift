@@ -152,16 +152,10 @@ enum QuantizationTable
 
 struct HuffmanTable
 {
-    enum Coefficient
-    {
-        case DC, AC
-    }
-
     typealias Entry = (value:UInt8, length:UInt8)
     
     private 
-    let coefficient:Coefficient, 
-        storage:[Entry], 
+    let storage:[Entry], 
         n:Int, // number of level 0 entries
         ζ:Int  // logical size of the table (where the n level 0 entries are each 256 units big)
 
@@ -218,8 +212,8 @@ struct HuffmanTable
     }
 
     static 
-    func create(leafCounts:UnsafePointer<UInt8>, leafValues:UnsafePointer<UInt8>, 
-        coefficient:Coefficient) -> HuffmanTable?
+    func create(leafCounts:UnsafePointer<UInt8>, leafValues:UnsafePointer<UInt8>) 
+        -> HuffmanTable?
     {
         /*
         idea:    jpeg huffman tables are encoded gzip style, as sequences of
@@ -435,7 +429,7 @@ struct HuffmanTable
         
         assert(storage.count == z)
         
-        return .init(coefficient: coefficient, storage: storage, n: n, ζ: z + n * 255)
+        return .init(storage: storage, n: n, ζ: z + n * 255)
     }
     
     // codeword is big-endian
@@ -735,39 +729,19 @@ struct ScanHeader
     struct Component 
     {
         let component:Int, 
-            selector:(dc:Int, ac:Int)
+            selectors:(dc:Int, ac:Int)
         
-        init(raw:(UInt8, UInt8) = (0, 0))
+        init(data:(UInt8, UInt8))
         {
-            self.component   = Int(raw.0)
-            self.selector.dc = Int(raw.1 >> 4)
-            self.selector.ac = Int(raw.1 & 0xf)
-        }
-        
-        init(data:UnsafeRawBufferPointer, offset:Int)
-        {
-            self.init(raw: (data.load(fromByteOffset: offset    , as: UInt8.self), 
-                            data.load(fromByteOffset: offset + 1, as: UInt8.self)))
-        }
-        
-        static 
-        let cleared:Component = .init()
-    }
-    
-    struct Components
-    {
-        let count:Int, 
-            storage:(Component, Component, Component, Component)
-        
-        var capacity:Int 
-        {
-            return 4
+            self.component    = Int(data.0)
+            self.selectors.dc = Int(data.1 >> 4)
+            self.selectors.ac = Int(data.1 & 0xf)
         }
     }
     
-    let spectrum:(start:Int, end:Int), 
-        approximationBit:(high:Int, low:Int), 
-        components:Components
+    let band:Range<Int>, 
+        exponent:Int, 
+        components:[Component] // FSA4
     
     // the marker parameter is not a reference because this function does not
     // update the `marker` variable because scan headers are followed by MCU data
@@ -799,54 +773,35 @@ struct ScanHeader
             return nil
         }
         
-        let count:UInt8 = data.load(fromByteOffset: 0, as: UInt8.self)
+        let count:Int = .init(data.load(fromByteOffset: 0, as: UInt8.self))
         
-        guard data.count - 4 >= count * 2 
+        guard   1 ... 4 ~= count, 
+                data.count - 4 >= count * 2 
         else 
         {
             return nil
         }
         
-        // thomas had never seen such a mess
-        let components:Components
-        switch count 
-        {
-        case 1:
-            components = .init(count: 1, storage:  (.init(data: data, offset: 1), 
-                                                    .cleared, 
-                                                    .cleared, 
-                                                    .cleared))
-        case 2:
-            components = .init(count: 2, storage:  (.init(data: data, offset: 1), 
-                                                    .init(data: data, offset: 3), 
-                                                    .cleared, 
-                                                    .cleared))
-        case 3:
-            components = .init(count: 3, storage:  (.init(data: data, offset: 1), 
-                                                    .init(data: data, offset: 3), 
-                                                    .init(data: data, offset: 5), 
-                                                    .cleared))
-        case 4:
-            components = .init(count: 4, storage:  (.init(data: data, offset: 1), 
-                                                    .init(data: data, offset: 3), 
-                                                    .init(data: data, offset: 5), 
-                                                    .init(data: data, offset: 7)))
         
-        default:
-            return nil
+        let components:[Component] = (0 ..< count).map 
+        {
+            .init(data: (data.load(fromByteOffset: $0 << 1 + 1, as: UInt8.self), 
+                         data.load(fromByteOffset: $0 << 1 + 2, as: UInt8.self)))
         }
         
         // TODO: validate sampling factor sum 
         
-        let spectrum:(UInt8, UInt8) = 
+        let band:(UInt8, UInt8) = 
             (data.load(fromByteOffset: data.count - 3, as: UInt8.self), 
              data.load(fromByteOffset: data.count - 2, as: UInt8.self))
-        let approximationBits:UInt8 = data.load(fromByteOffset: data.count - 1, as: UInt8.self)
+        let bits:UInt8 = data.load(fromByteOffset: data.count - 1, as: UInt8.self)
+        
+        // need to validate Ah parameter
         
         return ScanHeader(
-            spectrum:         (Int(spectrum.0)            , Int(spectrum.1)), 
-            approximationBit: (Int(approximationBits >> 4), Int(approximationBits & 0xf)), 
-            components:        components)
+            band      : Int(band.0    ) ..< Int(band.1   ) + 1, 
+            exponent  : Int(bits & 0xf), 
+            components: components)
     }
 }
 
@@ -863,10 +818,15 @@ struct Context
                  QuantizationTable?) = (nil, nil, nil, nil)
 
     private
-    var htables:(HuffmanTable?,
-                 HuffmanTable?,
-                 HuffmanTable?,
-                 HuffmanTable?) = (nil, nil, nil, nil)
+    var dctables:(HuffmanTable?,
+                  HuffmanTable?,
+                  HuffmanTable?,
+                  HuffmanTable?) = (nil, nil, nil, nil)
+    private
+    var actables:(HuffmanTable?,
+                  HuffmanTable?,
+                  HuffmanTable?,
+                  HuffmanTable?) = (nil, nil, nil, nil)
 
     // restart is a naked marker so it takes no `stream` parameter. just like
     // ScanHeader.read(from:marker:) this function does not update the `marker`
@@ -1004,23 +964,9 @@ struct Context
                 return nil
             }
 
-            let coefficient:HuffmanTable.Coefficient,
-                flags:UInt8 = it.load(as: UInt8.self)
+            let flags:UInt8 = it.load(as: UInt8.self)
             // `it` gets incremented halfway through so it’s easier to just store
             // the `flags` byte
-            switch flags & 0xf0
-            {
-            case 0x00:
-                coefficient = .DC
-
-            case 0x10:
-                coefficient = .AC
-
-            default:
-                // huffman table has invalid class
-                return nil
-            }
-
             it += 1
 
             // huffman tables have variable length that can only be determined
@@ -1042,8 +988,7 @@ struct Context
             let leafValues:UnsafePointer<UInt8> = it.bindMemory(to: UInt8.self, capacity: leaves)
             it += leaves 
 
-            guard let table:HuffmanTable = 
-                .create(leafCounts: leafCounts, leafValues: leafValues, coefficient: coefficient)
+            guard let table:HuffmanTable = .create(leafCounts: leafCounts, leafValues: leafValues)
             else 
             {
                 return nil 
@@ -1051,20 +996,32 @@ struct Context
             
             switch flags & 0x0f
             {
-            case 0:
-                htables.0 = table
+            case 0x00:
+                dctables.0 = table
+            
+            case 0x01:
+                dctables.1 = table
 
-            case 1:
-                htables.1 = table
+            case 0x02:
+                dctables.2 = table
 
-            case 2:
-                htables.2 = table
+            case 0x03:
+                dctables.3 = table
+            
+            case 0x10:
+                actables.0 = table
+            
+            case 0x11:
+                actables.1 = table
 
-            case 3:
-                htables.3 = table
+            case 0x12:
+                actables.2 = table
+
+            case 0x13:
+                actables.3 = table
 
             default:
-                // huffman table has invalid binding index (index must be in 0 ... 3)
+                // huffman table has invalid binding index
                 return nil
             }
         }
@@ -1287,7 +1244,7 @@ func decode(path:String) throws
             throw JPEGReadError.InvalidScanHeader
         }
         
-        print("scan header", scanHeader)
+        print(scanHeader)
 
         try decodeEntropicSegment(from: stream, marker: &marker)
 
@@ -1306,4 +1263,9 @@ func decode(path:String) throws
         }
     }
     // the while loop already scanned the EOI marker
+    
+    print() // space for testing progress bar
+    print()
+    print()
+    print() 
 }

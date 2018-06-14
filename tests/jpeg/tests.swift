@@ -23,8 +23,7 @@ func testDecode() -> String?
  
 func testHuffmanTable(leafCounts:[UInt8], leafValues:[UInt8], message:[UInt8], key:String) -> String?
 {
-    guard let table:HuffmanTable = 
-        .create(leafCounts: leafCounts, leafValues: leafValues, coefficient: .AC)
+    guard let table:HuffmanTable = .create(leafCounts: leafCounts, leafValues: leafValues)
     else 
     {
         return "failed to generate huffman table"
