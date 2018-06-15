@@ -84,7 +84,7 @@ func testHuffmanTableUndefined() -> String?
     // test codewords that do not correspond to encoded leaf nodes
     return testHuffmanTable(leafCounts: [1, 1, 1, 1,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0], 
         leafValues  : .init(0x61 ..< 0x61 + 4), 
-        message     : [0b11110_110, 0b11111110, 0b10_10_1110, 0b11111111, 0b11111111], 
+        message     : [0b11110_110, 0b11111110, 0b10_10_1110, 0b11111111, 0b11111110], 
         key         : "\0bbd\0")
 }
 

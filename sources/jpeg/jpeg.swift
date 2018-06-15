@@ -1030,13 +1030,6 @@ struct Context
     }
 }
 
-struct Codebook 
-{
-    let dc:HuffmanTable, 
-        ac:HuffmanTable, 
-        quantizer:QuantizationTable
-}
-
 struct Bitstream 
 {
     let atoms:[UInt16]
@@ -1103,6 +1096,47 @@ func amplitude(count:Int, bitPattern:UInt16) -> Int16
     
     // if negative, we need to add 1 (per our two’s complement rule)
     return mask | Int16(bitPattern: bitPattern &+ flip)
+}
+
+struct _Spectra 
+{
+    struct Codebook 
+    {
+        let dc:HuffmanTable, 
+            ac:HuffmanTable, 
+            quantizer:QuantizationTable
+    }
+    
+    let layout:[(offset:Int, factor:Int, codebook:Codebook)]
+
+    mutating 
+    func extend(to underestimatedCount:Int)
+    {
+        // unimplemented
+    }
+    
+    mutating 
+    func decode(group _:Int, offset _:Int, codebook _:Codebook)
+    {
+        // unimplemented
+    }
+    
+    mutating 
+    func _updateSpectra(for components:[(offset:Int, factor:Int, codebook:Codebook)])
+    {
+        let group:Int = 0
+        while true
+        {
+            self.extend(to: group)
+            for (offset, factor, codebook):(Int, Int, Codebook) in components 
+            {
+                for i:Int in 0 ..< factor
+                {
+                    self.decode(group: group, offset: offset + i, codebook: codebook)
+                }
+            }
+        }
+    }
 }
 
 func decodeEntropicSegment(from stream:UnsafeMutablePointer<FILE>, marker:inout UInt8) throws
