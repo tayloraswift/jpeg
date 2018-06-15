@@ -3,6 +3,12 @@ import JPEGTests
 let cases:[(group:String, cases:[Case])] = 
 [
     (
+        "amplitude coding", 
+        [            
+            (true, "amplitude level coding (1–15)", testAmplitudeDecoding)
+        ]
+    ), 
+    (
         "huffman", 
         [            
             (true, "single-level table", testHuffmanTableSingle), 

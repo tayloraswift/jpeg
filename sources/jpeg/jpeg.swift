@@ -1089,6 +1089,22 @@ struct Bitstream
     }
 }
 
+func amplitude(count:Int, bitPattern:UInt16) -> Int16
+{
+    assert(count > 0)
+    
+    // extract the most significant bit and shift it to the least significant position, 
+    // and flip it, so that it will look like the sign bit of the result
+    let flip:UInt16 = bitPattern &>> (count &- 1) ^ (1 as UInt16)
+    
+    // flip it, move it to the proper sign bit location, and sign-extend it rightwards 
+    let sign:Int16 = .init(bitPattern: flip) &<< (UInt16.bitWidth - 1), 
+        mask:Int16 = sign >> (UInt16.bitWidth - 1 &- count)
+    
+    // if negative, we need to add 1 (per our two’s complement rule)
+    return mask | Int16(bitPattern: bitPattern &+ flip)
+}
+
 func decodeEntropicSegment(from stream:UnsafeMutablePointer<FILE>, marker:inout UInt8) throws
 {
     var data:[UInt8] = [],

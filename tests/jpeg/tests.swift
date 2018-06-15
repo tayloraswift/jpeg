@@ -20,6 +20,8 @@ func testDecode() -> String?
     
     return nil
 }
+
+// UNIT TESTS 
  
 func testHuffmanTable(leafCounts:[UInt8], leafValues:[UInt8], message:[UInt8], key:String) -> String?
 {
@@ -84,6 +86,54 @@ func testHuffmanTableUndefined() -> String?
         leafValues  : .init(0x61 ..< 0x61 + 4), 
         message     : [0b11110_110, 0b11111110, 0b10_10_1110, 0b11111111, 0b11111111], 
         key         : "\0bbd\0")
+}
+
+public 
+func testAmplitudeDecoding() -> String? 
+{
+    for (count, bitPattern, expected):(Int, UInt16, Int16) in 
+    [
+        (1, 0, -1),
+        (1, 1,  1), 
+        
+        (2, 0, -3), 
+        (2, 1, -2), 
+        (2, 2,  2), 
+        (2, 3,  3),
+        
+        (5,  0, -31), 
+        (5,  1, -30), 
+        (5, 14, -17), 
+        (5, 15, -16), 
+        (5, 16,  16), 
+        (5, 17,  17), 
+        (5, 30,  30), 
+        (5, 31,  31), 
+        
+        (11,    0, -2047), 
+        (11,    1, -2046), 
+        (11, 1023, -1024), 
+        (11, 1024,  1024), 
+        (11, 2046,  2046), 
+        (11, 2047,  2047), 
+        
+        (15,     0, -32767), 
+        (15,     1, -32766), 
+        (15, 16383, -16384), 
+        (15, 16384,  16384), 
+        (15, 32766,  32766), 
+        (15, 32767,  32767), 
+    ]
+    {
+        let result:Int16 = amplitude(count: count, bitPattern: bitPattern)
+        guard result == expected 
+        else 
+        {
+            return "amplitude decoder mapped level bits {\(count); \(bitPattern)} incorrectly (expected \(expected), got \(result))"
+        }
+    }
+    
+    return nil
 }
 
 public 
