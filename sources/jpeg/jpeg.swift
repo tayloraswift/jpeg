@@ -1100,6 +1100,15 @@ func amplitude(count:Int, bitPattern:UInt16) -> Int16
 
 struct _Spectra 
 {
+    struct ScanElement 
+    {
+        let offset:Int, 
+            factor:Int, 
+            dcTable:HuffmanTable, 
+            acTable:HuffmanTable, 
+            quantizationTable:QuantizationTable
+    }
+    
     struct Codebook 
     {
         let dc:HuffmanTable, 
