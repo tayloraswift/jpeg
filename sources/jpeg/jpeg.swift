@@ -544,25 +544,25 @@ struct FrameHeader
         private
         let _sampleFactors:UInt8
 
-        let qtable:UInt8
+        let q:UInt8
 
         var sampleFactors:(x:UInt8, y:UInt8)
         {
             return (self._sampleFactors >> 4, self._sampleFactors & 0x0f)
         }
 
-        init?(sampleFactors:UInt8, qtable:UInt8)
+        init?(sampleFactors:UInt8, q:UInt8)
         {
             guard 1 ... 4 ~= sampleFactors >> 4,
                   1 ... 4 ~= sampleFactors & 0x0f,
-                  0 ... 3 ~= qtable
+                  0 ... 3 ~= q
             else
             {
                 return nil
             }
 
             self._sampleFactors = sampleFactors
-            self.qtable         = qtable
+            self.q              = q
         }
     }
 
@@ -682,7 +682,7 @@ struct FrameHeader
             
             guard let component:Component = Component.init(
                 sampleFactors: data.load(fromByteOffset: 7 + 3 * i, as: UInt8.self),
-                qtable:        data.load(fromByteOffset: 8 + 3 * i, as: UInt8.self))
+                q:             data.load(fromByteOffset: 8 + 3 * i, as: UInt8.self))
             else
             {
                 return nil
@@ -921,6 +921,8 @@ struct Context
                 return nil
             }
             
+            print(table)
+            
             switch flags & 0x0f
             {
             case 0:
@@ -994,6 +996,8 @@ struct Context
                 return nil 
             }
             
+            print(table)
+            
             switch flags & 0x0f
             {
             case 0x00:
@@ -1059,7 +1063,7 @@ struct Bitstream
     var front:UInt16?
     {
         // can optimize with two shifts and &>> ?
-        let atom:UInt16 = self.atoms[self.position] << bit | self.atoms[self.position + 1] >> (16 - bit)
+        let atom:UInt16 = self.atoms[self.position] << self.bit | self.atoms[self.position + 1] >> (16 - self.bit)
         
         guard atom != 0xffff 
         else 
@@ -1082,21 +1086,6 @@ struct Bitstream
     }
 }
 
-func amplitude(count:Int, bitPattern:UInt16) -> Int16
-{
-    assert(count > 0)
-    
-    // extract the most significant bit and shift it to the least significant position, 
-    // and flip it, so that it will look like the sign bit of the result
-    let flip:UInt16 = bitPattern &>> (count &- 1) ^ (1 as UInt16)
-    
-    // flip it, move it to the proper sign bit location, and sign-extend it rightwards 
-    let sign:Int16 = .init(bitPattern: flip) &<< (UInt16.bitWidth - 1), 
-        mask:Int16 = sign >> (UInt16.bitWidth - 1 &- count)
-    
-    // if negative, we need to add 1 (per our two’s complement rule)
-    return mask | Int16(bitPattern: bitPattern &+ flip)
-}
 
 struct _Spectra 
 {
@@ -1111,29 +1100,121 @@ struct _Spectra
     
     struct Codebook 
     {
-        let dc:HuffmanTable, 
-            ac:HuffmanTable, 
-            quantizer:QuantizationTable
+        let dcTable:HuffmanTable, 
+            acTable:HuffmanTable, 
+            quantizationTable:QuantizationTable
     }
     
-    let layout:[(offset:Int, factor:Int, codebook:Codebook)]
+    private 
+    var storage:[Int16] = []
+    private 
+    let layout:[(end:Int, q:UInt8)]
+    
+    private 
+    var stride:(Int, Int) 
+    {
+        return (self.layout[self.layout.count - 1].end << 6, 1 << 6)
+    }
+    
+    subscript(group:Int, block:Int, k:Int) -> Int16
+    {
+        get 
+        {
+            return self.storage[group * self.stride.0 + block + self.stride.1 + k]
+        }
+        set(value) 
+        {
+            self.storage[group * self.stride.0 + block + self.stride.1 + k] = value
+        }
+    }
+    
+    init(components:[FrameHeader.Component])
+    {
+        var end:Int = 0
+        self.layout = components.map 
+        {
+            end += Int($0.sampleFactors.x * $0.sampleFactors.y)
+            return (end, $0.q)
+        } 
+    }
+    
+    static 
+    func amplitude(count:UInt8, bitPattern:UInt16) -> Int16
+    {
+        assert(count > 0)
+        
+        let flip:UInt16 = bitPattern >> (UInt16.bitWidth - 1) ^ (1 as UInt16)
+        
+        // extract the most significant bit and shift it to the least significant position, 
+        // and flip it, so that it will look like the sign bit of the result
+        let sign:Int16  = Int16(bitPattern: flip << (Int16.bitWidth - 1)), 
+            mask:Int16  = sign &>> (UInt8(UInt16.bitWidth) - 1 &- count)
+        
+        // if negative, we need to add 1 (per our two’s complement rule)
+        return mask | Int16(bitPattern: bitPattern &>> (UInt8(UInt16.bitWidth) &- count) &+ flip)
+    }
 
     mutating 
     func extend(to underestimatedCount:Int)
     {
         // unimplemented
     }
-    
+
     mutating 
-    func decode(group _:Int, offset _:Int, codebook _:Codebook)
+    func decodeDeep(_ bitstream:inout Bitstream, group:Int, offset:Int, band:Range<Int>, exponent:Int, codebook:Codebook) -> Void?
     {
         // unimplemented
+        @inline(__always)
+        func _decodeDeep(k:Int, table:HuffmanTable) -> Void?
+        {
+            guard let path:UInt16 = bitstream.front
+            else 
+            {
+                return nil
+            }
+            
+            let entry:HuffmanTable.Entry = table[path]
+            bitstream.pop(entry.length)
+            
+            let bits:UInt8 = entry.value
+            guard let tail:UInt16 = bitstream.front
+            else 
+            {
+                return nil
+            }
+            bitstream.pop(bits)
+            
+            let amplitude:Int16 = _Spectra.amplitude(count: bits, bitPattern: tail)
+            
+            self[group, offset, k] |= amplitude << exponent
+            return ()
+        }
+        
+        if band.lowerBound == 0 
+        {
+            guard let _:Void = _decodeDeep(k: 0, table: codebook.dcTable)
+            else 
+            {
+                return nil
+            }
+        }
+        
+        for _ in max(band.lowerBound, 1) ..< band.upperBound 
+        {
+            guard let _:Void = _decodeDeep(k: 0, table: codebook.acTable)
+            else 
+            {
+                return nil
+            }
+        }
+        
+        return ()
     }
     
     mutating 
     func _updateSpectra(for components:[(offset:Int, factor:Int, codebook:Codebook)])
     {
-        let group:Int = 0
+        var group:Int = 0
         while true
         {
             self.extend(to: group)
@@ -1141,9 +1222,11 @@ struct _Spectra
             {
                 for i:Int in 0 ..< factor
                 {
-                    self.decode(group: group, offset: offset + i, codebook: codebook)
+                    //self.decode(group: group, offset: offset + i, codebook: codebook)
                 }
             }
+            
+            group += 1
         }
     }
 }

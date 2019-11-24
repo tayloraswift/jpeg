@@ -2,7 +2,7 @@ extension FrameHeader.Component:CustomStringConvertible
 {
     var description:String 
     {
-        return "{qtable: \(self.qtable), sample factors: \(self.sampleFactors)}"
+        return "{q: \(self.q), sample factors: \(self.sampleFactors)}"
     }
 }
 

@@ -91,7 +91,7 @@ func testHuffmanTableUndefined() -> String?
 public 
 func testAmplitudeDecoding() -> String? 
 {
-    for (count, bitPattern, expected):(Int, UInt16, Int16) in 
+    for (count, bitPattern, expected):(UInt8, UInt16, Int16) in 
     [
         (1, 0, -1),
         (1, 1,  1), 
@@ -125,7 +125,7 @@ func testAmplitudeDecoding() -> String?
         (15, 32767,  32767), 
     ]
     {
-        let result:Int16 = amplitude(count: count, bitPattern: bitPattern)
+        let result:Int16 = _Spectra.amplitude(count: count, bitPattern: bitPattern << (16 - count))
         guard result == expected 
         else 
         {
