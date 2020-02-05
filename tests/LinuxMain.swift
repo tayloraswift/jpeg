@@ -2,7 +2,7 @@ import JPEGTests
 
 let cases:[(group:String, cases:[Case])] = 
 [
-    (
+    /* (
         "amplitude coding", 
         [            
             (true, "amplitude level coding (1–15)", testAmplitudeDecoding)
@@ -15,7 +15,7 @@ let cases:[(group:String, cases:[Case])] =
             (true, "double-level table", testHuffmanTableDouble), 
             (true, "undefined codewords", testHuffmanTableUndefined)
         ]
-    ), 
+    ),  */
     (
         "decode",
         [
