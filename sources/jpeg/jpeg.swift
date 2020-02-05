@@ -1,5 +1,113 @@
 import Glibc
 
+func decode(path:String) throws
+{
+    try JPEG.File.Source.open(path: path) 
+    {
+        (stream:inout JPEG.File.Source) in 
+        
+        var marker:(type:JPEG.Marker, data:[UInt8]) 
+        
+        // start of image 
+        marker = try stream.segment()
+        guard case .start = marker.type 
+        else 
+        {
+            throw JPEG.Parse.Error.unexpected(.markerSegment(marker.type), expected: .markerSegment(.start))
+        }
+        
+        // jfif header (must immediately follow start of image)
+        marker = try stream.segment()
+        guard case .application(0) = marker.type 
+        else 
+        {
+            throw JPEG.Parse.Error.unexpected(.markerSegment(marker.type), expected: .markerSegment(.application(0)))
+        }
+        guard let image:JPEG.JFIF = try .parse(marker.data) 
+        else 
+        {
+            throw JPEG.Parse.Error.invalid(.markerSegment(.application(0)))
+        }
+        
+        print(image)
+        
+        
+        let frame:JPEG.Frame = try
+        {
+            marker = try stream.segment()
+            while true 
+            {
+                print(marker.type)
+                switch marker.type 
+                {
+                case .frame(.unsupported(let code)):
+                    throw JPEG.Parse.Error.unsupported("jpeg encoding mode \(code)")
+                
+                case .frame(let mode):
+                    let frame:JPEG.Frame = try .parse(marker.data, mode: mode)
+                    marker               = try stream.segment() 
+                    return frame
+                
+                case .quantization:
+                    break 
+                case .huffman:
+                    break
+                
+                case .comment, .application:
+                    break 
+                
+                case .scan, .height, .restart, .end:
+                    throw JPEG.Parse.Error.premature(marker.type)
+                
+                case .start:
+                    throw JPEG.Parse.Error.duplicate(marker.type)
+                }
+                
+                marker = try stream.segment() 
+            }
+        }()
+        
+        print(frame)
+        
+        scans:
+        while true 
+        {
+            print(marker.type)
+            switch marker.type 
+            {
+            case .start, .frame:
+                throw JPEG.Parse.Error.duplicate(marker.type)
+            
+            case .quantization:
+                break 
+            case .huffman:
+                break
+            
+            case .comment, .application:
+                break 
+            
+            case .scan:
+                let ecs:[UInt8] 
+                (ecs, marker) = try stream.segment(prefix: true)
+                print("ecs(\(ecs.count))")
+                continue scans
+            
+            case .height, .restart:
+                break // TODO: enforce ordering
+            case .end:
+                break scans 
+            }
+            
+            marker = try stream.segment() 
+        }
+    }
+    
+    print()
+    print()
+    print()
+}
+
+
 protocol _JPEGBytestreamSource 
 {
     mutating 
@@ -21,11 +129,12 @@ enum JPEG
         case quantization 
         case huffman 
         
+        case height 
         case restart 
         case comment 
         case application(Int)
         
-        case frame(Frame.Encoding)
+        case frame(Mode)
         case scan 
         
         init?(code:UInt8) 
@@ -40,6 +149,8 @@ enum JPEG
                 self = .quantization
             case 0xc4:
                 self = .huffman
+            case 0xdc:
+                self = .height 
             case 0xdd:
                 self = .restart 
             case 0xfe:
@@ -60,20 +171,11 @@ enum JPEG
                 self = .frame(.progressiveDCT)
 
             case 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf:
-                self = .frame(.unsupported)
+                self = .frame(.unsupported(.init(code & 0x0f)))
             
             default:
                 return nil
             }
-        }
-    }
-    
-    struct Frame 
-    {
-        enum Encoding 
-        {
-            case baselineDCT, extendedDCT, progressiveDCT
-            case unsupported
         }
     }
     
@@ -99,8 +201,62 @@ enum JPEG
             case invalid(Lexeme)
         }
     }
+    enum Parse 
+    {
+        enum Entity  
+        {
+            case signature([UInt8])
+            
+            case markerSegment(Marker) 
+            case markerSegmentLength(Int)
+        }
+        
+        enum Error:Swift.Error 
+        {
+            case duplicate(Marker)
+            case premature(Marker)
+            
+            case unexpected(Entity, expected:Entity)
+            case invalid(Entity)
+            
+            case unsupported(String)
+        }
+    }
 }
 
+// compound types 
+extension JPEG 
+{
+    enum DensityUnit
+    {
+        case none
+        case dpi 
+        case dpcm 
+        
+        init?(code:UInt8) 
+        {
+            switch code 
+            {
+            case 0:
+                self = .none 
+            case 1:
+                self = .dpi 
+            case 2:
+                self = .dpcm 
+            default:
+                return nil 
+            }
+        }
+    }
+    
+    enum Mode 
+    {
+        case baselineDCT, extendedDCT, progressiveDCT
+        case unsupported(Int)
+    }
+}
+
+// lexing 
 extension JPEG.Bytestream.Source 
 {
     private mutating 
@@ -210,9 +366,184 @@ extension JPEG.Bytestream.Source
     }
 }
 
+// parsing 
+extension JPEG 
+{
+    struct JFIF
+    {
+        let version:(major:Int, minor:Int),
+            density:(x:Int, y:Int, unit:DensityUnit)
+
+        static 
+        func parse(_ data:[UInt8]) throws -> Self
+        {
+            guard data.count >= 14
+            else
+            {
+                throw JPEG.Parse.Error.invalid(.markerSegmentLength(data.count))
+            }
+            
+            // look for 'JFIF' signature
+            guard data[0 ..< 5] == [0x4a, 0x46, 0x49, 0x46, 0x00]
+            else 
+            {
+                throw JPEG.Parse.Error.invalid(.signature(.init(data[0 ..< 5])))
+            }
+
+            let version:(major:Int, minor:Int)
+            version.major = .init(data[5])
+            version.minor = .init(data[6])
+
+            guard   1 ... 1 ~= version.major, 
+                    0 ... 2 ~= version.minor
+            else
+            {
+                // bad JFIF version number (expected 1.0 ... 1.2)
+                throw JPEG.Parse.Error.invalid(.markerSegment(.application(0)))
+            }
+
+            guard let unit:DensityUnit = DensityUnit.init(code: data[7])
+            else
+            {
+                // invalid JFIF density unit
+                throw JPEG.Parse.Error.invalid(.markerSegment(.application(0)))
+            }
+
+            let density:(x:Int, y:Int) = 
+            (
+                data.load(bigEndian: UInt16.self, as: Int.self, at:  8), 
+                data.load(bigEndian: UInt16.self, as: Int.self, at: 10)
+            )
+
+            // we ignore the thumbnail data
+            return .init(version: version, density: (density.x, density.y, unit))
+        }
+    }
+    
+    struct Frame
+    {
+        struct Component
+        {
+            let factors:(x:Int, y:Int)
+            let qi:Int 
+            
+            init?(factors:UInt8, qi:UInt8)
+            {
+                let factors:(x:Int, y:Int)  = (.init(factors >> 4), .init(factors & 0x0f))
+                let qi:Int                  = .init(qi)
+                guard   1 ... 4 ~= factors.x,
+                        1 ... 4 ~= factors.y,
+                        0 ... 3 ~= qi
+                else
+                {
+                    return nil
+                }
+
+                self.factors = factors 
+                self.qi      = qi
+            }
+        }
+
+        let mode:Mode,
+            precision:Int
+
+        internal private(set) // DNL segment may change this later on
+        var size:(x:Int, y:Int)
+
+        let components:[Int: Component]
+
+        static
+        func parse(_ data:[UInt8], mode:JPEG.Mode) throws -> Self
+        {
+            guard data.count >= 6
+            else
+            {
+                throw JPEG.Parse.Error.invalid(.markerSegmentLength(data.count))
+            }
+
+            let precision:Int = .init(data[0])
+            switch (mode, precision) 
+            {
+            case    (.baselineDCT,      8), 
+                    (.extendedDCT,      8), (.extendedDCT,      16), 
+                    (.progressiveDCT,   8), (.progressiveDCT,   16):
+                break
+
+            default:
+                // invalid precision
+                throw JPEG.Parse.Error.invalid(.markerSegment(.frame(mode)))
+            }
+            
+            let size:(x:Int, y:Int) = 
+            (
+                data.load(bigEndian: UInt16.self, as: Int.self, at: 3),
+                data.load(bigEndian: UInt16.self, as: Int.self, at: 1)
+            )
+
+            let count:Int = .init(data[5])
+            switch (mode, count) 
+            {
+            case    (.baselineDCT,      1 ... .max), 
+                    (.extendedDCT,      1 ... .max), 
+                    (.progressiveDCT,   1 ... 4   ):
+                break
+
+            default:
+                // invalid count
+                throw JPEG.Parse.Error.invalid(.markerSegment(.frame(mode)))
+            }
+
+            guard data.count == 3 * count + 6
+            else
+            {
+                // wrong segment size
+                throw JPEG.Parse.Error.unexpected(.markerSegmentLength(data.count), 
+                    expected: .markerSegmentLength(3 * count + 6))
+            }
+
+            var components:[Int: Component] = [:]
+            for i:Int in 0 ..< count
+            {
+                let base:Int = 3 * i + 6
+                let ci:Int = .init(data[base])
+                
+                guard let component:Component = 
+                    Component.init(factors: data[base + 1], qi: data[base + 2])
+                else
+                {
+                    throw JPEG.Parse.Error.invalid(.markerSegment(.frame(mode)))
+                }
+                
+                // make sure no duplicate component indices are used 
+                guard components.updateValue(component, forKey: ci) == nil 
+                else 
+                {
+                    throw JPEG.Parse.Error.invalid(.markerSegment(.frame(mode)))
+                }
+            }
+
+            return .init(mode: mode, precision: precision, size: size, components: components)
+        }
+        
+        // parse DNL segment 
+        mutating
+        func height(_ data:[UInt8]) throws 
+        {
+            guard data.count == 2
+            else
+            {
+                throw JPEG.Parse.Error.unexpected(.markerSegmentLength(data.count), 
+                    expected: .markerSegmentLength(2))
+            }
+
+            self.size.y = data.load(bigEndian: UInt16.self, as: Int.self, at: 0)
+        }
+    }
+}
+
+/// A namespace for file IO functionality.
 extension JPEG
 {
-    /// A namespace for file IO functionality.
     public
     enum File
     {
@@ -354,35 +685,4 @@ extension ArraySlice where Element == UInt8
             return U(T(bigEndian: value))
         }
     }
-}
-
-
-func decode(path:String) 
-{
-    try! JPEG.File.Source.open(path: path) 
-    {
-        var marker:(type:JPEG.Marker, body:[UInt8]) = try $0.segment()
-        loop:
-        while true 
-        {
-            print(marker.type)
-            switch marker.type 
-            {
-            case .end:
-                break loop 
-            
-            case .scan:
-                let ecs:[UInt8] 
-                (ecs, marker) = try $0.segment(prefix: true)
-                print("ecs(\(ecs.count))")
-            
-            default:
-                marker = try $0.segment() 
-            }
-        }
-    }
-    
-    print()
-    print()
-    print()
 }
