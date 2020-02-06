@@ -20,7 +20,7 @@ extension JPEG.Frame.Component:CustomStringConvertible
 {
     var description:String 
     {
-        return "{quantization table: \(self.selector), sample factors: (\(self.factor.x), \(self.factor.y))}"
+        "{quantization table: \(self.selector), sample factors: (\(self.factor.x), \(self.factor.y))}"
     }
 }
 
@@ -28,7 +28,7 @@ extension JPEG.Frame:CustomStringConvertible
 {
     var description:String 
     {
-        return """
+        """
         frame header: 
         {
             mode            : \(self.mode), 
@@ -56,7 +56,7 @@ extension JPEG.Scan.Component:CustomStringConvertible
 {
     var description:String 
     {
-        return "[\(self.ci)]: \(self.selector)"
+        "[\(self.ci)]: \(self.selector)"
     }
 }
 
@@ -64,7 +64,7 @@ extension JPEG.Scan:CustomStringConvertible
 {
     var description:String 
     {
-        return """
+        """
         scan header:
         {
             band            : \(self.band.lowerBound) ..< \(self.band.upperBound), 
@@ -73,6 +73,20 @@ extension JPEG.Scan:CustomStringConvertible
             [
                 \(self.components.map(String.init(describing:)).joined(separator: ", \n        "))
             ]
+        }
+        """
+    }
+}
+
+extension JPEG.HuffmanTable:CustomStringConvertible
+{
+    var description:String 
+    {
+        """
+        huffman table: \(self.storage.count * MemoryLayout<JPEG.HuffmanTable.Entry>.stride) bytes 
+        {
+            logical entries (ζ): \(self.ζ)
+            level 0 entries (n): \(self.n)
         }
         """
     }

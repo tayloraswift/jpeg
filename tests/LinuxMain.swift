@@ -7,7 +7,7 @@ let cases:[(group:String, cases:[Case])] =
         [            
             (true, "amplitude level coding (1–15)", testAmplitudeDecoding)
         ]
-    ), 
+    ), */
     (
         "huffman", 
         [            
@@ -15,7 +15,7 @@ let cases:[(group:String, cases:[Case])] =
             (true, "double-level table", testHuffmanTableDouble), 
             (true, "undefined codewords", testHuffmanTableUndefined)
         ]
-    ),  */
+    ), 
     (
         "decode",
         [
