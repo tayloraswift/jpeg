@@ -87,8 +87,10 @@ func decode(path:String) throws
                 break 
             
             case .scan:
+                let scan:JPEG.Scan = try .parse(marker.data, frame: frame)
                 let ecs:[UInt8] 
                 (ecs, marker) = try stream.segment(prefix: true)
+                print(scan)
                 print("ecs(\(ecs.count))")
                 continue scans
             
@@ -207,12 +209,15 @@ enum JPEG
         {
             case signature([UInt8])
             
+            case component(Int)
+            
             case markerSegment(Marker) 
             case markerSegmentLength(Int)
         }
         
         enum Error:Swift.Error 
         {
+            case missing(Entity)
             case duplicate(Marker)
             case premature(Marker)
             
@@ -424,24 +429,8 @@ extension JPEG
     {
         struct Component
         {
-            let factors:(x:Int, y:Int)
-            let qi:Int 
-            
-            init?(factors:UInt8, qi:UInt8)
-            {
-                let factors:(x:Int, y:Int)  = (.init(factors >> 4), .init(factors & 0x0f))
-                let qi:Int                  = .init(qi)
-                guard   1 ... 4 ~= factors.x,
-                        1 ... 4 ~= factors.y,
-                        0 ... 3 ~= qi
-                else
-                {
-                    return nil
-                }
-
-                self.factors = factors 
-                self.qi      = qi
-            }
+            let factor:(x:Int, y:Int)
+            let selector:Int 
         }
 
         let mode:Mode,
@@ -505,15 +494,21 @@ extension JPEG
             for i:Int in 0 ..< count
             {
                 let base:Int = 3 * i + 6
-                let ci:Int = .init(data[base])
+                let byte:(UInt8, UInt8, UInt8) = (data[base], data[base + 1], data[base + 2])
                 
-                guard let component:Component = 
-                    Component.init(factors: data[base + 1], qi: data[base + 2])
+                let factor:(x:Int, y:Int)  = (.init(byte.1 >> 4), .init(byte.1 & 0x0f))
+                let ci:Int                  = .init(byte.0), 
+                    selector:Int            = .init(byte.2)
+                
+                guard   1 ... 4 ~= factor.x,
+                        1 ... 4 ~= factor.y,
+                        0 ... 3 ~= selector
                 else
                 {
                     throw JPEG.Parse.Error.invalid(.markerSegment(.frame(mode)))
                 }
                 
+                let component:Component = .init(factor: factor, selector: selector)
                 // make sure no duplicate component indices are used 
                 guard components.updateValue(component, forKey: ci) == nil 
                 else 
@@ -537,6 +532,121 @@ extension JPEG
             }
 
             self.size.y = data.load(bigEndian: UInt16.self, as: Int.self, at: 0)
+        }
+    }
+    
+    struct Scan
+    {
+        struct Component 
+        {
+            let ci:Int, 
+                selector:(dc:Int, ac:Int)
+        }
+        
+        let band:Range<Int>, 
+            bits:Range<Int>, 
+            components:[Component] 
+        
+        static 
+        func parse(_ data:[UInt8], frame:JPEG.Frame) throws -> Self
+        {
+            guard data.count >= 4 
+            else 
+            {
+                throw JPEG.Parse.Error.invalid(.markerSegmentLength(data.count))
+            }
+            
+            let count:Int = .init(data[0])
+            guard 1 ... 4 ~= count
+            else 
+            {
+                throw JPEG.Parse.Error.invalid(.markerSegment(.scan))
+            } 
+            
+            guard data.count == 2 * count + 4
+            else 
+            {
+                // wrong segment size
+                throw JPEG.Parse.Error.unexpected(.markerSegmentLength(data.count), 
+                    expected: .markerSegmentLength(2 * count + 4))
+            }
+            
+            let components:[Component] = try (0 ..< count).map 
+            {
+                let base:Int            = 2 * $0 + 1
+                let byte:(UInt8, UInt8) = (data[base], data[base + 1])
+                
+                let ci:Int = .init(byte.0)
+                let selector:(dc:Int, ac:Int) = 
+                (
+                    dc: .init(byte.1 >> 4), 
+                    ac: .init(byte.1 & 0xf)
+                )
+                
+                switch (frame.mode, selector.dc, selector.ac) 
+                {
+                case    (.baselineDCT,      0 ... 1, 0 ... 1), 
+                        (.extendedDCT,      0 ... 3, 0 ... 3), 
+                        (.progressiveDCT,   0 ... 3, 0 ... 3):
+                    break 
+                
+                default:
+                    throw JPEG.Parse.Error.invalid(.markerSegment(.scan))
+                }
+                
+                return .init(ci: ci, selector: selector)
+            }
+            
+            // validate sampling factor sum 
+            let sampling:Int = try components.map 
+            {
+                guard let component:Frame.Component = frame.components[$0.ci]
+                else 
+                {
+                    throw JPEG.Parse.Error.missing(.component($0.ci))
+                }
+                
+                return component.factor.x * component.factor.y
+            }.reduce(0, +)
+            
+            guard 0 ... 10 ~= sampling 
+            else 
+            {
+                throw JPEG.Parse.Error.invalid(.markerSegment(.scan))
+            }
+            
+            // parse spectral parameters 
+            let base:Int                    = 2 * count + 1
+            let byte:(UInt8, UInt8, UInt8)  = (data[base], data[base + 1], data[base + 2])
+            
+            let band:(Int, Int)             = (.init(byte.0), .init(byte.1))
+            let bits:(Int, Int)             = 
+            (
+                .init(byte.2 & 0xf), 
+                byte.2 >> 4 == 0 ? frame.precision : .init(byte.2 >> 4)
+            )
+            
+            guard   band.0 <= band.1, 
+                    bits.0 <= bits.1, 
+                    band == (0, 0) || count == 1 // only DC scans can contain multiple components 
+            else 
+            {
+                throw JPEG.Parse.Error.invalid(.markerSegment(.scan))
+            }
+            
+            switch (frame.mode, band.0, band.1, bits.0, bits.1) 
+            {
+            case    (.baselineDCT,      0,        63,                0,                     frame.precision), 
+                    (.extendedDCT,      0,        63,                0,                     frame.precision),
+                    (.progressiveDCT,   0,        0,                 0 ..< frame.precision, bits.0 + 1 ... frame.precision),
+                    (.progressiveDCT,   1 ..< 64, band.0 + 1 ..< 64, 0 ..< frame.precision, bits.0 + 1 ... frame.precision):
+                break 
+            
+            default:
+                throw JPEG.Parse.Error.invalid(.markerSegment(.scan))
+            }
+            
+            return .init(band: band.0 ..< band.1 + 1, bits: bits.0 ..< bits.1, components: components)
         }
     }
 }
