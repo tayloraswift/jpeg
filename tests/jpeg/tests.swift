@@ -25,7 +25,7 @@ func testDecode() -> String?
  
 func testHuffmanTable(leafCounts:[Int], leafValues:[UInt8], message:[UInt8], key:String) -> String?
 {
-    guard let table:JPEG.HuffmanTable = .build(counts: leafCounts, values: leafValues)
+    guard let table:JPEG.HuffmanTable = .build(counts: leafCounts, values: leafValues, target: \.dc.0)
     else 
     {
         return "failed to generate huffman table"
@@ -86,6 +86,41 @@ func testHuffmanTableUndefined() -> String?
         leafValues  : .init(0x61 ..< 0x61 + 4), 
         message     : [0b11110_110, 0b11111110, 0b10_10_1110, 0b11111111, 0b11111110], 
         key         : "\0bbd\0")
+}
+
+public 
+func testHuffmanTableBuilding() -> String? 
+{
+    guard let table:JPEG.HuffmanTable = .build(
+        counts: Examples.HuffmanLuminanceAC.counts, 
+        values: Examples.HuffmanLuminanceAC.values, 
+        target: \.dc.0)
+    else 
+    {
+        return "failed to generate huffman table"
+    }
+    
+    var expected:UInt8 = 0
+    for (length, codeword):(Int, UInt16) in Examples.HuffmanLuminanceAC.codewords 
+    {
+        let aligned:UInt16 = codeword << (16 - length)
+        guard table[aligned].value == expected 
+        else 
+        {
+            return "codeword decoded incorrectly (\(table[aligned].value), expected \(expected))"
+        }
+        
+        if expected & 0x0f < 0x0a 
+        {
+            expected =  expected & 0xf0          | (expected & 0x0f &+ 1)
+        }
+        else 
+        {
+            expected = (expected & 0xf0 &+ 0x10) | (expected & 0xf0 == 0xe0 ? 0 : 1)
+        }
+    }
+    
+    return nil
 }
 
 /* public 

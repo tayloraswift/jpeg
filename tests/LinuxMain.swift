@@ -11,6 +11,7 @@ let cases:[(group:String, cases:[Case])] =
     (
         "huffman", 
         [            
+            (true, "table construction", testHuffmanTableBuilding), 
             (true, "single-level table", testHuffmanTableSingle), 
             (true, "double-level table", testHuffmanTableDouble), 
             (true, "undefined codewords", testHuffmanTableUndefined)
