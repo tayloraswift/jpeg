@@ -31,15 +31,16 @@ func testHuffmanTable(leafCounts:[Int], leafValues:[UInt8], message:[UInt8], key
         return "failed to generate huffman table"
     }
     
-    var bitstream:JPEG.Bitstream = .init(message), 
-        decoded:String = ""
-    while let path:UInt16 = bitstream.front
+    let bits:JPEG.Bitstream = .init(message)
+    var b:Int               = 0,
+        decoded:String      = ""
+    while b < bits.count 
     {
-        let entry:JPEG.HuffmanTable.Entry = table[path]
-        bitstream.pop(entry.length)
-        decoded.append(Character(Unicode.Scalar(entry.value)))
+        let entry:JPEG.HuffmanTable.Entry = table[bits[b, count: 16]]
+        decoded.append(Character.init(Unicode.Scalar.init(entry.value)))
+        b += .init(entry.length)
     }
-
+    
     guard decoded == key
     else 
     {
@@ -123,10 +124,10 @@ func testHuffmanTableBuilding() -> String?
     return nil
 }
 
-/* public 
+public 
 func testAmplitudeDecoding() -> String? 
 {
-    for (count, bitPattern, expected):(UInt8, UInt16, Int16) in 
+    for (binade, tail, expected):(Int, UInt16, Int) in 
     [
         (1, 0, -1),
         (1, 1,  1), 
@@ -160,16 +161,45 @@ func testAmplitudeDecoding() -> String?
         (15, 32767,  32767), 
     ]
     {
-        let result:Int16 = _Spectra.amplitude(count: count, bitPattern: bitPattern << (16 - count))
+        let result:Int = JPEG.Bitstream.extend(binade: binade, tail, as: Int.self)
         guard result == expected 
         else 
         {
-            return "amplitude decoder mapped level bits {\(count); \(bitPattern)} incorrectly (expected \(expected), got \(result))"
+            return "amplitude decoder mapped level bits {\(binade); \(tail)} incorrectly (expected \(expected), got \(result))"
         }
     }
     
     return nil
-} */
+} 
+public 
+func testZigZagOrdering() -> String? 
+{
+    let indices:[[Int]] = 
+    [
+        [ 0,  1,  5,  6, 14, 15, 27, 28],
+        [ 2,  4,  7, 13, 16, 26, 29, 42],
+        [ 3,  8, 12, 17, 25, 30, 41, 43],
+        [ 9, 11, 18, 24, 31, 40, 44, 53],
+        [10, 19, 23, 32, 39, 45, 52, 54], 
+        [20, 22, 33, 38, 46, 51, 55, 60], 
+        [21, 34, 37, 47, 50, 56, 59, 61], 
+        [35, 36, 48, 49, 57, 58, 62, 63]
+    ]
+    for (y, row):(Int, [Int]) in indices.enumerated() 
+    {
+        for (x, expected):(Int, Int) in row.enumerated() 
+        {
+            let z:Int = JPEG.Spectral.Plane.z(x: x, y: y)
+            guard z == expected 
+            else 
+            {
+                return "zig-zag transform mapped index (\(x), \(y)) to zig-zag index \(z) (expected \(expected))"
+            }
+        }
+    }
+    
+    return nil
+} 
 
 public 
 typealias Case = (expectation:Bool, name:String, f:() -> String?)

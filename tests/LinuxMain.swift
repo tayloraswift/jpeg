@@ -2,12 +2,18 @@ import JPEGTests
 
 let cases:[(group:String, cases:[Case])] = 
 [
-    /* (
+    (
         "amplitude coding", 
         [            
             (true, "amplitude level coding (1–15)", testAmplitudeDecoding)
         ]
-    ), */
+    ), 
+    (
+        "zig-zag transform", 
+        [            
+            (true, "zig-zag mapping", testZigZagOrdering)
+        ]
+    ), 
     (
         "huffman", 
         [            
