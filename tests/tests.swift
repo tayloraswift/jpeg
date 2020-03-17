@@ -1,113 +1,99 @@
 import JPEG 
 
-fileprivate
-extension Array where Element == UInt8
+enum Test 
 {
-    func load<T, U>(littleEndian:T.Type, as type:U.Type, at byte:Int) -> U
-        where T:FixedWidthInteger, U:BinaryInteger
+    static 
+    func decode(_ name:String) -> String?
     {
-        return self[byte ..< byte + MemoryLayout<T>.size].load(littleEndian: T.self, as: U.self)
+        let jpegPath:String = "tests/jpeg/\(name).jpg",
+            rgbaPath:String = "tests/ycc/\(name).jpg.ycc"
+        return Self.decode(jpeg: jpegPath, rgba: rgbaPath)
     }
-}
-fileprivate
-extension ArraySlice where Element == UInt8
-{
-    func load<T, U>(littleEndian:T.Type, as type:U.Type) -> U
-        where T:FixedWidthInteger, U:BinaryInteger
+    
+    static 
+    func decode(jpeg jpegPath:String, rgba rgbaPath:String) -> String?
     {
-        return self.withUnsafeBufferPointer
+        do
         {
-            (buffer:UnsafeBufferPointer<UInt8>) in
-
-            assert(buffer.count >= MemoryLayout<T>.size,
-                "attempt to load \(T.self) from slice of size \(buffer.count)")
-
-            var storage:T = .init()
-            let value:T   = withUnsafeMutablePointer(to: &storage)
-            {
-                $0.deinitialize(count: 1)
-
-                let source:UnsafeRawPointer     = .init(buffer.baseAddress!),
-                    raw:UnsafeMutableRawPointer = .init($0)
-
-                raw.copyMemory(from: source, byteCount: MemoryLayout<T>.size)
-
-                return raw.load(as: T.self)
-            }
-
-            return U(T(littleEndian: value))
-        }
-    }
-}
-
-func testDecode(_ name:String) -> String?
-{
-    let jpegPath:String = "tests/jpeg/\(name).jpg",
-        rgbaPath:String = "tests/rgba/\(name).jpg.rgba"
-    return testDecode(jpeg: jpegPath, rgba: rgbaPath)
-}
-
-func testDecode(jpeg jpegPath:String, rgba rgbaPath:String) -> String?
-{
-    do
-    {
-        guard let rectangular:JPEG.Data.Rectangular = try .decompress(path: jpegPath)
-        else
-        {
-            return "failed to open file '\(jpegPath)'"
-        }
-
-        let image:[JPEG.RGB<UInt16>] = rectangular.rgb(of: UInt16.self)
-
-        guard let result:[JPEG.RGB<UInt16>]? =
-        (JPEG.File.Source.open(path: rgbaPath)
-        {
-            let pixels:Int = rectangular.properties.size.x * rectangular.properties.size.y,
-                bytes:Int  = pixels * MemoryLayout<JPEG.RGB<UInt16>>.stride
-
-            guard let data:[UInt8] = $0.read(count: bytes)
+            guard let rectangular:JPEG.Data.Rectangular = try .decompress(path: jpegPath)
             else
             {
-                return nil
+                return "failed to open file '\(jpegPath)'"
             }
-
-            return (0 ..< pixels).map
+            
+            let image:[JPEG.YCbCr<UInt8>] = rectangular.ycc()
+            /*
+            for i:Int in 0 ..< rectangular.size.y 
             {
-                let r:UInt16 = data.load(littleEndian: UInt16.self, as: UInt16.self, at: $0 << 3),
-                    g:UInt16 = data.load(littleEndian: UInt16.self, as: UInt16.self, at: $0 << 3 | 2),
-                    b:UInt16 = data.load(littleEndian: UInt16.self, as: UInt16.self, at: $0 << 3 | 4)
+                let line:String = (4 * rectangular.size.x / 16 ..< 8 * rectangular.size.x / 16).map 
+                {
+                    (j:Int) in 
+                    
+                    let c:JPEG.RGB<UInt8> = image[j + i * rectangular.size.x]
+                    let r:Float     = .init(c.r) / 255,
+                        g:Float     = .init(c.g) / 255,
+                        b:Float     = .init(c.b) / 255
+                    return Highlight.square((r, g, b))
+                }.joined(separator: "")
+                print(line)
+            } 
+            */
+            
+            guard let result:[JPEG.YCbCr<UInt8>]? =
+            (JPEG.File.Source.open(path: rgbaPath)
+            {
+                let pixels:Int = rectangular.size.x * rectangular.size.y, 
+                    bytes:Int  = 3 * pixels 
+                guard let data:[UInt8] = $0.read(count: bytes)
+                else
+                {
+                    return nil
+                }
 
-                return .init(r, g, b)
-            }
-        })
-        else
-        {
-            return "failed to open file '\(rgbaPath)'"
-        }
-
-        guard let reference:[JPEG.RGB<UInt16>] = result
-        else
-        {
-            return "failed to read file '\(rgbaPath)'"
-        }
-
-        for (i, pair):(Int, (JPEG.RGB<UInt16>, JPEG.RGB<UInt16>)) in
-            zip(image, reference).enumerated()
-        {
-            guard pair.0 == pair.1
+                return (0 ..< pixels).map
+                {
+                    let y:UInt8  = data[$0 * 3    ],
+                        cb:UInt8 = data[$0 * 3 + 1],
+                        cr:UInt8 = data[$0 * 3 + 2]
+                    return .init(y: y, cb: cb, cr: cr)
+                }
+            })
             else
             {
-                return "pixel \(i) has value \(pair.0) (expected \(pair.1))"
+                return "failed to open file '\(rgbaPath)'"
             }
-        }
 
-        return nil
-    }
-    catch
-    {
-        return "\(error)"
+            guard let reference:[JPEG.YCbCr<UInt8>] = result
+            else
+            {
+                return "failed to read file '\(rgbaPath)'"
+            }
+
+            // var _message:String = ""
+            // var _difference:(Int, Int, Int) = (0, 0, 0)
+            for (i, pair):(Int, (JPEG.YCbCr<UInt8>, JPEG.YCbCr<UInt8>)) in
+                zip(image, reference).enumerated()
+            {
+                guard pair.0 == pair.1
+                else
+                {
+                    return "pixel \(i) has value \(pair.0) (expected \(pair.1))"
+                    // _difference.0 = max(_difference.0, abs(.init(pair.0.y) -  .init(pair.1.y)))
+                    // _difference.1 = max(_difference.1, abs(.init(pair.0.cb) - .init(pair.1.cb)))
+                    // _difference.2 = max(_difference.2, abs(.init(pair.0.cr) - .init(pair.1.cr)))
+                    // continue 
+                }
+            }
+
+            return nil
+        }
+        catch
+        {
+            return "\(error)"
+        }
     }
 }
+
 
 // UNIT TESTS 
  /* 

@@ -1,77 +1,98 @@
-#if os(macOS)
-import Darwin
-#elseif os(Linux)
-import Glibc
-#endif
- 
-enum Colors 
+extension String 
 {
     static 
-    let off         = ("\u{001B}[0m"   , "\u{001B}[1m"), 
-        green       = ("\u{001B}[0;32m", "\u{001B}[1;32m"),
-        lightGreen  = ("\u{001B}[0;92m", "\u{001B}[1;92m"),
-        lightCyan   = ("\u{001B}[0;96m", "\u{001B}[1;96m"),
-        red         = ("\u{001B}[0;31m", "\u{001B}[1;31m"),
-        pink        = ("\u{001B}[38;5;204m", "\u{001B}[1m\u{001B}[38;5;204m")
-}
- 
-let TERM_WIDTH:Int = 72
- 
-func printCentered(_ string:String, width:Int = TERM_WIDTH)
-{
-    var count:Int    = 0
-    var escaped:Bool = false 
-    for character:Character in string 
+    func pad(_ string:String, left count:Int) -> Self 
     {
-        if escaped 
+        .init(repeating: " ", count: count - string.count) + string
+    }
+}
+enum Highlight 
+{
+    static 
+    var bold:String     = "\u{1B}[1m"
+    static 
+    var reset:String    = "\u{1B}[0m"
+    
+    static 
+    func fg(_ color:(r:UInt8, g:UInt8, b:UInt8)?) -> String 
+    {
+        if let color:(r:UInt8, g:UInt8, b:UInt8) = color
         {
-            if character == "m"
-            {
-                escaped = false 
-            }
-            
-            continue 
+            return "\u{1B}[38;2;\(color.r);\(color.g);\(color.b)m"
         }
         else 
         {
-            if character == "\u{001B}"
-            {
-                escaped = true 
-                continue 
-            }    
+            return "\u{1B}[39m"
         }
-        
-        count += 1
+    }
+    static 
+    func bg(_ color:(r:UInt8, g:UInt8, b:UInt8)?) -> String 
+    {
+        if let color:(r:UInt8, g:UInt8, b:UInt8) = color
+        {
+            return "\u{1B}[48;2;\(color.r);\(color.g);\(color.b)m"
+        }
+        else 
+        {
+            return "\u{1B}[49m"
+        }
     }
     
-    print(String(repeating: " ", count: max(0, (width - count)) >> 1) + string)
-}
- 
-func upline(_ n:Int = 1) 
-{
-    print(String(repeating: "\u{001B}[1A\u{001B}[K", count: n), terminator: "")
-}
- 
-func indent(_ string:String, by indentation:Int) -> String 
-{
-    let indent:String = .init(repeating: " ", count: indentation)
-    return indent + string.split(separator: "\n").joined(separator: "\n\(indent)")
-}
-
-func printTestHeader(_ i:Int, of count:Int) 
-{
-    printCentered("\(Colors.lightCyan.1)—— Testing: \(i) of \(count) tests ——\(Colors.off.0)")
-}
- 
-func printProgress(_ percent:Double, width:Int = TERM_WIDTH)
-{
-    let barWidth:Int = width - 8
-    let percentLabel:String = "\(Int(percent * 100))%"
-    let percentPadding:String = String(repeating: " ", count: 5 - percentLabel.count)
-
-    print("\(percentPadding)\(percentLabel) \(Colors.lightGreen.0)[\(Colors.lightGreen.1)", terminator: "")
-    let barSegments:Int = Int(percent * Double(barWidth))
-    print(String(repeating: "=", count: barSegments) + String(repeating: "-", count: barWidth - barSegments), terminator: "")
-    print("\(Colors.lightGreen.0)]\(Colors.off.0)")
-    fflush(stdout)
+    static 
+    func quantize<F>(_ color:(r:F, g:F, b:F)) -> (r:UInt8, g:UInt8, b:UInt8) 
+        where F:BinaryFloatingPoint 
+    {
+        let r:UInt8 = .init((.init(UInt8.max) * max(0, min(color.r, 1))).rounded()),
+            g:UInt8 = .init((.init(UInt8.max) * max(0, min(color.g, 1))).rounded()),
+            b:UInt8 = .init((.init(UInt8.max) * max(0, min(color.b, 1))).rounded())
+        return (r, g, b)
+    }
+    static 
+    func highlight<F>(_ string:String, _ color:(r:F, g:F, b:F)) -> String 
+        where F:BinaryFloatingPoint 
+    {
+        let c:
+        (
+            bg:(r:UInt8, g:UInt8, b:UInt8), 
+            fg:(r:UInt8, g:UInt8, b:UInt8)
+        )
+        c.bg = Self.quantize(color)
+        c.fg = (color.r + color.g + color.b) / 3 < 0.5 ? (.max, .max, .max) : (0, 0, 0)
+        
+        return "\(Self.bg(c.bg))\(Self.fg(c.fg))\(string)\(Self.fg(nil))\(Self.bg(nil))"
+    }
+    static 
+    func swatch<F>(_ color:(r:F, g:F, b:F)) -> String 
+        where F:BinaryFloatingPoint 
+    {
+        let v:(String, String, String) = 
+        (
+            String.pad("\(color.r)", left: 3),
+            String.pad("\(color.g)", left: 3),
+            String.pad("\(color.b)", left: 3)
+        )
+        return Self.highlight(" \(v.0)\(v.1)\(v.2) ", color)
+    }
+    static 
+    func square<F>(_ color:(r:F, g:F, b:F)) -> String 
+        where F:BinaryFloatingPoint 
+    {
+        return Self.highlight("  ", color)
+    }
+    
+    static 
+    func bits<I>(_ x:I) -> String where I:FixedWidthInteger 
+    {
+        return (0 ..< I.bitWidth).reversed().map
+        { 
+            (x >> $0) & 1 == 0 ? Self.highlight("0", (0.2, 0.2, 0.2)) : Self.highlight("1", (1, 1, 1))
+        }.joined(separator: "")
+    }
+    
+    static 
+    func print<F>(_ string:String, _ color:(r:F, g:F, b:F))  
+        where F:BinaryFloatingPoint 
+    {
+        Swift.print(Self.highlight(string, color))
+    }
 }
