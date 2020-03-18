@@ -112,9 +112,9 @@ enum JPEG
 }
 
 // compound types 
-public 
 extension JPEG 
 {
+    public 
     enum DensityUnit
     {
         case none
@@ -137,20 +137,23 @@ extension JPEG
         }
     }
     
-    enum Coding 
-    {
-        case huffman 
-        case arithmetic 
-    }
-    
+    public 
     enum Process 
     {
+        public 
+        enum Coding 
+        {
+            case huffman 
+            case arithmetic 
+        }
+        
         case baseline 
         case extended(coding:Coding, differential:Bool)
         case progressive(coding:Coding, differential:Bool)
         case lossless(coding:Coding, differential:Bool)
     }
     
+    public 
     enum Marker
     {
         case start
@@ -927,18 +930,22 @@ extension JPEG
     public 
     struct Frame
     {
+        public 
         struct Component
         {
+            public 
             let factor:(x:Int, y:Int)
+            public 
             let selector:Table.Quantization.Selector 
         }
-
+        
+        public 
         let process:JPEG.Process,
             precision:Int
 
-        private(set) // DNL segment may change this later on
+        public private(set) // DNL segment may change this later on
         var size:(x:Int, y:Int)
-
+        public 
         let components:[Int: Component]
     }
     
@@ -968,6 +975,9 @@ public
 extension JPEG.JFIF 
 {
     static 
+    let signature:[UInt8] = [0x4a, 0x46, 0x49, 0x46, 0x00]
+    
+    static 
     func parse(_ data:[UInt8]) throws -> Self
     {
         guard data.count >= 14
@@ -978,7 +988,7 @@ extension JPEG.JFIF
         }
         
         // look for 'JFIF' signature
-        guard data[0 ..< 5] == [0x4a, 0x46, 0x49, 0x46, 0x00]
+        guard data[0 ..< 5] == Self.signature[...]
         else 
         {
             throw JPEG.ParsingError.invalidJFIFSignature(.init(data[0 ..< 5]))
