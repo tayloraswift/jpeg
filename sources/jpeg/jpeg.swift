@@ -429,7 +429,6 @@ extension JPEG
             } 
         }
     }
-    
     enum ParsingError:JPEG.Error 
     {
         case truncatedMarkerSegmentBody(Marker, Int, expected:ClosedRange<Int>)
@@ -593,7 +592,7 @@ extension JPEG
             case .invalidScanSamplingVolume(let volume):
                 return "scan mcu sample volume (\(volume)) can be at most 10"
             case .invalidScanProgressiveSubset(band: let band, bits: let bits, let count, let process):
-                return "scan (\(count) components) with coding process '\(process)' cannot define bits [\(bits.1):\(bits.0)] for coefficients [\(band.0) ... \(band.1)]"
+                return "scan (\(count) components) with coding process '\(process)' cannot define bits \(bits.0) ..< \(bits.1) for coefficients \(band.0) ..< \(band.1)"
             
             case .invalidHuffmanTarget(let code):
                 return "selector code (0x\(String.init(code, radix: 16))) does not correspond to a valid huffman table destination"
@@ -952,12 +951,16 @@ extension JPEG
     public 
     struct Scan
     {
+        public 
         struct Component 
         {
+            public 
             let ci:Int
+            public 
             let factor:(x:Int, y:Int)
             // can only store selectors because DC-only scans do not need an AC table, 
             // and vice-versa
+            public 
             let selectors:
             (
                 huffman:(dc:Table.HuffmanDC.Selector, ac:Table.HuffmanAC.Selector), 
@@ -965,6 +968,7 @@ extension JPEG
             )
         }
         
+        public 
         let band:Range<Int>, 
             bits:Range<Int>, 
             components:[Component] 
@@ -1374,41 +1378,43 @@ extension JPEG.Scan
         let base:Int                    = 2 * count + 1
         let byte:(UInt8, UInt8, UInt8)  = (data[base], data[base + 1], data[base + 2])
         
-        let band:(Int, Int)             = (.init(byte.0), .init(byte.1))
+        let band:(Int, Int)             = (.init(byte.0), .init(byte.1) + 1)
         let bits:(Int, Int)             = 
         (
-            .init(byte.2 & 0xf), 
-            byte.2 >> 4 == 0 ? frame.precision : .init(byte.2 >> 4)
+                                        .init(byte.2 & 0x0f), 
+            byte.2 & 0xf0 == 0 ? .max : .init(byte.2 >> 4)
         )
         
-        guard   band.0 <= band.1, 
-                band == (0, 0) || count == 1, 
-                bits.0 <= bits.1, 
-                bits.1 == frame.precision || bits.1 - bits.0 == 1 // 1 bit per refining scan
+        guard   band.0 < band.1, // is valid range 
+                bits.0 < bits.1
         else 
         {
             throw JPEG.ParsingError.invalidScanProgressiveSubset(
                 band: band, bits: bits, count, frame.process)
         }
         
-        switch (frame.process, band.0, band.1, bits.0, bits.1) 
+        switch (frame.process, band, bits) 
         {
-        case    (.baseline,     0,                      63, 
-                                0,                      frame.precision), 
-                (.extended,     0,                      63, 
-                                0,                      frame.precision),
-                (.progressive,  0,                      0,                 
-                                0 ..< frame.precision,  bits.0 + 1 ... frame.precision),
-                (.progressive,  1 ..< 64,               band.0 + 1 ..< 64, 
-                                0 ..< frame.precision,  bits.0 + 1 ... frame.precision):
+        case    (.baseline,    (0,       64), (0,       .max)), 
+                (.extended,    (0,       64), (0,       .max)), 
+                (.progressive, (0,        1), (_,       .max)), // unlimited bits per initial scan
+                (.progressive, (0,        1), (_, bits.0 + 1)): // 1 bit per refining scan 
             break 
+        case    (.progressive, (_, 2 ... 64), (_,       .max)), 
+                (.progressive, (_, 2 ... 64), (_, bits.0 + 1)): 
+            guard count == 1 
+            else 
+            {
+                // progressive scans that code for AC components cannot be interleaved
+                fallthrough
+            }
         
         default:
             throw JPEG.ParsingError.invalidScanProgressiveSubset(
                 band: band, bits: bits, count, frame.process)
         }
         
-        return .init(band: band.0 ..< band.1 + 1, bits: bits.0 ..< bits.1, components: components)
+        return .init(band: band.0 ..< band.1, bits: bits.0 ..< bits.1, components: components)
     }
 }
 

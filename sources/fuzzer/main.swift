@@ -140,6 +140,31 @@ extension JPEG.Frame
         return bytes
     }
 }
+extension JPEG.Scan 
+{
+    func serialize() -> [UInt8] 
+    {
+        var bytes:[UInt8] = [.init(self.components.count)]
+        for component:Component in self.components 
+        {
+            let dc:UInt8 = JPEG.Table.HuffmanDC.serialize(selector: component.selectors.huffman.dc),
+                ac:UInt8 = JPEG.Table.HuffmanAC.serialize(selector: component.selectors.huffman.ac)
+            bytes.append(.init(component.ci))
+            bytes.append(dc << 4 | ac)
+        }
+        
+        bytes.append(.init(self.band.lowerBound))
+        bytes.append(.init(self.band.upperBound - 1))
+        
+        let pt:(UInt8, UInt8) = 
+        (
+                                                .init(self.bits.lowerBound), 
+            self.bits.upperBound == .max ? 0 :  .init(self.bits.upperBound)
+        )
+        bytes.append(pt.1 << 4 | pt.0)
+        return bytes 
+    }
+}
 
 extension JPEG.Bitstream 
 {
@@ -266,4 +291,16 @@ extension Array where Element == UInt8
             }
         }
     }
+}
+
+
+var heap:Common.Heap<Int> = [3, 2, 6, 9, 0, -1, 45, 0, 61, -55, 34, 35]
+for v:Int in [-66, 4, -11, 60, 135, -9]
+{
+    heap.enqueue(v)
+}
+
+while let v:Int = heap.dequeue()
+{
+    print(v)
 }
