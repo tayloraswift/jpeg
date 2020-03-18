@@ -1735,6 +1735,7 @@ extension JPEG
             public 
             struct Plane 
             {
+                public 
                 var units:(x:Int, y:Int)
                 public 
                 var size:(x:Int, y:Int) 
@@ -1814,6 +1815,7 @@ extension JPEG
             public 
             struct Plane 
             {
+                public 
                 let units:(x:Int, y:Int)
                 public 
                 var size:(x:Int, y:Int) 
@@ -2065,7 +2067,14 @@ extension JPEG.Bitstream
         public 
         struct DC 
         {
+            public 
             let difference:Int 
+            
+            public 
+            init(difference:Int) 
+            {
+                self.difference = difference
+            }
         }
         public 
         enum AC 
