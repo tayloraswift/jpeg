@@ -22,14 +22,13 @@ enum Test
             }
             
             let image:[JPEG.YCbCr<UInt8>] = rectangular.ycc()
-            /*
             for i:Int in 0 ..< rectangular.size.y 
             {
                 let line:String = (4 * rectangular.size.x / 16 ..< 8 * rectangular.size.x / 16).map 
                 {
                     (j:Int) in 
                     
-                    let c:JPEG.RGB<UInt8> = image[j + i * rectangular.size.x]
+                    let c:JPEG.RGB<UInt8> = image[j + i * rectangular.size.x].rgb
                     let r:Float     = .init(c.r) / 255,
                         g:Float     = .init(c.g) / 255,
                         b:Float     = .init(c.b) / 255
@@ -37,7 +36,6 @@ enum Test
                 }.joined(separator: "")
                 print(line)
             } 
-            */
             
             guard let result:[JPEG.YCbCr<UInt8>]? =
             (JPEG.File.Source.open(path: rgbaPath)

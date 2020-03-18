@@ -1,32 +1,7 @@
 extension String 
 {
-    init(selector:JPEG.HuffmanTable.Selector) 
-    {
-        switch selector
-        {
-        case \.dc.0:
-            self = "DC 0"
-        case \.dc.1:
-            self = "DC 1"
-        case \.dc.2:
-            self = "DC 2"
-        case \.dc.3:
-            self = "DC 3"
-        
-        case \.ac.0:
-            self = "AC 0"
-        case \.ac.1:
-            self = "AC 1"
-        case \.ac.2:
-            self = "AC 2"
-        case \.ac.3:
-            self = "AC 3"
-        
-        default:
-            self = "<unavailable>"
-        }
-    }
-    init(selector:JPEG.QuantizationTable.Selector) 
+    public 
+    init<Table>(selector:Table.Selector) where Table:JPEG.AnyTable  
     {
         switch selector
         {
@@ -47,6 +22,7 @@ extension String
 
 extension JPEG.Process:CustomStringConvertible
 {
+    public 
     var description:String 
     {
         switch self 
@@ -65,6 +41,7 @@ extension JPEG.Process:CustomStringConvertible
 
 extension JPEG.Frame.Component:CustomStringConvertible 
 {
+    public 
     var description:String 
     {
         "{quantization table: \(String.init(selector: self.selector)), sample factors: (\(self.factor.x), \(self.factor.y))}"
@@ -73,6 +50,7 @@ extension JPEG.Frame.Component:CustomStringConvertible
 
 extension JPEG.Frame:CustomStringConvertible 
 {
+    public 
     var description:String 
     {
         """
@@ -101,6 +79,7 @@ extension JPEG.Frame:CustomStringConvertible
 
 extension JPEG.Scan:CustomStringConvertible
 {
+    public 
     var description:String 
     {
         """
@@ -114,12 +93,13 @@ extension JPEG.Scan:CustomStringConvertible
     }
 }
 
-extension JPEG.HuffmanTable:CustomStringConvertible
+extension JPEG.Table.Huffman:CustomStringConvertible
 {
+    public 
     var description:String 
     {
         return """
-        huffman table: \(self.storage.count * MemoryLayout<JPEG.HuffmanTable.Entry>.stride) bytes 
+        huffman table: \(self.storage.count * MemoryLayout<Self.Entry>.stride) bytes 
         {
             target             : \(String.init(selector: self.target))
             logical entries (ζ): \(self.ζ)
@@ -129,8 +109,9 @@ extension JPEG.HuffmanTable:CustomStringConvertible
     }
 }
 
-extension JPEG.QuantizationTable:CustomStringConvertible
+extension JPEG.Table.Quantization:CustomStringConvertible
 {
+    public 
     var description:String 
     {
         return """

@@ -112,6 +112,7 @@ enum JPEG
 }
 
 // compound types 
+public 
 extension JPEG 
 {
     enum DensityUnit
@@ -268,7 +269,8 @@ extension JPEG
     {
         private 
         var atoms:[UInt16]
-        let count:Int
+        private(set)
+        var count:Int
         
         init(_ data:[UInt8])
         {
@@ -333,7 +335,7 @@ extension JPEG
             }
             
             let shift:Int       = UInt16.bitWidth &- 1 &- b
-            let clear:UInt16    = ~((~bit & 1) &<< shift)
+            let clear:UInt16    = ~(.init(~bit & 1) &<< shift)
             // all bits at and beyond bit index `self.count` should be `1`-bits 
             self.atoms[a]      &= clear 
             self.count         += 1
@@ -341,6 +343,7 @@ extension JPEG
     }
 }
 
+public 
 protocol _JPEGError:Swift.Error 
 {
     static 
@@ -357,6 +360,7 @@ protocol _JPEGError:Swift.Error
         get 
     }
 }
+public 
 extension JPEG 
 {
     typealias Error = _JPEGError
@@ -372,11 +376,12 @@ extension JPEG
         case invalidMarkerSegmentPrefix(UInt8)
         case invalidMarkerSegmentType(UInt8)
         
-        static 
+        public static 
         var namespace:String 
         {
             "lexing error" 
         }
+        public 
         var message:String 
         {
             switch self 
@@ -398,6 +403,7 @@ extension JPEG
                 return "invalid marker segment type code"
             } 
         }
+        public 
         var details:String? 
         {
             switch self 
@@ -467,11 +473,12 @@ extension JPEG
             }
         }
         
-        static 
+        public static 
         var namespace:String 
         {
             "parsing error" 
         }
+        public 
         var message:String 
         {
             switch self 
@@ -523,7 +530,7 @@ extension JPEG
                 return "invalid quantization table precision specifier"
             }
         }
-        
+        public 
         var details:String? 
         {
             switch self 
@@ -601,10 +608,11 @@ extension JPEG
     {
         case truncatedEntropyCodedSegment
         
-        case invalidCoefficientBinade(Int, expected:ClosedRange<Int>)
+        case invalidCompositeValue(Int, expected:ClosedRange<Int>)
         
-        case undefinedScanHuffmanTableReference(JPEG.Table.Huffman.Selector)
-        case undefinedScanQuantizationTableReference(JPEG.Table.Quantization.Selector)
+        case undefinedScanHuffmanDCReference(JPEG.Table.HuffmanDC.Selector)
+        case undefinedScanHuffmanACReference(JPEG.Table.HuffmanAC.Selector)
+        case undefinedScanQuantizationReference(JPEG.Table.Quantization.Selector)
         
         case undefinedScanComponentReference(Int, [Int])
         case invalidScanInterleaving(Int)
@@ -620,11 +628,12 @@ extension JPEG
         
         case unsupportedColorFormat([Int], Int)
         
-        static 
+        public static 
         var namespace:String 
         {
             "decoding error" 
         }
+        public 
         var message:String 
         {
             switch self 
@@ -632,12 +641,14 @@ extension JPEG
             case .truncatedEntropyCodedSegment:
                 return "truncated entropy coded segment bitstream"
                 
-            case .invalidCoefficientBinade:
-                return "invalid DCT coefficient binade"
+            case .invalidCompositeValue:
+                return "invalid composite value"
             
-            case .undefinedScanHuffmanTableReference:
-                return "undefined huffman table reference"
-            case .undefinedScanQuantizationTableReference:
+            case .undefinedScanHuffmanDCReference:
+                return "undefined dc huffman table reference"
+            case .undefinedScanHuffmanACReference:
+                return "undefined ac huffman table reference"
+            case .undefinedScanQuantizationReference:
                 return "undefined quantization table reference"
             
             case .undefinedScanComponentReference:
@@ -666,19 +677,21 @@ extension JPEG
                 return "unsupported color format"
             }
         }
-        
+        public 
         var details:String? 
         {
             switch self 
             {
             case .truncatedEntropyCodedSegment:
                 return "not enough data in entropy coded segment bitstream"
-            case .invalidCoefficientBinade(let binade, expected: let expected):
-                return "DCT coefficient binade (\(binade)) must be within \(expected.lowerBound) ... \(expected.upperBound)"
+            case .invalidCompositeValue(let value, expected: let expected):
+                return "magnitude-tail encoded value (\(value)) must be within \(expected.lowerBound) ... \(expected.upperBound)"
             
-            case .undefinedScanHuffmanTableReference(let selector):
-                return "no huffman table has been installed at the location <\(String.init(selector: selector))>"
-            case .undefinedScanQuantizationTableReference(let selector):
+            case .undefinedScanHuffmanDCReference(let selector):
+                return "no dc huffman table has been installed at the location <\(String.init(selector: selector))>"
+            case .undefinedScanHuffmanACReference(let selector):
+                return "no ac huffman table has been installed at the location <\(String.init(selector: selector))>"
+            case .undefinedScanQuantizationReference(let selector):
                 return "no quantization table has been installed at the location <\(String.init(selector: selector))>"
                 
             case .undefinedScanComponentReference(let ci, let defined):
@@ -824,12 +837,14 @@ extension JPEG.Bytestream.Source
 // jfif segment parsing 
 extension JPEG 
 {
+    public 
     struct JFIF
     {
+        public 
         let version:(major:Int, minor:Int),
             density:(x:Int, y:Int, unit:DensityUnit)
 
-        static 
+        public static 
         func parse(_ data:[UInt8]) throws -> Self
         {
             guard data.count >= 14
@@ -877,11 +892,13 @@ extension JPEG
     }
 }
 // table parsing 
+public 
 protocol _JPEGAnyTable 
 {
     typealias Slots    = (Self?, Self?, Self?, Self?)
     typealias Selector = WritableKeyPath<Slots, Self?>
 }
+public 
 protocol _JPEGBitstreamAnySymbol 
 {
     init(_:UInt8)
@@ -889,7 +906,7 @@ protocol _JPEGBitstreamAnySymbol
 extension JPEG.AnyTable  
 {
     static 
-    func parse(selector:UInt8) -> Self?
+    func parse(selector:UInt8) -> Self.Selector?
     {
         switch selector & 0x0f
         {
@@ -908,25 +925,30 @@ extension JPEG.AnyTable
 }
 extension JPEG.Bitstream 
 {
+    public 
     typealias AnySymbol = _JPEGBitstreamAnySymbol
+    public 
     enum Symbol 
     {
+        public 
         struct DC:AnySymbol
         {
             private 
             let value:UInt8 
             
+            public 
             init(_ value:UInt8) 
             {
                 self.value = value 
             }
         }
-        
+        public 
         struct AC:AnySymbol
         {
             private 
             let value:UInt8
             
+            public 
             init(_ value:UInt8) 
             {
                 self.value = value 
@@ -936,16 +958,18 @@ extension JPEG.Bitstream
 }
 extension JPEG 
 {
+    public 
     typealias AnyTable = _JPEGAnyTable 
+    public 
     enum Table 
     {
+        public 
         typealias HuffmanDC = Huffman<JPEG.Bitstream.Symbol.DC>
+        public 
         typealias HuffmanAC = Huffman<JPEG.Bitstream.Symbol.AC>
+        public 
         struct Huffman<Symbol>:AnyTable where Symbol:JPEG.Bitstream.AnySymbol
         {
-            typealias Slots    = (Self?, Self?, Self?, Self?)
-            typealias Selector = WritableKeyPath<Slots, Self?>
-            
             struct Entry 
             {
                 let symbol:Symbol
@@ -960,17 +984,15 @@ extension JPEG
             let target:Selector
         }
         
+        public 
         struct Quantization:AnyTable
         {
-            typealias Slots    = (Self?, Self?, Self?, Self?)
-            typealias Selector = WritableKeyPath<Slots, Self?>
-            
             private 
             let elements:[Int]
             let target:Selector
         }
         
-        static 
+        public static 
         func parse(_ data:[UInt8], as:(JPEG.Table.HuffmanDC.Type, JPEG.Table.HuffmanAC.Type)) 
             throws -> (dc:[JPEG.Table.HuffmanDC], ac:[JPEG.Table.HuffmanAC]) 
         {
@@ -1057,7 +1079,7 @@ extension JPEG
             return tables
         }
         
-        static 
+        public static 
         func parse(_ data:[UInt8], as: JPEG.Table.Quantization.Type) 
             throws -> [JPEG.Table.Quantization] 
         {
@@ -1111,6 +1133,7 @@ extension JPEG
 // frame/scan header parsing 
 extension JPEG 
 {
+    public 
     struct Frame
     {
         struct Component
@@ -1127,7 +1150,7 @@ extension JPEG
 
         let components:[Int: Component]
 
-        static
+        public static
         func parse(_ data:[UInt8], process:JPEG.Process) throws -> Self
         {
             switch process 
@@ -1223,7 +1246,7 @@ extension JPEG
         }
         
         // parse DNL segment 
-        mutating
+        public mutating
         func height(_ data:[UInt8]) throws 
         {
             guard data.count == 2
@@ -1236,6 +1259,7 @@ extension JPEG
         } 
     }
     
+    public 
     struct Scan
     {
         struct Component 
@@ -1255,7 +1279,7 @@ extension JPEG
             bits:Range<Int>, 
             components:[Component] 
         
-        static 
+        public static 
         func parse(_ data:[UInt8], frame:JPEG.Frame) 
             throws -> Self
         {
@@ -1285,7 +1309,6 @@ extension JPEG
                 let byte:(UInt8, UInt8) = (data[base], data[base + 1])
                 
                 let ci:Int = .init(byte.0)
-                let selector:(dc:JPEG.HuffmanTable.Selector, ac:JPEG.HuffmanTable.Selector) 
                 
                 switch (frame.process, byte.1 >> 4, byte.1 & 0x0f) 
                 {
@@ -1412,7 +1435,7 @@ extension JPEG.Table.Huffman
         return (n, z)
     }
 
-    static 
+    public static 
     func build<RAC>(counts:[Int], values:RAC, target:Selector) -> Self?
         where RAC:RandomAccessCollection, RAC.Element == UInt8, RAC.Index == Int
     {
@@ -1643,7 +1666,7 @@ extension JPEG.Table.Huffman
             guard j < self.ζ 
             else 
             {
-                return (0, 16)
+                return .init(symbol: .init(0), length: 16)
             }
             
             return self.storage[j - self.n * 255]
@@ -1653,7 +1676,7 @@ extension JPEG.Table.Huffman
 
 extension JPEG.Table.Quantization 
 {
-    static 
+    public static 
     func build<RAC>(values:RAC, target:Selector) -> Self
         where RAC:RandomAccessCollection, RAC.Element == UInt8, RAC.Index == Int
     {
@@ -1694,7 +1717,6 @@ extension JPEG
             public 
             struct Plane 
             {
-                public private(set)
                 var units:(x:Int, y:Int)
                 public 
                 var size:(x:Int, y:Int) 
@@ -1702,22 +1724,16 @@ extension JPEG
                     (8 * self.units.x, 8 * self.units.y)
                 }
                 
-                 
+                // have to be `Int16` to circumvent compiler size limits for `_read` and `_modify`
+                @Storage2<Int16>
+                public 
                 var factor:(x:Int, y:Int) 
-                {
-                    (.init(self._factor.x), .init(self._factor.y))
-                } 
-                var ci:Int
-                {
-                    .init(self._ci)
-                }
+                @Storage<Int16>
+                public 
+                var ci:Int 
                 
                 private 
                 var buffer:[Int]
-                // have to be `Int16` to circumvent compiler size limits for `_read` and `_modify`
-                private 
-                let _factor:(x:Int16, y:Int16), 
-                    _ci:Int16
                 
                 // subscript with a zigzag coordinate
                 public 
@@ -1780,30 +1796,23 @@ extension JPEG
             public 
             struct Plane 
             {
-                public 
-                var ci:Int 
-                {
-                    .init(self._ci)
-                }
+                let units:(x:Int, y:Int)
                 public 
                 var size:(x:Int, y:Int) 
                 {
                     (8 * self.units.x, 8 * self.units.y)
                 }
+                
+                // have to be `Int16` to circumvent compiler size limits for `_read` and `_modify`
+                @Storage2<Int16>
                 public 
                 var factor:(x:Int, y:Int) 
-                {
-                    (.init(self._factor.x), .init(self._factor.y))
-                }
-                
-                let units:(x:Int, y:Int)
+                @Storage<Int16>
+                public 
+                var ci:Int 
                 
                 private 
                 var buffer:[Float]
-                // have to be `Int16` to circumvent compiler size limits for `_read` and `_modify`
-                private 
-                let _factor:(x:Int16, y:Int16), 
-                    _ci:Int16
                 
                 public 
                 subscript(x x:Int, y y:Int) -> Float
@@ -1885,12 +1894,12 @@ extension JPEG.Data.Planar:RandomAccessCollection
 
 extension JPEG.Data.Spectral.Plane 
 {
-    init(ci:Int, factor:(x:Int, y:Int), stride:Int)
+    init(stride:Int, factor:(x:Int, y:Int), ci:Int)
     {
         self.buffer     = []
         self.units      = (stride, 0)
-        self._factor    = (.init(factor.x), .init(factor.y))
-        self._ci        = .init(ci)
+        self._factor    = .init(wrappedValue: factor)
+        self._ci        = .init(wrappedValue: ci)
     }
     
     mutating 
@@ -1965,9 +1974,9 @@ extension JPEG.Data.Spectral
         {
             let numerator:Int                   = size.x * component.factor.x
             let plane:JPEG.Data.Spectral.Plane  = .init(
-                ci:     ci, 
+                stride: Self.units(numerator, stride: 8 * self.scale.x), 
                 factor: component.factor, 
-                stride: Self.units(numerator, stride: 8 * self.scale.x))
+                ci:     ci)
             planes.append(plane)
         }
         
@@ -1987,7 +1996,6 @@ extension JPEG.Data.Spectral
             let numerator:Int = height * self[p].factor.y
             self[p].resize(to: Self.units(numerator, stride: 8 * self.scale.y))
         }
-        
     }
 }
 
@@ -2032,12 +2040,15 @@ extension JPEG.Bitstream.Symbol.AC
 }
 extension JPEG.Bitstream
 {
+    public 
     enum Composite 
     {
+        public 
         struct DC 
         {
             let difference:Int 
         }
+        public 
         enum AC 
         {
             case run(Int, value:Int)
@@ -2045,7 +2056,7 @@ extension JPEG.Bitstream
         }
     }
     
-    static 
+    public static 
     func extend<I>(binade:Int, _ tail:UInt16, as _:I.Type) -> I
         where I:FixedWidthInteger & SignedInteger
     {
@@ -2059,7 +2070,7 @@ extension JPEG.Bitstream
         return .init(combined)
     }
     
-    static 
+    public static 
     func compact<I>(_ x:I) -> (binade:Int, tail:UInt16)
         where I:FixedWidthInteger & SignedInteger
     {
@@ -2100,14 +2111,14 @@ extension JPEG.Bitstream
             throw JPEG.DecodingError.truncatedEntropyCodedSegment
         }
         
-        let (symbol, length):(JPEG.Bitstream.Symbol.DC, Int)    = table[self[i, count: 16]]
-        let binade:Int                                          = symbol.binade 
-        i += .init(length)
+        let entry:JPEG.Table.HuffmanDC.Entry    = table[self[i, count: 16]]
+        let binade:Int                          = entry.symbol.binade 
+        i += entry.length
         
         guard binade > 0
         else  
         {
-            return 0 
+            return .init(difference: 0) 
         }
         
         // read `binade` additional bits (raw)
@@ -2135,10 +2146,10 @@ extension JPEG.Bitstream
             throw JPEG.DecodingError.truncatedEntropyCodedSegment
         }
         
-        let (symbol, length):(JPEG.Bitstream.Symbol.AC, Int)    = table[self[i, count: 16]]
-        let zeroes:Int                                          = symbol.zeroes, 
-            binade:Int                                          = symbol.binade 
-        i += .init(length)
+        let entry:JPEG.Table.HuffmanAC.Entry    = table[self[i, count: 16]]
+        let zeroes:Int                          = entry.symbol.zeroes, 
+            binade:Int                          = entry.symbol.binade 
+        i += entry.length
         
         switch (zeroes, binade) 
         {
@@ -2215,7 +2226,7 @@ extension JPEG.Data.Spectral
             guard let huffman:JPEG.Table.HuffmanDC = slots[keyPath: $0.selectors.huffman.dc]
             else 
             {
-                throw JPEG.DecodingError.undefinedScanHuffmanTableReference($0.selectors.huffman.dc)
+                throw JPEG.DecodingError.undefinedScanHuffmanDCReference($0.selectors.huffman.dc)
             }
             
             guard let p:Int = plane[$0.ci] 
@@ -2382,7 +2393,7 @@ extension JPEG.Data.Spectral
         guard let table:JPEG.Table.HuffmanAC    = slots[keyPath: component.selectors.huffman.ac]
         else 
         {
-            throw JPEG.DecodingError.undefinedScanHuffmanTableReference(component.selectors.huffman.ac)
+            throw JPEG.DecodingError.undefinedScanHuffmanACReference(component.selectors.huffman.ac)
         }
         
         let bits:JPEG.Bitstream     = .init(data)
@@ -2457,7 +2468,7 @@ extension JPEG.Data.Spectral
         guard let table:JPEG.Table.HuffmanAC    = slots[keyPath: component.selectors.huffman.ac]
         else 
         {
-            throw JPEG.DecodingError.undefinedScanHuffmanTableReference(component.selectors.huffman.ac)
+            throw JPEG.DecodingError.undefinedScanHuffmanACReference(component.selectors.huffman.ac)
         }
         
         let bits:JPEG.Bitstream     = .init(data)
@@ -2488,7 +2499,7 @@ extension JPEG.Data.Spectral
                             guard -1 ... 1 ~= v 
                             else 
                             {
-                                throw JPEG.DecodingError.invalidCoefficientBinade(binade, expected: 0 ... 1)
+                                throw JPEG.DecodingError.invalidCompositeValue(v, expected: -1 ... 1)
                             }
                             
                             zeroes = run 
@@ -2553,7 +2564,7 @@ extension JPEG.Data.Spectral
                 slots[keyPath: $0.selectors.quantization]
             else 
             {
-                throw JPEG.DecodingError.undefinedScanQuantizationTableReference($0.selectors.quantization)
+                throw JPEG.DecodingError.undefinedScanQuantizationReference($0.selectors.quantization)
             }
             
             guard let p:Int = plane[$0.ci] 
@@ -2583,78 +2594,6 @@ extension JPEG.Data.Spectral
         }
     }
 }
-
-/* extension JPEG.Bitstream 
-{
-    func rrrrssssx(_ i:inout Int, table:JPEG.HuffmanTable) 
-        throws -> (zeroes:Int, run:Int, coefficient:Int) 
-    {
-        // read RRRR:SSSS:[extra] (huffman coded)
-        guard i < self.count 
-        else 
-        {
-            throw JPEG.DecodingError.truncatedEntropyCodedSegment
-        }
-        
-        let entry:(value:UInt8, length:UInt8)   = table[self[i, count: 16]]
-        let zeroes:Int                          = .init(entry.value >> 4),
-            binade:Int                          = .init(entry.value & 0x0f)
-        i += .init(entry.length)
-        
-        switch binade 
-        {
-        case 0:
-            let zerorun:(zeroes:Int, run:Int) = try self.zerorun(&i, zeroes: zeroes)
-            return (zeroes: zerorun.zeroes, run: zerorun.run, coefficient: 0)
-        default:
-            guard i + binade <= self.count 
-            else 
-            {
-                throw JPEG.DecodingError.truncatedEntropyCodedSegment
-            }
-            
-            let coefficient:Int = Self.extend(binade: binade, self[i, count: binade], as: Int.self)
-            i += binade
-            return (zeroes: zeroes, run: 1, coefficient: coefficient)
-        }
-    } 
-    
-    func rrrrssssy(_ i:inout Int, table:JPEG.HuffmanTable) 
-        throws -> (zeroes:Int, run:Int, delta:Int) 
-    {
-        guard i < self.count 
-        else 
-        {
-            throw JPEG.DecodingError.truncatedEntropyCodedSegment
-        }
-        
-        let entry:(value:UInt8, length:UInt8)   = table[self[i, count: 16]]
-        let zeroes:Int                          = .init(entry.value >> 4),
-            binade:Int                          = .init(entry.value & 0x0f)
-        i += .init(entry.length)
-        
-        switch binade
-        {
-        case 0:
-            let zerorun:(zeroes:Int, run:Int) = try self.zerorun(&i, zeroes: zeroes)
-            return (zeroes: zerorun.zeroes, run: zerorun.run, delta: 0)
-        case 1:
-            guard i < self.count 
-            else 
-            {
-                throw JPEG.DecodingError.truncatedEntropyCodedSegment
-            }
-            
-            let delta:Int = self[i] * 2 - 1
-            i += 1
-            return (zeroes: zeroes, run: 1, delta: delta)
-        
-        default:
-            throw JPEG.DecodingError.invalidCoefficientBinade(binade, expected: 0 ... 1)
-        }
-    } 
-} */
-
 
 // signal processing and upscaling 
 extension JPEG.Data.Spectral.Plane 
@@ -2734,6 +2673,7 @@ extension JPEG.Data.Spectral.Plane
 }
 extension JPEG.Data.Spectral 
 {
+    public 
     func idct() -> JPEG.Data.Planar 
     {
         .init(self.map{ $0.idct() }, scale: self.scale, size: self.size, 
@@ -2746,8 +2686,8 @@ extension JPEG.Data.Planar.Plane
     {
         self.buffer     = values 
         self.units      = units 
-        self._factor    = (.init(factor.x), .init(factor.y))
-        self._ci        = .init(ci)
+        self._factor    = .init(wrappedValue: factor)
+        self._ci        = .init(wrappedValue: ci)
     }
 }
 extension JPEG.Data.Planar 
@@ -2761,6 +2701,7 @@ extension JPEG.Data.Planar
         self.planes     = planes 
     }
     
+    public 
     func interleave() -> JPEG.Data.Rectangular 
     {
         var interleaved:[Float]
@@ -3098,6 +3039,7 @@ extension JPEG.YCbCr where Component == UInt8
         .init(max(.init(UInt8.min), min(x, .init(UInt8.max))))
     }
     
+    public 
     var rgb:JPEG.RGB<UInt8>
     {
         let y:Float     = .init(self.y),
@@ -3146,10 +3088,6 @@ extension JPEG.Data.Rectangular
             }
         
         case .ycc8:
-            func emulate(_ x:Float) -> UInt8 
-            {
-                let u16:UInt16 = .init(max(.init(UInt16.min), min(x, .init(UInt16.max))))
-            }
             return stride(from: 0, to: self.values.count, by: 3).map 
             {
                 let ycc:JPEG.YCbCr<UInt8> = .init(
@@ -3310,22 +3248,54 @@ extension ArraySlice where Element == UInt8
 }
 
 // language support 
-@propertyWrapper 
-struct Storage<I> where I:FixedWidthInteger & BinaryInteger 
+extension JPEG 
 {
-    private 
-    var storage:I 
-    
-    init(wrappedValue:Int) 
+    @propertyWrapper 
+    public 
+    struct Storage<I> where I:FixedWidthInteger & BinaryInteger 
     {
-        self.storage = .init(truncatingIfNeeded: wrappedValue)
-    }
-    
-    var wrappedValue:Int 
-    {
-        get 
+        private 
+        var storage:I 
+        
+        public 
+        init(wrappedValue:Int) 
         {
-            .init(self.storage)
+            self.storage = .init(truncatingIfNeeded: wrappedValue)
+        }
+        
+        public 
+        var wrappedValue:Int 
+        {
+            get 
+            {
+                .init(self.storage)
+            }
+        }
+    }
+    @propertyWrapper 
+    public 
+    struct Storage2<I> where I:FixedWidthInteger & BinaryInteger 
+    {
+        private 
+        var storage:(x:I, y:I) 
+        
+        public 
+        init(wrappedValue:(x:Int, y:Int)) 
+        {
+            self.storage = 
+            (
+                .init(truncatingIfNeeded: wrappedValue.x),
+                .init(truncatingIfNeeded: wrappedValue.y)
+            )
+        }
+        
+        public 
+        var wrappedValue:(x:Int, y:Int) 
+        {
+            get 
+            {
+                (.init(self.storage.x), .init(self.storage.y))
+            }
         }
     }
 }
