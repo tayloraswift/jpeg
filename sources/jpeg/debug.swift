@@ -63,7 +63,7 @@ extension JPEG.Frame:CustomStringConvertible
             [
                 \(self.components.keys.sorted().map
                 {
-                    guard let component:JPEG.Frame.Component = self.components[$0]
+                    guard let component:Component = self.components[$0]
                     else 
                     {
                         return "[\($0)]: "
@@ -99,7 +99,7 @@ extension JPEG.Table.Huffman:CustomStringConvertible
     var description:String 
     {
         return """
-        huffman table: \(self.storage.count * MemoryLayout<Self.Entry>.stride) bytes 
+        huffman table: \(self.storage.count * MemoryLayout<Entry>.stride) bytes 
         {
             target             : \(String.init(selector: self.target))
             logical entries (ζ): \(self.ζ)
