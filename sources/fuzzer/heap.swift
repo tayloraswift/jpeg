@@ -1,21 +1,21 @@
 enum Common   
 {
-    struct Heap<Element> where Element:Comparable 
+    struct Heap<Key, Value> where Key:Comparable 
     {
         private 
-        var storage:[Element]
+        var storage:[(key:Key, value:Value)]
         
         // support 1-based indexing
         private
-        subscript(index:Int) -> Element
+        subscript(index:Int) -> (key:Key, value:Value)
         {
             get
             {
                 self.storage[index - 1]
             }
-            set(value)
+            set(item)
             {
-                self.storage[index - 1] = value
+                self.storage[index - 1] = item
             }
         }
 
@@ -23,7 +23,7 @@ enum Common
         {
             self.storage.count
         }
-        var first:Element?
+        var first:(key:Key, value:Value)?
         {
             self.storage.first
         }
@@ -67,7 +67,7 @@ extension Common.Heap
     }
     
     private
-    func lowestPriority(above child:Int) -> Int?
+    func highest(above child:Int) -> Int?
     {
         let p:Int = Self.parent(index: child)
         // make sure it’s not the root
@@ -78,10 +78,10 @@ extension Common.Heap
         }
                 
         // and the element is higher than the parent
-        return self[p] < self[child] ? p : nil
+        return self[child].key < self[p].key ? p : nil
     }
     private
-    func highestPriority(below parent:Int) -> Int?
+    func lowest(below parent:Int) -> Int?
     {
         let r:Int = Self.right(index: parent),
             l:Int = Self.left (index: parent)
@@ -95,11 +95,11 @@ extension Common.Heap
         guard r < self.endIndex
         else
         {
-            return self[parent] < self[l] ? l : nil 
+            return  self[l].key < self[parent].key ? l : nil 
         }
         
-        let c:Int = self[l] < self[r] ? r : l
-        return self[parent] < self[c] ? c : nil 
+        let c:Int = self[r].key < self[l].key      ? r : l
+        return      self[c].key < self[parent].key ? c : nil 
     }
     
 
@@ -112,7 +112,7 @@ extension Common.Heap
     private mutating
     func siftUp(index:Int)
     {
-        guard let parent:Int = self.lowestPriority(above: index)
+        guard let parent:Int = self.highest(above: index)
         else
         {
             return
@@ -124,7 +124,7 @@ extension Common.Heap
     private mutating
     func siftDown(index:Int)
     {
-        guard let child:Int = self.highestPriority(below: index)
+        guard let child:Int = self.lowest(below: index)
         else
         {
             return
@@ -135,14 +135,14 @@ extension Common.Heap
     }
 
     mutating
-    func enqueue(_ element:Element)
+    func enqueue(key:Key, value:Value)
     {
-        self.storage.append(element)
+        self.storage.append((key, value))
         self.siftUp(index: self.endIndex - 1)
     }
     
     mutating
-    func dequeue() -> Element?
+    func dequeue() -> (key:Key, value:Value)?
     {
         switch self.count 
         {
@@ -160,7 +160,7 @@ extension Common.Heap
         }
     }
     
-    init<S>(_ sequence:S) where S:Sequence, S.Element == Element 
+    init<S>(_ sequence:S) where S:Sequence, S.Element == (key:Key, value:Value) 
     {
         self.storage = .init(sequence)
         // heapify 
@@ -174,8 +174,8 @@ extension Common.Heap
 }
 extension Common.Heap:ExpressibleByArrayLiteral 
 {
-    init(arrayLiteral:Element...) 
+    init(arrayLiteral:(key:Key, value:Value)...) 
     {
         self.init(arrayLiteral)
     }
-}
+} 

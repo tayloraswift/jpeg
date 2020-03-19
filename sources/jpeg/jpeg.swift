@@ -843,9 +843,14 @@ protocol _JPEGAnyTable
     typealias Selector = WritableKeyPath<Slots, Self?>
 }
 public 
-protocol _JPEGBitstreamAnySymbol 
+protocol _JPEGBitstreamAnySymbol:Hashable
 {
     init(_:UInt8)
+    
+    var value:UInt8 
+    {
+        get 
+    }
 }
 extension JPEG.Bitstream 
 {
@@ -857,7 +862,7 @@ extension JPEG.Bitstream
         public 
         struct DC:AnySymbol
         {
-            private 
+            public  
             let value:UInt8 
             
             public 
@@ -869,7 +874,7 @@ extension JPEG.Bitstream
         public 
         struct AC:AnySymbol
         {
-            private 
+            public  
             let value:UInt8
             
             public 

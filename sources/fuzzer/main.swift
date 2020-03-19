@@ -293,14 +293,38 @@ extension Array where Element == UInt8
     }
 }
 
-
-var heap:Common.Heap<Int> = [3, 2, 6, 9, 0, -1, 45, 0, 61, -55, 34, 35]
+ 
+var heap:Common.Heap<Int, Void> = 
+[
+    (  3, ()), 
+    (  2, ()), 
+    (  6, ()), 
+    (  9, ()), 
+    (  0, ()), 
+    ( -1, ()), 
+    ( 45, ()), 
+    (  0, ()), 
+    ( 61, ()), 
+    (-55, ()), 
+    ( 34, ()), 
+    ( 35, ()), 
+]
 for v:Int in [-66, 4, -11, 60, 135, -9]
 {
-    heap.enqueue(v)
+    heap.enqueue(key: v, value: ())
 }
 
-while let v:Int = heap.dequeue()
+while let (v, _):(Int, Void) = heap.dequeue()
 {
     print(v)
-}
+} 
+
+var frequencies:[Int] = .init(repeatElement(1, count: 256))
+frequencies[16] = 5
+frequencies[17] = 3
+frequencies[18] = 10
+frequencies[19] = 200
+frequencies[20] = 2
+frequencies[21] = 60
+
+JPEG.Table.InverseHuffmanDC.construct(frequencies: frequencies)
