@@ -3,7 +3,7 @@ enum Common
     struct Heap<Key, Value> where Key:Comparable 
     {
         private 
-        var storage:[(key:Key, value:Value)]
+        var storage:[(Key, Value)]
         
         // support 1-based indexing
         private
@@ -160,7 +160,7 @@ extension Common.Heap
         }
     }
     
-    init<S>(_ sequence:S) where S:Sequence, S.Element == (key:Key, value:Value) 
+    init<S>(_ sequence:S) where S:Sequence, S.Element == (Key, Value) 
     {
         self.storage = .init(sequence)
         // heapify 

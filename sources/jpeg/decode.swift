@@ -260,89 +260,134 @@ protocol _JPEGBytestreamSource
     mutating 
     func read(count:Int) -> [UInt8]?
 }
-public 
 extension JPEG 
 {
+    public 
     enum Bytestream 
     {
+        public 
         typealias Source = _JPEGBytestreamSource
     }
     
+    public 
     struct Bitstream 
     {
         private 
         var atoms:[UInt16]
         private(set)
         var count:Int
-        
-        init(_ data:[UInt8])
+    }
+}
+extension JPEG.Bitstream 
+{
+    init(_ data:[UInt8])
+    {
+        // convert byte array to big-endian UInt16 array 
+        var atoms:[UInt16] = stride(from: 0, to: data.count - 1, by: 2).map
         {
-            // convert byte array to big-endian UInt16 array 
-            var atoms:[UInt16] = stride(from: 0, to: data.count - 1, by: 2).map
-            {
-                .init(data[$0]) << 8 | .init(data[$0 | 1])
-            }
-            // if odd number of bytes, pad out last atom
-            if data.count & 1 != 0
-            {
-                atoms.append(.init(data[data.count - 1]) << 8 | 0x00ff)
-            }
-            
-            // insert two more 0xffff atoms to serve as a barrier
-            atoms.append(0xffff)
-            atoms.append(0xffff)
-            
-            self.atoms = atoms
-            self.count = 8 * data.count
+            .init(data[$0]) << 8 | .init(data[$0 | 1])
+        }
+        // if odd number of bytes, pad out last atom
+        if data.count & 1 != 0
+        {
+            atoms.append(.init(data[data.count - 1]) << 8 | 0x00ff)
         }
         
-        // single bit (0 or 1)
-        subscript(i:Int) -> Int 
+        // insert a `0xffff` atom to serve as a barrier
+        atoms.append(0xffff)
+        
+        self.atoms = atoms
+        self.count = 8 * data.count
+    }
+    
+    // single bit (0 or 1)
+    subscript(i:Int) -> Int 
+    {
+        let a:Int           = i >> 4, 
+            b:Int           = i & 0x0f
+        let shift:Int       = UInt16.bitWidth &- 1 &- b
+        let single:UInt16   = (self.atoms[a] &>> shift) & 1
+        return .init(single)
+    }
+    
+    subscript(i:Int, count c:Int) -> UInt16
+    {
+        let a:Int = i >> 4, 
+            b:Int = i & 0x0f
+        // w.0             w.1
+        //        |<-- c = 16 -->|
+        //  [ : : :x:x:x:x:x|x:x:x: : : : : ]
+        //        ^
+        //      b = 6
+        //  [x:x:x:x:x|x:x:x]
+        // must use >> and not &>> to correctly handle shift of 16
+        let front:UInt16 = self.atoms[a] &<< b | self.atoms[a &+ 1] >> (UInt16.bitWidth &- b)
+        return front &>> (UInt16.bitWidth - c)
+    }
+    
+    // integer is 1 or 0 (ignoring higher bits), we avoid using `Bool` here 
+    // since this is not semantically a logic parameter
+    mutating 
+    func append(bit:Int) 
+    {
+        let a:Int           = self.count >> 4, 
+            b:Int           = self.count & 0x0f
+        
+        guard a < self.atoms.count
+        else 
         {
-            let a:Int           = i >> 4, 
-                b:Int           = i & 0x0f
-            let shift:Int       = UInt16.bitWidth &- 1 &- b
-            let single:UInt16   = (self.atoms[a] &>> shift) & 1
-            return .init(single)
+            self.atoms.append(0xffff)
+            self.append(bit: bit)
+            return 
         }
         
-        subscript(i:Int, count c:Int) -> UInt16
+        let shift:Int       = UInt16.bitWidth &- 1 &- b
+        let inverted:UInt16 = ~(.init(~bit & 1) &<< shift)
+        // all bits at and beyond bit index `self.count` should be `1`-bits 
+        self.atoms[a]      &= inverted 
+        self.count         += 1
+    }
+    mutating 
+    func append(_ bits:UInt16, count:Int) 
+    {
+        let a:Int           = self.count >> 4, 
+            b:Int           = self.count & 0x0f
+        
+        guard a + 1 < self.atoms.count
+        else 
         {
-            let a:Int = i >> 4, 
-                b:Int = i & 0x0f
-            // w.0             w.1
-            //        |<-- c = 16 -->|
-            //  [ : : :x:x:x:x:x|x:x:x: : : : : ]
-            //        ^
-            //      b = 6
-            //  [x:x:x:x:x|x:x:x]
-            // must use >> and not &>> to correctly handle shift of 16
-            let front:UInt16 = self.atoms[a] &<< b | self.atoms[a &+ 1] >> (UInt16.bitWidth &- b)
-            return front &>> (UInt16.bitWidth - c)
+            self.atoms.append(0xffff)
+            self.append(bits, count: count)
+            return 
         }
         
-        // integer is 1 or 0 (ignoring higher bits), we avoid using `Bool` here 
-        // since this is not semantically a logic parameter
-        mutating 
-        func append(bit:Int) 
-        {
-            let a:Int           = self.count >> 4, 
-                b:Int           = self.count & 0x0f
-            
-            guard a < self.atoms.count
-            else 
-            {
-                self.atoms.append(0xffff)
-                self.append(bit: bit)
-                return 
-            }
-            
-            let shift:Int       = UInt16.bitWidth &- 1 &- b
-            let clear:UInt16    = ~(.init(~bit & 1) &<< shift)
-            // all bits at and beyond bit index `self.count` should be `1`-bits 
-            self.atoms[a]      &= clear 
-            self.count         += 1
-        }
+        // w.0             w.1
+        //  [x:x:x:x:x|x:x:x]
+        //      b = 6
+        //        v
+        //  [ : : :x:x:x:x:x|x:x:x: : : : : ]
+        //        |<-- c = 16 -->|
+
+        // invert bits because we use `1`-bits as the “background”, and shift 
+        // operator will only extend with `0`-bits
+        // must use << and not &<< to correctly handle shift of 16
+        let inverted:(UInt16, UInt16) = 
+        (
+            ~bits &>>                     b, 
+            ~bits  << (UInt16.bitWidth &- b)
+        )
+        
+        self.atoms[a    ] &= ~inverted.0
+        self.atoms[a + 1] &= ~inverted.1
+        self.count        += count 
+    }
+}
+extension JPEG.Bitstream:ExpressibleByArrayLiteral 
+{
+    public 
+    init(arrayLiteral:UInt8...) 
+    {
+        self.init(arrayLiteral)
     }
 }
 
@@ -363,11 +408,11 @@ protocol _JPEGError:Swift.Error
         get 
     }
 }
-public 
 extension JPEG 
 {
+    public 
     typealias Error = _JPEGError
-    
+    public 
     enum LexingError:JPEG.Error
     {
         case truncatedMarkerSegmentType
@@ -429,6 +474,7 @@ extension JPEG
             } 
         }
     }
+    public 
     enum ParsingError:JPEG.Error 
     {
         case truncatedMarkerSegmentBody(Marker, Int, expected:ClosedRange<Int>)
@@ -606,6 +652,7 @@ extension JPEG
             }
         }
     }
+    public 
     enum DecodingError:JPEG.Error 
     {
         case truncatedEntropyCodedSegment
@@ -615,6 +662,7 @@ extension JPEG
         case undefinedScanHuffmanDCReference(Table.HuffmanDC.Selector)
         case undefinedScanHuffmanACReference(Table.HuffmanAC.Selector)
         case undefinedScanQuantizationReference(Table.Quantization.Selector)
+        case invalidScanQuantizationPrecision(Table.Quantization.Precision, Table.Quantization.Selector)
         
         case undefinedScanComponentReference(Int, [Int])
         case invalidScanInterleaving(Int)
@@ -652,6 +700,8 @@ extension JPEG
                 return "undefined ac huffman table reference"
             case .undefinedScanQuantizationReference:
                 return "undefined quantization table reference"
+            case .invalidScanQuantizationPrecision:
+                return "quantization table precision mismatch"
             
             case .undefinedScanComponentReference:
                 return "undefined component reference"
@@ -695,6 +745,8 @@ extension JPEG
                 return "no ac huffman table has been installed at the location <\(String.init(selector: selector))>"
             case .undefinedScanQuantizationReference(let selector):
                 return "no quantization table has been installed at the location <\(String.init(selector: selector))>"
+            case .invalidScanQuantizationPrecision(let precision, let selector):
+                return "referenced quantization table at location <\(String.init(selector: selector))> has mismatched integer type (\(precision))"
                 
             case .undefinedScanComponentReference(let ci, let defined):
                 return "component with index (\(ci)) is not one of the components (\(defined)) defined in frame header"
@@ -924,9 +976,16 @@ extension JPEG
         public 
         struct Quantization:AnyTable
         {
-            private 
-            let elements:[Int]
+            public 
+            enum Precision  
+            {
+                case uint8
+                case uint16
+            }
+            
+            let storage:[UInt16]
             let target:Selector
+            let precision:Precision
         }
 
     }
@@ -980,13 +1039,12 @@ extension JPEG
     }
 }
 // jfif segment parsing 
-public 
 extension JPEG.JFIF 
 {
     static 
     let signature:[UInt8] = [0x4a, 0x46, 0x49, 0x46, 0x00]
     
-    static 
+    public static 
     func parse(_ data:[UInt8]) throws -> Self
     {
         guard data.count >= 14
@@ -1033,7 +1091,6 @@ extension JPEG.JFIF
     }
 }
 // table parsing 
-public 
 extension JPEG.AnyTable  
 {
     static 
@@ -1054,10 +1111,9 @@ extension JPEG.AnyTable
         }
     }
 }
-public 
 extension JPEG.Table 
 {
-    static 
+    public static 
     func parse(_ data:[UInt8], as:(HuffmanDC.Type, HuffmanAC.Type)) 
         throws -> (dc:[HuffmanDC], ac:[HuffmanAC]) 
     {
@@ -1142,7 +1198,7 @@ extension JPEG.Table
         return tables
     }
     
-    static 
+    public static 
     func parse(_ data:[UInt8], as: Quantization.Type) 
         throws -> [Quantization] 
     {
@@ -1168,7 +1224,8 @@ extension JPEG.Table
                         count: data.count, minimum: base + 65)
                 }
                 
-                table = .build(values: data[base + 1 ..< base + 65], target: target)
+                table = .build(values: data[base + 1 ..< base + 65], 
+                    target: target, precision: .uint8)
                 base += 65 
             case 0x10:
                 guard data.count >= base + 129 
@@ -1178,7 +1235,8 @@ extension JPEG.Table
                         count: data.count, minimum: base + 129)
                 }
                 
-                table = .build(values: data[base + 1 ..< base + 129], target: target)
+                table = .build(values: data[base + 1 ..< base + 129], 
+                    target: target, precision: .uint16)
                 base += 129 
             
             default:
@@ -1192,10 +1250,9 @@ extension JPEG.Table
     }
 }
 // frame/scan header parsing 
-public 
 extension JPEG.Frame 
 {
-    static
+    public static
     func parse(_ data:[UInt8], process:JPEG.Process) throws -> Self
     {
         switch process 
@@ -1291,7 +1348,7 @@ extension JPEG.Frame
     }
     
     // parse DNL segment 
-    mutating
+    public mutating
     func height(_ data:[UInt8]) throws 
     {
         guard data.count == 2
@@ -1302,11 +1359,10 @@ extension JPEG.Frame
 
         self.size.y = data.load(bigEndian: UInt16.self, as: Int.self, at: 0)
     } 
-}
-public 
+} 
 extension JPEG.Scan 
 {
-    static 
+    public static 
     func parse(_ data:[UInt8], frame:JPEG.Frame) 
         throws -> Self
     {
@@ -1716,31 +1772,31 @@ extension JPEG.Table.Huffman
 extension JPEG.Table.Quantization 
 {
     public static 
-    func build<RAC>(values:RAC, target:Selector) -> Self
+    func build<RAC>(values:RAC, target:Selector, precision:Precision) -> Self
         where RAC:RandomAccessCollection, RAC.Element == UInt8, RAC.Index == Int
     {
-        let elements:[Int]
+        let storage:[UInt16]
         switch values.count 
         {
         case 64:
-            elements = values.map(Int.init(_:))
+            storage = values.map(UInt16.init(_:))
         case 128:
             let base:Int = values.startIndex 
-            elements = (0 ..< 64).map 
+            storage = (0 ..< 64).map 
             {
                 let bytes:[UInt8] = .init(values[base + 2 * $0 ..< base + 2 * $0 + 2])
-                return bytes.load(bigEndian: UInt16.self, as: Int.self, at: 0)
+                return bytes.load(bigEndian: UInt16.self, as: UInt16.self, at: 0)
             }
         default:
             fatalError("unreachable")
         }
         
-        return .init(elements: elements, target: target)
+        return .init(storage: storage, target: target, precision: precision)
     }
     
     subscript(z z:Int) -> Int 
     {
-        self.elements[z]
+        .init(self.storage[z])
     }
 }
 
@@ -2105,7 +2161,7 @@ extension JPEG.Bitstream
         }
     }
     
-    public static 
+    static 
     func extend<I>(binade:Int, _ tail:UInt16, as _:I.Type) -> I
         where I:FixedWidthInteger & SignedInteger
     {
@@ -2119,7 +2175,7 @@ extension JPEG.Bitstream
         return .init(combined)
     }
     
-    public static 
+    static 
     func compact<I>(_ x:I) -> (binade:Int, tail:UInt16)
         where I:FixedWidthInteger & SignedInteger
     {
@@ -2614,6 +2670,16 @@ extension JPEG.Data.Spectral
                 throw JPEG.DecodingError.undefinedScanQuantizationReference($0.selectors.quantization)
             }
             
+            switch (self.properties.format, quantization.precision) 
+            {
+            case    (.y8,   .uint8), 
+                    (.ycc8, .uint8):
+                break 
+            default:
+                throw JPEG.DecodingError.invalidScanQuantizationPrecision(
+                    quantization.precision, $0.selectors.quantization)
+            }
+            
             guard let p:Int = plane[$0.ci] 
             else 
             {
@@ -2924,7 +2990,7 @@ extension JPEG.Context
         if scan.bits != 0 ..< frame.precision 
         {
             // successive approximation 
-            switch (scan.bits.upperBound == frame.precision, scan.band == 0 ..< 1)
+            switch (scan.bits.upperBound == .max, scan.band == 0 ..< 1)
             {
             case (true, true):
                 // initial dc scan 
@@ -3160,7 +3226,6 @@ extension JPEG
     public
     enum File
     {
-        private
         typealias Descriptor = UnsafeMutablePointer<FILE>
         
         /// Read data from files on disk.
