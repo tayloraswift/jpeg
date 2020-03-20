@@ -503,7 +503,7 @@ extension JPEG.Bitstream
     } 
     
     static 
-    func initial(dc composites:[Composite.DC], table:JPEG.Table.InverseHuffmanDC) 
+    func encode(_ composites:[Composite.DC], table:JPEG.Table.InverseHuffmanDC) 
         -> Self 
     {
         var bits:Self = []
@@ -514,7 +514,7 @@ extension JPEG.Bitstream
         return bits 
     }
     static 
-    func refining(dc refinements:[Bool]) 
+    func encode(_ refinements:[Bool]) 
         -> Self 
     {
         var bits:Self = []
@@ -525,7 +525,7 @@ extension JPEG.Bitstream
         return bits 
     }
     static 
-    func initial(ac composites:[Composite.AC], table:JPEG.Table.InverseHuffmanAC) 
+    func encode(_ composites:[Composite.AC], table:JPEG.Table.InverseHuffmanAC) 
         -> Self 
     {
         var bits:Self = []
@@ -536,7 +536,7 @@ extension JPEG.Bitstream
         return bits 
     }
     static 
-    func refining(ac pairs:[(Composite.AC, [Bool])], table:JPEG.Table.InverseHuffmanAC) 
+    func encode(_ pairs:[(Composite.AC, [Bool])], table:JPEG.Table.InverseHuffmanAC) 
         -> Self 
     {
         var bits:Self = []
@@ -549,6 +549,63 @@ extension JPEG.Bitstream
             }
         }
         return bits 
+    }
+}
+extension JPEG.Table.InverseHuffman
+{
+    private static 
+    func frequencies<S>(of path:KeyPath<S.Element, Symbol>, in sequence:S) -> [Int]
+        where S:Sequence
+    {
+        var frequencies:[Int] = .init(repeating: 0, count: 256)
+        for element:S.Element in sequence  
+        {
+            frequencies[.init(element[keyPath: path].value)] += 1
+        }
+        return frequencies
+    }
+}
+extension JPEG.Table.InverseHuffmanDC 
+{
+    static 
+    func encode(_ composites:[JPEG.Bitstream.Composite.DC], target:Selector) 
+        -> (Self, [UInt8])
+    {
+        let frequencies:[Int]   = Self.frequencies(of: \.decomposed.symbol, in: composites)
+        
+        let table:Self          = .build(frequencies: frequencies, target: target)
+        let bits:JPEG.Bitstream = .encode(composites, table: table)
+        return (table, bits.bytes(escaping: 0xff, with: (0xff, 0x00)))
+    }
+    static 
+    func encode(_ refinements:[Bool]) 
+        -> [UInt8]
+    {
+        let bits:JPEG.Bitstream = .encode(refinements)
+        return bits.bytes(escaping: 0xff, with: (0xff, 0x00))
+    }
+}
+extension JPEG.Table.InverseHuffmanAC 
+{
+    static 
+    func encode(_ composites:[JPEG.Bitstream.Composite.AC], target:Selector) 
+        -> (Self, [UInt8])
+    {
+        let frequencies:[Int]   = Self.frequencies(of: \.decomposed.symbol, in: composites)
+        
+        let table:Self          = .build(frequencies: frequencies, target: target)
+        let bits:JPEG.Bitstream = .encode(composites, table: table)
+        return (table, bits.bytes(escaping: 0xff, with: (0xff, 0x00)))
+    }
+    static 
+    func encode(_ pairs:[(JPEG.Bitstream.Composite.AC, [Bool])], target:Selector) 
+        -> (Self, [UInt8])
+    {
+        let frequencies:[Int]   = Self.frequencies(of: \.0.decomposed.symbol, in: pairs)
+        
+        let table:Self          = .build(frequencies: frequencies, target: target)
+        let bits:JPEG.Bitstream = .encode(pairs, table: table)
+        return (table, bits.bytes(escaping: 0xff, with: (0xff, 0x00)))
     }
 }
 

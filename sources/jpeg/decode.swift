@@ -379,6 +379,51 @@ extension JPEG.Bitstream
         self.atoms[a + 1] &= ~inverted.1
         self.count        += count 
     }
+    
+    // strips trailing `0xff` bytes 
+    func bytes(escaping escaped:UInt8, with sequence:(UInt8, UInt8)) -> [UInt8]
+    {
+        let unescaped:[UInt8] = .init(unsafeUninitializedCapacity: 2 * self.atoms.count)
+        {
+            (buffer:inout UnsafeMutableBufferPointer<UInt8>, count:inout Int) in
+            
+            for (i, atom):(Int, UInt16) in self.atoms.enumerated() 
+            {
+                buffer[i << 1    ] = .init(atom >> 8)
+                buffer[i << 1 | 1] = .init(atom & 0xff)
+            }
+        }
+        // strip the trailing `0xff`’s. it is important to do this step *before* 
+        // escaping, which is why we need to do two loops 
+        var suffix:Int = 0
+        for byte:UInt8 in unescaped.reversed()
+        {
+            guard byte == 0xff 
+            else 
+            {
+                break 
+            }
+            
+            suffix += 1
+        }
+        
+        var bytes:[UInt8] = []
+            bytes.reserveCapacity(unescaped.count - suffix)
+        for byte:UInt8 in unescaped.dropLast(suffix) 
+        {
+            if byte == escaped 
+            {
+                bytes.append(sequence.0)
+                bytes.append(sequence.1)
+            }
+            else 
+            {
+                bytes.append(byte)
+            }
+        }
+        
+        return bytes
+    }
 }
 extension JPEG.Bitstream:ExpressibleByArrayLiteral 
 {
