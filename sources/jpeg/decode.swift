@@ -1,5 +1,3 @@
-import Glibc
-
 public 
 enum JPEG 
 {
@@ -962,7 +960,7 @@ extension JPEG
             struct Entry 
             {
                 let symbol:Symbol
-                @Storage<UInt8> 
+                @Common.Storage<UInt8> 
                 var length:Int 
             }
             
@@ -1821,10 +1819,10 @@ extension JPEG
                 }
                 
                 // have to be `Int16` to circumvent compiler size limits for `_read` and `_modify`
-                @Storage2<Int16>
+                @Common.Storage2<Int16>
                 public 
                 var factor:(x:Int, y:Int) 
-                @Storage<Int16>
+                @Common.Storage<Int16>
                 public 
                 var ci:Int 
                 
@@ -1901,10 +1899,10 @@ extension JPEG
                 }
                 
                 // have to be `Int16` to circumvent compiler size limits for `_read` and `_modify`
-                @Storage2<Int16>
+                @Common.Storage2<Int16>
                 public 
                 var factor:(x:Int, y:Int) 
-                @Storage<Int16>
+                @Common.Storage<Int16>
                 public 
                 var ci:Int 
                 
@@ -3030,7 +3028,8 @@ extension JPEG.Context
     }
     
     static 
-    func decompress(stream:inout JPEG.File.Source) throws -> JPEG.Data.Spectral 
+    func decompress<Source>(stream:inout Source) throws -> JPEG.Data.Spectral 
+        where Source:JPEG.Bytestream.Source
     {
         var marker:(type:JPEG.Marker, data:[UInt8]) 
         
@@ -3113,12 +3112,16 @@ extension JPEG.Context
 }
 
 // staged APIs 
+// declare conformance (as a formality)
+extension Common.File.Source:JPEG.Bytestream.Source 
+{
+}
 extension JPEG.Data.Spectral 
 {
     public static 
     func decompress(path:String) throws -> Self? 
     {
-        return try JPEG.File.Source.open(path: path, JPEG.Context.decompress(stream:))
+        return try Common.File.Source.open(path: path, JPEG.Context.decompress(stream:))
     }
 }
 extension JPEG.Data.Planar 
@@ -3215,197 +3218,6 @@ extension JPEG.Data.Rectangular
                     cb: JPEG.YCbCr.clamp8(self.values[$0 + 1] + 128), 
                     cr: JPEG.YCbCr.clamp8(self.values[$0 + 2] + 128))
                 return ycc.rgb 
-            }
-        }
-    }
-}
-
-/// A namespace for file IO functionality.
-extension JPEG
-{
-    public
-    enum File
-    {
-        typealias Descriptor = UnsafeMutablePointer<FILE>
-        
-        /// Read data from files on disk.
-        public
-        struct Source
-        {
-            private
-            let descriptor:Descriptor
-        }
-    }
-}
-extension JPEG.File.Source:JPEG.Bytestream.Source 
-{
-    /// Calls a closure with an interface for reading from the specified file.
-    /// 
-    /// This method automatically closes the file when its function argument returns.
-    /// - Parameters:
-    ///     - path: A path to the file to open.
-    ///     - body: A closure with a `Source` parameter from which data in
-    ///         the specified file can be read. This interface is only valid
-    ///         for the duration of the method’s execution. The closure is
-    ///         only executed if the specified file could be successfully
-    ///         opened, otherwise `nil` is returned. If `body` has a return
-    ///         value and the specified file could be opened, its return
-    ///         value is returned as the return value of the `open(path:body:)`
-    ///         method.
-    /// - Returns: `nil` if the specified file could not be opened, or the
-    ///     return value of the function argument otherwise.
-    public static
-    func open<Result>(path:String, _ body:(inout Self) throws -> Result)
-        rethrows -> Result?
-    {
-        guard let descriptor:JPEG.File.Descriptor = fopen(path, "rb")
-        else
-        {
-            return nil
-        }
-
-        var file:Self = .init(descriptor: descriptor)
-        defer
-        {
-            fclose(file.descriptor)
-        }
-
-        return try body(&file)
-    }
-
-    /// Read the specified number of bytes from this file interface.
-    /// 
-    /// This method only returns an array if the exact number of bytes
-    /// specified could be read. This method advances the file pointer.
-    /// 
-    /// - Parameters:
-    ///     - capacity: The number of bytes to read.
-    /// - Returns: An array containing the read data, or `nil` if the specified
-    ///     number of bytes could not be read.
-    public
-    func read(count capacity:Int) -> [UInt8]?
-    {
-        let buffer:[UInt8] = .init(unsafeUninitializedCapacity: capacity)
-        {
-            (buffer:inout UnsafeMutableBufferPointer<UInt8>, count:inout Int) in
-
-            count = fread(buffer.baseAddress, MemoryLayout<UInt8>.stride,
-                capacity, self.descriptor)
-        }
-
-        guard buffer.count == capacity
-        else
-        {
-            return nil
-        }
-
-        return buffer
-    }
-}
-
-// raw buffer utilities 
-fileprivate
-extension Array where Element == UInt8
-{
-    /// Loads a misaligned big-endian integer value from the given byte offset
-    /// and casts it to a desired format.
-    /// - Parameters:
-    ///     - bigEndian: The size and type to interpret the data to load as.
-    ///     - type: The type to cast the read integer value to.
-    ///     - byte: The byte offset to load the big-endian integer from.
-    /// - Returns: The read integer value, cast to `U`.
-    func load<T, U>(bigEndian:T.Type, as type:U.Type, at byte:Int) -> U
-        where T:FixedWidthInteger, U:BinaryInteger
-    {
-        return self[byte ..< byte + MemoryLayout<T>.size].load(bigEndian: T.self, as: U.self)
-    }
-}
-
-fileprivate
-extension ArraySlice where Element == UInt8
-{
-    /// Loads this array slice as a misaligned big-endian integer value,
-    /// and casts it to a desired format.
-    /// - Parameters:
-    ///     - bigEndian: The size and type to interpret this array slice as.
-    ///     - type: The type to cast the read integer value to.
-    /// - Returns: The read integer value, cast to `U`.
-    func load<T, U>(bigEndian:T.Type, as type:U.Type) -> U
-        where T:FixedWidthInteger, U:BinaryInteger
-    {
-        return self.withUnsafeBufferPointer
-        {
-            (buffer:UnsafeBufferPointer<UInt8>) in
-
-            assert(buffer.count >= MemoryLayout<T>.size,
-                "attempt to load \(T.self) from slice of size \(buffer.count)")
-
-            var storage:T = .init()
-            let value:T   = withUnsafeMutablePointer(to: &storage)
-            {
-                $0.deinitialize(count: 1)
-
-                let source:UnsafeRawPointer     = .init(buffer.baseAddress!),
-                    raw:UnsafeMutableRawPointer = .init($0)
-
-                raw.copyMemory(from: source, byteCount: MemoryLayout<T>.size)
-
-                return raw.load(as: T.self)
-            }
-
-            return U(T(bigEndian: value))
-        }
-    }
-}
-
-// language support 
-extension JPEG 
-{
-    @propertyWrapper 
-    public 
-    struct Storage<I> where I:FixedWidthInteger & BinaryInteger 
-    {
-        private 
-        var storage:I 
-        
-        public 
-        init(wrappedValue:Int) 
-        {
-            self.storage = .init(truncatingIfNeeded: wrappedValue)
-        }
-        
-        public 
-        var wrappedValue:Int 
-        {
-            get 
-            {
-                .init(self.storage)
-            }
-        }
-    }
-    @propertyWrapper 
-    public 
-    struct Storage2<I> where I:FixedWidthInteger & BinaryInteger 
-    {
-        private 
-        var storage:(x:I, y:I) 
-        
-        public 
-        init(wrappedValue:(x:Int, y:Int)) 
-        {
-            self.storage = 
-            (
-                .init(truncatingIfNeeded: wrappedValue.x),
-                .init(truncatingIfNeeded: wrappedValue.y)
-            )
-        }
-        
-        public 
-        var wrappedValue:(x:Int, y:Int) 
-        {
-            get 
-            {
-                (.init(self.storage.x), .init(self.storage.y))
             }
         }
     }

@@ -1,5 +1,3 @@
-import Glibc
-
 extension JPEG.DensityUnit 
 {
     var code:UInt8 
@@ -183,7 +181,7 @@ extension JPEG.Table
         {
             // the inhabited bits are in the most significant end of the `UInt16`
             let bits:UInt16
-            @JPEG.Storage<UInt16> 
+            @Common.Storage<UInt16> 
             var length:Int 
         }
         
@@ -743,103 +741,7 @@ extension JPEG.Bytestream.Destination
     }
 }
 
-/// file IO functionality
-extension JPEG.File 
+// declare conformance (as a formality)
+extension Common.File.Destination:JPEG.Bytestream.Destination 
 {
-    public 
-    struct Destination 
-    {
-        private 
-        let descriptor:Descriptor
-    }
-}
-extension JPEG.File.Destination:JPEG.Bytestream.Destination 
-{
-    /// Calls a closure with an interface for writing to the specified file.
-    /// 
-    /// This method automatically closes the file when its function argument returns.
-    /// - Parameters:
-    ///     - path: A path to the file to open.
-    ///     - body: A closure with a `Destination` parameter representing
-    ///         the specified file to which data can be written to. This
-    ///         interface is only valid for the duration of the method’s
-    ///         execution. The closure is only executed if the specified
-    ///         file could be successfully opened, otherwise `nil` is returned.
-    ///         If `body` has a return value and the specified file could
-    ///         be opened, its return value is returned as the return value
-    ///         of the `open(path:body:)` method.
-    /// - Returns: `nil` if the specified file could not be opened, or the
-    ///     return value of the function argument otherwise.
-    public static
-    func open<Result>(path:String, body:(inout Self) throws -> Result)
-        rethrows -> Result?
-    {
-        guard let descriptor:JPEG.File.Descriptor = fopen(path, "wb")
-        else
-        {
-            return nil
-        }
-
-        var file:Self = .init(descriptor: descriptor)
-        defer
-        {
-            fclose(file.descriptor)
-        }
-
-        return try body(&file)
-    }
-
-    /// Write the bytes in the given array to this file interface.
-    /// 
-    /// This method only returns `()` if the entire array argument could
-    /// be written. This method advances the file pointer.
-    /// 
-    /// - Parameters:
-    ///     - buffer: The data to write.
-    /// - Returns: `()` if the entire array argument could be written, or
-    ///     `nil` otherwise.
-    public
-    func write(_ buffer:[UInt8]) -> Void?
-    {
-        let count:Int = buffer.withUnsafeBufferPointer
-        {
-            fwrite($0.baseAddress, MemoryLayout<UInt8>.stride,
-                $0.count, self.descriptor)
-        }
-
-        guard count == buffer.count
-        else
-        {
-            return nil
-        }
-
-        return ()
-    }
-}
-
-extension Array where Element == UInt8
-{
-    /// Decomposes the given integer value into its constituent bytes, in big-endian order.
-    /// - Parameters:
-    ///     - value: The integer value to decompose.
-    ///     - type: The big-endian format `T` to store the given `value` as. The given
-    ///             `value` is truncated to fit in a `T`.
-    /// - Returns: An array containing the bytes of the given `value`, in big-endian order.
-    fileprivate static
-    func store<U, T>(_ value:U, asBigEndian type:T.Type) -> [UInt8]
-        where U:BinaryInteger, T:FixedWidthInteger
-    {
-        return .init(unsafeUninitializedCapacity: MemoryLayout<T>.size)
-        {
-            (buffer:inout UnsafeMutableBufferPointer<UInt8>, count:inout Int) in
-
-            let bigEndian:T = T.init(truncatingIfNeeded: value).bigEndian,
-                destination:UnsafeMutableRawBufferPointer = .init(buffer)
-            Swift.withUnsafeBytes(of: bigEndian)
-            {
-                destination.copyMemory(from: $0)
-                count = $0.count
-            }
-        }
-    }
 }

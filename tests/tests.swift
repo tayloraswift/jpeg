@@ -38,7 +38,7 @@ enum Test
             } 
             
             guard let result:[JPEG.YCbCr<UInt8>]? =
-            (JPEG.File.Source.open(path: rgbaPath)
+            (Common.File.Source.open(path: rgbaPath)
             {
                 let pixels:Int = rectangular.size.x * rectangular.size.y, 
                     bytes:Int  = 3 * pixels 
