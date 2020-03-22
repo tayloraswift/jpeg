@@ -100,6 +100,11 @@ extension JPEG.Bitstream
     }
 }
 
+func fuzz()
+{
+    
+}
+
  
 /* var heap:Common.Heap<Int, Void> = 
 [

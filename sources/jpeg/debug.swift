@@ -1,3 +1,14 @@
+// literal forms 
+extension JPEG.Frame.Component.Index:ExpressibleByIntegerLiteral 
+{
+    public 
+    init(integerLiteral:UInt8) 
+    {
+        self.init(integerLiteral)
+    }
+}
+
+// print descriptions
 extension String 
 {
     public 
@@ -47,6 +58,22 @@ extension JPEG.Frame.Component:CustomStringConvertible
         "{quantization table: \(String.init(selector: self.selector)), sample factors: (\(self.factor.x), \(self.factor.y))}"
     }
 }
+extension JPEG.Scan.Component:CustomStringConvertible 
+{
+    public 
+    var description:String 
+    {
+        "{dc huffman table: \(String.init(selector: self.selectors.huffman.dc)), ac huffman table: \(String.init(selector: self.selectors.huffman.ac))}"
+    }
+}
+extension JPEG.Frame.Component.Index:CustomStringConvertible 
+{
+    public 
+    var description:String 
+    {
+        "\(self.value)"
+    }
+}
 
 extension JPEG.Frame:CustomStringConvertible 
 {
@@ -83,11 +110,17 @@ extension JPEG.Scan:CustomStringConvertible
     var description:String 
     {
         """
-        scan header:
+        scan header (\(Self.self)):
         {
             band            : \(self.band.lowerBound) ..< \(self.band.upperBound), 
             bits            : \(self.bits.lowerBound) ..< \(self.bits.upperBound), 
-            components      : \(self.components.map(\.ci))
+            components      : 
+            [
+                \(self.components.map
+                { 
+                    "[\($0.ci)]: \($0)" 
+                }.joined(separator: ", \n        "))
+            ]
         }
         """
     }
@@ -98,12 +131,10 @@ extension JPEG.Table.Huffman:CustomStringConvertible
     public 
     var description:String 
     {
-        return """
-        huffman table: \(self.storage.count * MemoryLayout<Entry>.stride) bytes 
+        """
+        huffman table (\(Self.self))
         {
-            target             : \(String.init(selector: self.target))
-            logical entries (ζ): \(self.ζ)
-            level 0 entries (n): \(self.n)
+            target  : \(String.init(selector: self.target))
         }
         """
     }
@@ -114,8 +145,8 @@ extension JPEG.Table.Quantization:CustomStringConvertible
     public 
     var description:String 
     {
-        return """
-        quantization table
+        """
+        quantization table (\(Self.self))
         {
             target  : \(String.init(selector: self.target))
         }

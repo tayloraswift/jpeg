@@ -167,39 +167,11 @@ extension JPEG
     }
 }
 
-// inverse huffman tables 
-extension JPEG.Table 
-{
-    public 
-    typealias InverseHuffmanDC = InverseHuffman<JPEG.Bitstream.Symbol.DC>
-    public 
-    typealias InverseHuffmanAC = InverseHuffman<JPEG.Bitstream.Symbol.AC>
-    public 
-    struct InverseHuffman<Symbol>:JPEG.AnyTable where Symbol:JPEG.Bitstream.AnySymbol  
-    {
-        struct Codeword  
-        {
-            // the inhabited bits are in the most significant end of the `UInt16`
-            let bits:UInt16
-            @Common.Storage<UInt16> 
-            var length:Int 
-        }
-        
-        let storage:[Codeword]
-        let symbols:[[Symbol]]
-        
-        let target:Selector
-        
-        subscript(symbol:Symbol) -> Codeword 
-        {
-            self.storage[.init(symbol.value)]
-        }
-    }
-}
-extension JPEG.Table.InverseHuffman 
+
+extension JPEG.Table.Huffman 
 {
     // indirect enum would entail too much copying 
-    final    
+    final  
     class Subtree<Element>
     {
         enum Node 
@@ -216,10 +188,10 @@ extension JPEG.Table.InverseHuffman
         }
     }
 }
-extension JPEG.Table.InverseHuffman.Subtree 
+extension JPEG.Table.Huffman.Subtree 
 {
     private 
-    var children:[JPEG.Table.InverseHuffman<Symbol>.Subtree<Element>] 
+    var children:[JPEG.Table.Huffman<Symbol>.Subtree<Element>] 
     {
         switch self.node  
         {
@@ -231,12 +203,12 @@ extension JPEG.Table.InverseHuffman.Subtree
     }
     func levels() -> [Int] 
     {
-        var levels:[Int]                                                = []
-        var queue:[JPEG.Table.InverseHuffman<Symbol>.Subtree<Element>]  = [self]
+        var levels:[Int]                                        = []
+        var queue:[JPEG.Table.Huffman<Symbol>.Subtree<Element>] = [self]
         while !queue.isEmpty  
         {
             var leaves:Int = 0 
-            for subtree:JPEG.Table.InverseHuffman<Symbol>.Subtree<Element> in queue 
+            for subtree:JPEG.Table.Huffman<Symbol>.Subtree<Element> in queue 
             {
                 if case .leaf = subtree.node 
                 {
@@ -250,102 +222,8 @@ extension JPEG.Table.InverseHuffman.Subtree
         return levels 
     }
 }
-extension JPEG.Table.InverseHuffman 
+extension JPEG.Table.Huffman 
 {
-    // `frequencies` must always contain 256 entries 
-    public static 
-    func build(frequencies:[Int], target:Selector) -> Self 
-    {
-        // sort non-zero symbols by (decreasing) frequency
-        // this is nlog(n), but so is the heap stuff later on
-        let sorted:[(frequency:Int, symbol:Symbol)] = (UInt8.min ... UInt8.max).compactMap 
-        {
-            (value:UInt8) -> (Int, Symbol)? in 
-            
-            let frequency:Int = frequencies[.init(value)]
-            guard frequency > 0 
-            else 
-            {
-                return nil 
-            }
-            
-            return (frequency, .init(value))
-        }.sorted
-        {
-            $0.frequency > $1.frequency
-        }
-        
-        // reversing (to get canonically sorted array) gets the heapify below 
-        // to its best-case O(n) time, not that O matters for n = 256 
-        var heap:Common.Heap<Int, Subtree<Void>> = .init(sorted.reversed().map  
-        {
-            ($0.frequency, .init(.leaf(())))
-        })
-        // insert dummy value with frequency 0 to occupy the all-ones codeword 
-        heap.enqueue(key: 0, value: .init(.leaf(())))
-        
-        // standard huffman tree construction algorithm
-        while let first:(key:Int, value:Subtree<Void>) = heap.dequeue() 
-        {
-            guard let second:(key:Int, value:Subtree<Void>) = heap.dequeue() 
-            else 
-            {
-                var storage:[Codeword] = .init(repeating: .init(bits: 0, length: 0), count: 256)
-                
-                // drop the first level, since it corresponds to the tree root 
-                let levels:ArraySlice<Int> = first.value.levels().dropFirst()
-                guard !levels.isEmpty
-                else 
-                {
-                    // happens in the (almost unreachable) situation where there 
-                    // are no codewords with non-zero frequency 
-                    let symbols:[[Symbol]] = .init(repeating: [], count: 16)
-                    return .init(storage: storage, symbols: symbols, target: target) 
-                }
-                
-                // convert level counts to codeword assignments 
-                let limited:[Int]        = Self.limit(height: 16, of: levels)
-                let codewords:[Codeword] = Self.assign(sorted.count, levels: limited)
-                
-                // for codeword:Codeword in codewords 
-                // {
-                //     print((0 ..< codeword.length).map
-                //     { 
-                //         (codeword.bits >> (UInt16.bitWidth - $0 - 1)) & 1 != 0 ? "1" : "0" 
-                //     }.joined(separator: " "))
-                // }
-                
-                // split symbols list into levels 
-                var base:Int            = 0, 
-                    symbols:[[Symbol]]  = []
-                for leaves:Int in limited 
-                {
-                    var level:[Symbol] = []
-                        level.reserveCapacity(leaves)
-                    for i:Int in base ..< base + leaves 
-                    {
-                        let symbol:Symbol               = sorted[i].symbol, 
-                            codeword:Codeword           = codewords[i]
-                        storage[.init(symbol.value)]    = codeword 
-                        level.append(symbol)
-                    }
-                    
-                    symbols.append(level)
-                    base += leaves 
-                }
-                
-                return .init(storage: storage, symbols: symbols, target: target)
-            }
-            
-            let merged:Subtree<Void> = .init(.interior(left: first.value, right: second.value))
-            let weight:Int           = first.key + second.key 
-            
-            heap.enqueue(key: weight, value: merged)
-        }
-        
-        fatalError("unreachable")
-    }
-    
     // limit the height of the generated tree to the given height, and also 
     // removes the slot corresponding to the all-ones code at the end 
     private static 
@@ -411,10 +289,10 @@ extension JPEG.Table.InverseHuffman
     }
     
     private static 
-    func assign(_ symbols:Int, levels:[Int]) -> [Codeword]
+    func assign(_ symbols:Int, levels:[Int]) -> [Encoder.Codeword]
     {
-        var codewords:[Codeword] = []
-        var counter:UInt16       = 0
+        var codewords:[Encoder.Codeword]    = []
+        var counter:UInt16                  = 0
         for (length, leaves):(Int, Int) in zip(1 ... 16, levels) 
         {
             for _ in 0 ..< leaves 
@@ -429,7 +307,142 @@ extension JPEG.Table.InverseHuffman
         
         return codewords
     }
+    
+    // `frequencies` must always contain 256 entries 
+    public 
+    init(frequencies:[Int], target:Selector)  
+    {
+        precondition(!frequencies.allSatisfy{ $0 <= 0 }, 
+            "at least one symbol must have non-zero frequency")
+        
+        // sort non-zero symbols by (decreasing) frequency
+        // this is nlog(n), but so is the heap stuff later on
+        let sorted:[(frequency:Int, symbol:Symbol)] = (UInt8.min ... UInt8.max).compactMap 
+        {
+            (value:UInt8) -> (Int, Symbol)? in 
+            
+            let frequency:Int = frequencies[.init(value)]
+            guard frequency > 0 
+            else 
+            {
+                return nil 
+            }
+            
+            return (frequency, .init(value))
+        }.sorted
+        {
+            $0.frequency > $1.frequency
+        }
+        
+        // reversing (to get canonically sorted array) gets the heapify below 
+        // to its best-case O(n) time, not that O matters for n = 256 
+        var heap:Common.Heap<Int, Subtree<Void>> = .init(sorted.reversed().map  
+        {
+            ($0.frequency, .init(.leaf(())))
+        })
+        // insert dummy value with frequency 0 to occupy the all-ones codeword 
+        heap.enqueue(key: 0, value: .init(.leaf(())))
+        
+        // standard huffman tree construction algorithm
+        while let first:(key:Int, value:Subtree<Void>) = heap.dequeue() 
+        {
+            guard let second:(key:Int, value:Subtree<Void>) = heap.dequeue() 
+            else 
+            {
+                // drop the first level, since it corresponds to the tree root 
+                let levels:ArraySlice<Int> = first.value.levels().dropFirst()
+                assert(!levels.isEmpty)
+                
+                // convert level counts to codeword assignments 
+                let limited:[Int]        = Self.limit(height: 16, of: levels)
+                
+                // split symbols list into levels 
+                var base:Int            = 0, 
+                    symbols:[[Symbol]]  = []
+                    symbols.reserveCapacity(limited.count)
+                for leaves:Int in limited 
+                {
+                    symbols.append(sorted[base ..< base + leaves].map(\.symbol))
+                    base += leaves 
+                }
+                
+                guard let size:(n:Int, z:Int) = Self.size(symbols.map(\.count))
+                else 
+                {
+                    fatalError("unreachable")
+                }
+                self.symbols = symbols 
+                self.target  = target 
+                self.size    = size
+                return 
+            }
+            
+            let merged:Subtree<Void> = .init(.interior(left: first.value, right: second.value))
+            let weight:Int           = first.key + second.key 
+            
+            heap.enqueue(key: weight, value: merged)
+        }
+        
+        fatalError("unreachable")
+    }
 }
+
+// inverse huffman tables 
+extension JPEG.Table.Huffman 
+{
+    struct Encoder
+    {
+        struct Codeword  
+        {
+            // the inhabited bits are in the most significant end of the `UInt16`
+            let bits:UInt16
+            @Common.Storage<UInt16> 
+            var length:Int 
+        }
+        
+        private 
+        let storage:[Codeword]
+        
+        init(_ storage:[Codeword]) 
+        {
+            self.storage = storage 
+        }
+    }
+}
+extension JPEG.Table.Huffman 
+{
+    func encoder() -> Encoder 
+    {
+        var storage:[Encoder.Codeword] = 
+            .init(repeating: .init(bits: 0, length: 0), count: 256)
+        
+        let levels:[Int]                    = self.symbols.map(\.count), 
+            count:Int                       = levels.reduce(0, +)
+        let codewords:[Encoder.Codeword]    = Self.assign(count, levels: levels)
+        
+        var base:Int = 0
+        for symbols:[Symbol] in self.symbols  
+        {
+            for (i, symbol):(Int, Symbol) in zip(base ..< base + symbols.count, symbols)
+            {
+                storage[.init(symbol.value)] = codewords[i]
+            }
+            
+            base += symbols.count  
+        }
+        
+        return .init(storage)
+    }
+}
+// table accessors 
+extension JPEG.Table.Huffman.Encoder 
+{
+    subscript(symbol:Symbol) -> Codeword 
+    {
+        self.storage[.init(symbol.value)]
+    }
+}
+
 
 // encoders (opposite of decoders)
 extension JPEG.Bitstream.Symbol.DC
@@ -482,79 +495,30 @@ extension JPEG.Bitstream.Composite.AC
 extension JPEG.Bitstream 
 { 
     mutating 
-    func append(composite:Composite.DC, table:JPEG.Table.InverseHuffmanDC) 
+    func append(composite:Composite.DC, table:JPEG.Table.HuffmanDC.Encoder) 
     {
         let (symbol, tail, length):(JPEG.Bitstream.Symbol.DC, UInt16, Int) = 
             composite.decomposed 
         
-        let codeword:JPEG.Table.InverseHuffmanDC.Codeword = table[symbol]
+        let codeword:JPEG.Table.HuffmanDC.Encoder.Codeword = table[symbol]
         self.append(codeword.bits, count: codeword.length)
         self.append(tail, count: length)
     } 
     mutating 
-    func append(composite:Composite.AC, table:JPEG.Table.InverseHuffmanAC) 
+    func append(composite:Composite.AC, table:JPEG.Table.HuffmanAC.Encoder) 
     {
         let (symbol, tail, length):(JPEG.Bitstream.Symbol.AC, UInt16, Int) = 
             composite.decomposed 
             
-        let codeword:JPEG.Table.InverseHuffmanAC.Codeword = table[symbol]
+        let codeword:JPEG.Table.HuffmanAC.Encoder.Codeword = table[symbol]
         self.append(codeword.bits, count: codeword.length)
         self.append(tail, count: length)
     } 
-    
-    static 
-    func encode(_ composites:[Composite.DC], table:JPEG.Table.InverseHuffmanDC) 
-        -> Self 
-    {
-        var bits:Self = []
-        for composite:Composite.DC in composites 
-        {
-            bits.append(composite: composite, table: table)
-        }
-        return bits 
-    }
-    static 
-    func encode(_ refinements:[Bool]) 
-        -> Self 
-    {
-        var bits:Self = []
-        for refinement:Bool in refinements 
-        {
-            bits.append(bit: refinement ? 1 : 0)
-        }
-        return bits 
-    }
-    static 
-    func encode(_ composites:[Composite.AC], table:JPEG.Table.InverseHuffmanAC) 
-        -> Self 
-    {
-        var bits:Self = []
-        for composite:Composite.AC in composites 
-        {
-            bits.append(composite: composite, table: table)
-        }
-        return bits 
-    }
-    static 
-    func encode(_ pairs:[(Composite.AC, [Bool])], table:JPEG.Table.InverseHuffmanAC) 
-        -> Self 
-    {
-        var bits:Self = []
-        for (composite, refinements):(Composite.AC, [Bool]) in pairs 
-        {
-            bits.append(composite: composite, table: table)
-            for refinement:Bool in refinements 
-            {
-                bits.append(bit: refinement ? 1 : 0)
-            }
-        }
-        return bits 
-    }
 }
-extension JPEG.Table.InverseHuffman
+extension JPEG.Bitstream.AnySymbol
 {
-    private static 
-    func frequencies<S>(of path:KeyPath<S.Element, Symbol>, in sequence:S) -> [Int]
+    static 
+    func frequencies<S>(of path:KeyPath<S.Element, Self>, in sequence:S) -> [Int]
         where S:Sequence
     {
         var frequencies:[Int] = .init(repeating: 0, count: 256)
@@ -565,48 +529,193 @@ extension JPEG.Table.InverseHuffman
         return frequencies
     }
 }
-extension JPEG.Table.InverseHuffmanDC 
+extension JPEG.Data.Spectral.Plane  
 {
-    static 
-    func encode(_ composites:[JPEG.Bitstream.Composite.DC], target:Selector) 
-        -> (Self, [UInt8])
+    func encode(band:Range<Int>, bits b:PartialRangeFrom<Int>, 
+        target:JPEG.Table.HuffmanAC.Selector) 
+        -> ([UInt8], JPEG.Table.HuffmanAC)
     {
-        let frequencies:[Int]   = Self.frequencies(of: \.decomposed.symbol, in: composites)
+        assert(band.lowerBound >   0)
+        assert(band.upperBound <= 64)
+         
+        var composites:[JPEG.Bitstream.Composite.AC] = []
+        for y:Int in 0 ..< self.units.y
+        {
+            for x:Int in 0 ..< self.units.x 
+            {
+                var zeroes = 0
+                for z:Int in band
+                {
+                    let coefficient:Int = self[x: x, y: y, z: z]
+                    
+                    let sign:Int = coefficient < 0 ? -1 : 1
+                    let high:Int = sign * abs(coefficient) >> b.lowerBound 
+                    
+                    if high == 0 
+                    {
+                        if zeroes == 15 
+                        {
+                            composites.append(.run(zeroes, value: 0))
+                            zeroes  = 0 
+                        }
+                        else 
+                        {
+                            zeroes += 1 
+                        }
+                    }
+                    else 
+                    {
+                        composites.append(.run(zeroes, value: high))
+                        zeroes      = 0
+                    }
+                }
+                
+                if zeroes > 0 
+                {
+                    composites.append(.eob(1))
+                }
+            }
+        }
         
-        let table:Self          = .build(frequencies: frequencies, target: target)
-        let bits:JPEG.Bitstream = .encode(composites, table: table)
-        return (table, bits.bytes(escaping: 0xff, with: (0xff, 0x00)))
+        let frequencies:[Int] = 
+            JPEG.Bitstream.Symbol.AC.frequencies(of: \.decomposed.symbol, in: composites)
+        
+        let table:JPEG.Table.HuffmanAC = .init(frequencies: frequencies, target: target)
+        let encoder:JPEG.Table.HuffmanAC.Encoder    = table.encoder()
+        
+        var bits:JPEG.Bitstream                     = []
+        for composite:JPEG.Bitstream.Composite.AC in composites 
+        {
+            bits.append(composite: composite, table: encoder)
+        }
+        return (bits.bytes(escaping: 0xff, with: (0xff, 0x00)), table)
     }
-    static 
-    func encode(_ refinements:[Bool]) 
-        -> [UInt8]
+     
+    func encode(band:Range<Int>, bit b:Int, 
+        target:JPEG.Table.HuffmanAC.Selector) 
+        -> ([UInt8], JPEG.Table.HuffmanAC)
     {
-        let bits:JPEG.Bitstream = .encode(refinements)
-        return bits.bytes(escaping: 0xff, with: (0xff, 0x00))
+        assert(band.lowerBound >   0)
+        assert(band.upperBound <= 64)
+        
+        var pairs:[(JPEG.Bitstream.Composite.AC, [Bool])] = []
+        for y:Int in 0 ..< self.units.y
+        {
+            for x:Int in 0 ..< self.units.x 
+            {
+                var zeroes              = 0
+                var refinements:[Bool]  = []
+                for z:Int in band
+                {
+                    let coefficient:Int = self[x: x, y: y, z: z]
+                    
+                    let sign:Int = coefficient < 0 ? -1 : 1
+                    let high:Int = sign * abs(coefficient)         >> (b + 1) 
+                    let low:Int  = (coefficient - high << (b + 1)) >>  b
+                    
+                    if high == 0 
+                    {
+                        if low == 0 
+                        {
+                            if zeroes == 15 
+                            {
+                                pairs.append((.run(zeroes, value: 0), refinements))
+                                refinements = []
+                                zeroes      = 0
+                            }
+                            else 
+                            {
+                                zeroes     += 1
+                            }
+                        }
+                        else 
+                        {
+                            pairs.append((.run(zeroes, value: low), refinements))
+                            refinements     = []
+                            zeroes          = 0
+                        } 
+                    }
+                    else 
+                    {
+                        refinements.append(low != 0)
+                    }
+                }
+                
+                if zeroes > 0 || !refinements.isEmpty 
+                {
+                    pairs.append((.eob(1), refinements))
+                }
+            }
+        }
+        
+        let frequencies:[Int] = 
+            JPEG.Bitstream.Symbol.AC.frequencies(of: \.0.decomposed.symbol, in: pairs)
+        
+        let table:JPEG.Table.HuffmanAC = .init(frequencies: frequencies, target: target)
+        let encoder:JPEG.Table.HuffmanAC.Encoder    = table.encoder()
+        
+        var bits:JPEG.Bitstream                     = []
+        for (composite, refinements):(JPEG.Bitstream.Composite.AC, [Bool]) in pairs 
+        {
+            bits.append(composite: composite, table: encoder)
+            for refinement:Bool in refinements 
+            {
+                bits.append(bit: refinement ? 1 : 0)
+            }
+        }
+        return (bits.bytes(escaping: 0xff, with: (0xff, 0x00)), table)
     }
 }
-extension JPEG.Table.InverseHuffmanAC 
+extension JPEG.Data.Spectral 
 {
-    static 
-    func encode(_ composites:[JPEG.Bitstream.Composite.AC], target:Selector) 
-        -> (Self, [UInt8])
+    /* private 
+    func encode(bits b:PartialRangeFrom<Int>, components:[JPEG.Scan.Component], 
+        target:JPEG.Table.InverseHuffmanDC.Selector) 
+        -> ([UInt8], JPEG.Table.InverseHuffmanDC)
     {
-        let frequencies:[Int]   = Self.frequencies(of: \.decomposed.symbol, in: composites)
+        let count:Int                                   = self.units.x * self.units.y
+        let composites:[JPEG.Bitstream.Composite.DC]    = 
+            .init(unsafeUninitializedCapacity: count) 
+        {
+            var predecessor:Int = 0
+            for y:Int in 0 ..< self.units.y
+            {
+                for x:Int in 0 ..< self.units.x 
+                {
+                    let high:Int                = self[x: x, y: y, z: 0] >> b.lowerBound
+                    $0[y * self.units.x + x]    = .init(difference: high - predecessor)
+                    predecessor                 = high 
+                }
+            }
+            
+            $1 = count 
+        }
         
-        let table:Self          = .build(frequencies: frequencies, target: target)
-        let bits:JPEG.Bitstream = .encode(composites, table: table)
-        return (table, bits.bytes(escaping: 0xff, with: (0xff, 0x00)))
+        let frequencies:[Int] = 
+            JPEG.Bitstream.Symbol.DC.frequencies(of: \.decomposed.symbol, in: composites)
+        
+        let table:JPEG.Table.InverseHuffmanDC   = .build(frequencies: frequencies, target: target)
+        var bits:JPEG.Bitstream                 = []
+        for composite:JPEG.Bitstream.Composite.DC in composites 
+        {
+            bits.append(composite: composite, table: table)
+        }
+        return (bits.bytes(escaping: 0xff, with: (0xff, 0x00)), table)
     }
-    static 
-    func encode(_ pairs:[(JPEG.Bitstream.Composite.AC, [Bool])], target:Selector) 
-        -> (Self, [UInt8])
+     
+    func encode(bit b:Int) 
+        ->  [UInt8]
     {
-        let frequencies:[Int]   = Self.frequencies(of: \.0.decomposed.symbol, in: pairs)
-        
-        let table:Self          = .build(frequencies: frequencies, target: target)
-        let bits:JPEG.Bitstream = .encode(pairs, table: table)
-        return (table, bits.bytes(escaping: 0xff, with: (0xff, 0x00)))
-    }
+        var bits:JPEG.Bitstream = []
+        for y:Int in 0 ..< self.units.y
+        {
+            for x:Int in 0 ..< self.units.x 
+            {
+                bits.append(bit: self[x: x, y: y, z: 0] >> b & 1)
+            }
+        }
+        return bits.bytes(escaping: 0xff, with: (0xff, 0x00))
+    } */
 }
 
 // serializers (opposite of parsers)
@@ -648,7 +757,7 @@ extension JPEG.AnyTable
         }
     }
 }
-extension JPEG.Table.InverseHuffman 
+extension JPEG.Table.Huffman 
 {
     // bytes 1 ..< 17 + count (does not include selector byte)
     func serialize() -> [UInt8]
@@ -673,17 +782,17 @@ extension JPEG.Table.Quantization
 extension JPEG.Table 
 {
     public static 
-    func serialize(_ dc:[InverseHuffmanDC], _ ac:[InverseHuffmanAC]) -> [UInt8]
+    func serialize(_ dc:[HuffmanDC], _ ac:[HuffmanAC]) -> [UInt8]
     {
         var bytes:[UInt8] = []
-        for table:InverseHuffmanDC in dc 
+        for table:HuffmanDC in dc 
         {
-            bytes.append(0x00 | InverseHuffmanDC.serialize(selector: table.target))
+            bytes.append(0x00 | HuffmanDC.serialize(selector: table.target))
             bytes.append(contentsOf: table.serialize())
         }
-        for table:InverseHuffmanAC in ac 
+        for table:HuffmanAC in ac 
         {
-            bytes.append(0x10 | InverseHuffmanAC.serialize(selector: table.target))
+            bytes.append(0x10 | HuffmanAC.serialize(selector: table.target))
             bytes.append(contentsOf: table.serialize())
         }
         
@@ -724,9 +833,9 @@ extension JPEG.Frame
         bytes.append(contentsOf: [UInt8].store(self.size.x, asBigEndian: UInt16.self))
         bytes.append(.init(self.components.count))
         
-        for (ci, component):(Int, Component) in self.components 
+        for (ci, component):(Component.Index, Component) in self.components 
         {
-            bytes.append(.init(ci))
+            bytes.append(.init(ci.value))
             bytes.append(.init(component.factor.x) << 4 | .init(component.factor.y))
             bytes.append(JPEG.Table.Quantization.serialize(selector: component.selector))
         }
@@ -744,7 +853,7 @@ extension JPEG.Scan
         {
             let dc:UInt8 = JPEG.Table.HuffmanDC.serialize(selector: component.selectors.huffman.dc),
                 ac:UInt8 = JPEG.Table.HuffmanAC.serialize(selector: component.selectors.huffman.ac)
-            bytes.append(.init(component.ci))
+            bytes.append(.init(component.ci.value))
             bytes.append(dc << 4 | ac)
         }
         
