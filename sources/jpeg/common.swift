@@ -392,6 +392,77 @@ extension Common.Heap:ExpressibleByArrayLiteral
     }
 } 
 
+// 2d iterators 
+extension Common 
+{
+    struct Range2<Bound> where Bound:Comparable 
+    {
+        let lowerBound:(x:Bound, y:Bound)
+        let upperBound:(x:Bound, y:Bound)
+        
+        init(lowerBound:(x:Bound, y:Bound), upperBound:(x:Bound, y:Bound))
+        {
+            precondition(lowerBound.x <= upperBound.x, "x lower bound cannot be greater than upper bound")
+            precondition(lowerBound.y <= upperBound.y, "y lower bound cannot be greater than upper bound")
+            
+            self.lowerBound = lowerBound
+            self.upperBound = upperBound
+        }
+    }
+    
+    struct Range2Iterator<Bound> where Bound:Strideable, Bound.Stride:SignedInteger
+    {
+        var x:Bound, 
+            y:Bound 
+        let bound:(x:(Bound, Bound), y:Bound)
+    }
+}
+func ..< <Bound>(lhs:(x:Bound, y:Bound), rhs:(x:Bound, y:Bound)) -> Common.Range2<Bound> 
+    where Bound:Comparable
+{
+    return .init(lowerBound: lhs, upperBound: rhs)
+}
+
+extension Common.Range2:Sequence where Bound:Strideable, Bound.Stride:SignedInteger
+{
+    typealias Element = (x:Bound, y:Bound)
+    func makeIterator() -> Common.Range2Iterator<Bound> 
+    {
+        .init(x: self.lowerBound.x, y: self.lowerBound.y, 
+            bound: ((self.lowerBound.x, self.upperBound.x), self.upperBound.y))
+    }
+}
+extension Common.Range2Iterator:IteratorProtocol
+{
+    mutating 
+    func next() -> (x:Bound, y:Bound)? 
+    {
+        if self.x < self.bound.x.1 
+        {
+            defer 
+            {
+                self.x = self.x.advanced(by: 1)
+            }
+            
+            return (self.x, self.y)
+        }
+        else 
+        {
+            self.y = self.y.advanced(by: 1)
+            
+            if self.y < self.bound.y 
+            {
+                self.x = self.bound.x.0 
+                return self.next()
+            }
+            else 
+            {
+                return nil 
+            }
+        }
+    }
+}
+
 // raw buffer utilities 
 extension ArraySlice where Element == UInt8
 {

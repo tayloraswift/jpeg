@@ -2456,8 +2456,7 @@ extension JPEG.Data.Spectral
         // in the frame header, we don’t care about that here 
         typealias Descriptor = (p:Int?, factor:(x:Int, y:Int), table:JPEG.Table.HuffmanDC.Decoder)
         
-        let descriptors:[Descriptor] = 
-            try scan.components.map 
+        let descriptors:[Descriptor] = try scan.components.map 
         {
             guard let huffman:JPEG.Table.HuffmanDC = slots[keyPath: $0.selectors.huffman.dc]
             else 
@@ -2475,7 +2474,7 @@ extension JPEG.Data.Spectral
             // interleaved 
             var predecessor:[Int] = .init(repeating: 0, count: descriptors.count)
             row:
-            for h:Int in 0... 
+            for my:Int in 0... 
             {
                 guard b < bits.count, bits[b, count: 16] != 0xffff 
                 else 
@@ -2491,7 +2490,7 @@ extension JPEG.Data.Spectral
                         continue 
                     }
                     
-                    let height:Int = (h + 1) * factor.y
+                    let height:Int = (my + 1) * factor.y
                     if height > self[p].units.y
                     {
                         self[p].resize(to: height)
@@ -2499,28 +2498,25 @@ extension JPEG.Data.Spectral
                 }
                 
                 column:
-                for k:Int in 0 ..< self.blocks.x 
+                for mx:Int in 0 ..< self.blocks.x 
                 {
                     for (c, (p, factor, table)):(Int, Descriptor) in zip(predecessor.indices, descriptors)
                     {
-                        let base:(x:Int, y:Int) = (k * factor.x, h * factor.y)
-                        for y:Int in 0 ..< factor.y 
+                        let start:(x:Int, y:Int) = (     mx * factor.x,      my * factor.y), 
+                            end:(x:Int, y:Int)   = (start.x + factor.x, start.y + factor.y) 
+                        for (x, y):(Int, Int) in start ..< end 
                         {
-                            for x:Int in 0 ..< factor.x 
+                            let composite:JPEG.Bitstream.Composite.DC = 
+                                try bits.composite(&b, table: table)
+                            
+                            guard let p:Int = p 
+                            else 
                             {
-                                let composite:JPEG.Bitstream.Composite.DC   = 
-                                    try bits.composite(&b, table: table)
-                                
-                                guard let p:Int = p 
-                                else 
-                                {
-                                    continue 
-                                }
-                                
-                                predecessor[c]                             += composite.difference 
-                                self[p][x: base.x + x, y: base.y + y, z: 0] = 
-                                    predecessor[c] << scan.bits.lowerBound
+                                continue 
                             }
+                            
+                            predecessor[c]             += composite.difference 
+                            self[p][x: x, y: y, z: 0]   = predecessor[c] << scan.bits.lowerBound
                         }
                     }
                 }
@@ -2577,31 +2573,23 @@ extension JPEG.Data.Spectral
         if descriptors.count > 1 
         {
             // interleaved 
-            row:
-            for h:Int in 0 ..< self.blocks.y 
+            for (mx, my):(Int, Int) in (0, 0) ..< self.blocks 
             {
-                column:
-                for k:Int in 0 ..< self.blocks.x 
+                for (p, factor):Descriptor in descriptors
                 {
-                    for (p, factor):Descriptor in descriptors
+                    let start:(x:Int, y:Int) = (     mx * factor.x,      my * factor.y), 
+                        end:(x:Int, y:Int)   = (start.x + factor.x, start.y + factor.y) 
+                    for (x, y):(Int, Int) in start ..< end 
                     {
-                        let base:(x:Int, y:Int) = (k * factor.x, h * factor.y)
-                        for y:Int in 0 ..< factor.y 
+                        let refinement:Int = try bits.refinement(&b) 
+                        
+                        guard let p:Int = p 
+                        else 
                         {
-                            for x:Int in 0 ..< factor.x 
-                            {
-                                let refinement:Int = try bits.refinement(&b) 
-                                
-                                guard let p:Int = p 
-                                else 
-                                {
-                                    continue 
-                                }
-                                
-                                self[p][x: base.x + x, y: base.y + y, z: 0] |= 
-                                    refinement << scan.bits.lowerBound
-                            }
+                            continue 
                         }
+                        
+                        self[p][x: x, y: y, z: 0] |= refinement << scan.bits.lowerBound
                     }
                 }
             }
@@ -2614,15 +2602,10 @@ extension JPEG.Data.Spectral
                 return 
             }
             
-            row: 
-            for y:Int in 0 ..< self[p].units.y
+            for (x, y):(Int, Int) in (0, 0) ..< self[p].units 
             {
-                column:
-                for x:Int in 0 ..< self[p].units.x 
-                {
-                    let refinement:Int         = try bits.refinement(&b)
-                    self[p][x: x, y: y, z: 0] |= refinement << scan.bits.lowerBound
-                }
+                let refinement:Int         = try bits.refinement(&b)
+                self[p][x: x, y: y, z: 0] |= refinement << scan.bits.lowerBound
             }
         }
     } 
@@ -2652,55 +2635,50 @@ extension JPEG.Data.Spectral
         let bits:JPEG.Bitstream     = .init(data)
         var b:Int                   = 0, 
             skip:Int                = 0
-        row: 
-        for y:Int in 0 ..< self[p].units.y
+        for (x, y):(Int, Int) in (0, 0) ..< self[p].units
         {
-            column:
-            for x:Int in 0 ..< self[p].units.x 
+            var z:Int = scan.band.lowerBound
+            frequency: 
+            while z < scan.band.upperBound  
             {
-                var z:Int = scan.band.lowerBound
-                frequency: 
-                while z < scan.band.upperBound  
+                // we spell the body of this loop this way to match the 
+                // flow logic of `refining(ac:scan:tables)`
+                let (zeroes, value):(Int, Int) 
+                if skip > 0 
                 {
-                    // we spell the body of this loop this way to match the 
-                    // flow logic of `refining(ac:scan:tables)`
-                    let (zeroes, value):(Int, Int) 
-                    if skip > 0 
-                    {
-                        zeroes = 64 
-                        value  = 0
-                        skip  -= 1
-                    } 
-                    else 
-                    {
-                        switch try bits.composite(&b, table: table)
-                        {
-                        case .run(let run, value: let v):
-                            zeroes = run 
-                            value  = v 
-                        
-                        case .eob(let blocks):
-                            zeroes = 64 
-                            value  = 0 
-                            skip   = blocks - 1
-                        }
-                    }
-                    
-                    z += zeroes 
-                    if z < scan.band.upperBound 
-                    {
-                        defer 
-                        {
-                            z += 1
-                        }
-                        
-                        self[p][x: x, y: y, z: z] = value << scan.bits.lowerBound
-                        continue frequency  
-                    }
-                    
-                    break frequency
+                    zeroes = 64 
+                    value  = 0
+                    skip  -= 1
                 } 
-            }
+                else 
+                {
+                    switch try bits.composite(&b, table: table)
+                    {
+                    case .run(let run, value: let v):
+                        zeroes = run 
+                        value  = v 
+                    
+                    case .eob(let blocks):
+                        zeroes = 64 
+                        value  = 0 
+                        skip   = blocks - 1
+                    }
+                }
+                
+                z += zeroes 
+                if z < scan.band.upperBound 
+                {
+                    defer 
+                    {
+                        z += 1
+                    }
+                    
+                    self[p][x: x, y: y, z: z] = value << scan.bits.lowerBound
+                    continue frequency  
+                }
+                
+                break frequency
+            } 
         }
     }
     
@@ -2726,73 +2704,68 @@ extension JPEG.Data.Spectral
         let bits:JPEG.Bitstream     = .init(data)
         var b:Int                   = 0, 
             skip:Int                = 0
-        row: 
-        for y:Int in 0 ..< self[p].units.y
+        for (x, y):(Int, Int) in (0, 0) ..< self[p].units
         {
-            column:
-            for x:Int in 0 ..< self[p].units.x 
+            var z:Int = scan.band.lowerBound
+            frequency:
+            while z < scan.band.upperBound  
             {
-                var z:Int = scan.band.lowerBound
-                frequency:
-                while z < scan.band.upperBound  
+                let (zeroes, delta):(Int, Int) 
+                if skip > 0 
                 {
-                    let (zeroes, delta):(Int, Int) 
-                    if skip > 0 
+                    zeroes = 64 
+                    delta  = 0
+                    skip  -= 1
+                } 
+                else 
+                {
+                    switch try bits.composite(&b, table: table)
                     {
-                        zeroes = 64 
-                        delta  = 0
-                        skip  -= 1
-                    } 
-                    else 
-                    {
-                        switch try bits.composite(&b, table: table)
-                        {
-                        case .run(let run, value: let v):
-                            guard -1 ... 1 ~= v 
-                            else 
-                            {
-                                throw JPEG.DecodingError.invalidCompositeValue(v, expected: -1 ... 1)
-                            }
-                            
-                            zeroes = run 
-                            delta  = v 
-                        
-                        case .eob(let blocks):
-                            zeroes = 64 
-                            delta  = 0 
-                            skip   = blocks - 1
-                        }
-                    }
-                    
-                    var skipped:Int = 0
-                    repeat  
-                    {
-                        defer 
-                        {
-                            z += 1
-                        }
-                        
-                        let unrefined:Int = self[p][x: x, y: y, z: z]
-                        if unrefined == 0 
-                        {
-                            guard skipped < zeroes 
-                            else 
-                            {
-                                self[p][x: x, y: y, z: z] = delta << scan.bits.lowerBound
-                                continue frequency  
-                            }
-                            
-                            skipped += 1
-                        }
+                    case .run(let run, value: let v):
+                        guard -1 ... 1 ~= v 
                         else 
                         {
-                            let delta:Int = (unrefined < 0 ? -1 : 1) * (try bits.refinement(&b))
-                            self[p][x: x, y: y, z: z] += delta << scan.bits.lowerBound
+                            throw JPEG.DecodingError.invalidCompositeValue(v, expected: -1 ... 1)
                         }
-                    } while z < scan.band.upperBound
+                        
+                        zeroes = run 
+                        delta  = v 
                     
-                    break frequency
+                    case .eob(let blocks):
+                        zeroes = 64 
+                        delta  = 0 
+                        skip   = blocks - 1
+                    }
                 }
+                
+                var skipped:Int = 0
+                repeat  
+                {
+                    defer 
+                    {
+                        z += 1
+                    }
+                    
+                    let unrefined:Int = self[p][x: x, y: y, z: z]
+                    if unrefined == 0 
+                    {
+                        guard skipped < zeroes 
+                        else 
+                        {
+                            self[p][x: x, y: y, z: z] = delta << scan.bits.lowerBound
+                            continue frequency  
+                        }
+                        
+                        skipped += 1
+                    }
+                    else 
+                    {
+                        let delta:Int = (unrefined < 0 ? -1 : 1) * (try bits.refinement(&b))
+                        self[p][x: x, y: y, z: z] += delta << scan.bits.lowerBound
+                    }
+                } while z < scan.band.upperBound
+                
+                break frequency
             }
         } 
     } 
@@ -2873,14 +2846,11 @@ extension JPEG.Data.Spectral
                 continue 
             }
             
-            for y:Int in 0 ..< self[p].units.y
+            for (x, y):(Int, Int) in (0, 0) ..< self[p].units
             {
-                for x:Int in 0 ..< self[p].units.x 
+                for z:Int in scan.band 
                 {
-                    for z:Int in scan.band 
-                    {
-                        self[p][x: x, y: y, z: z] *= table[z: z]
-                    }
+                    self[p][x: x, y: y, z: z] *= table[z: z]
                 }
             }
         }
@@ -2894,43 +2864,37 @@ extension JPEG.Data.Spectral.Plane
     {
         let values:[Float] = .init(unsafeUninitializedCapacity: 64) 
         {
-            for i:Int in 0 ..< 8
+            for (j, i):(Int, Int) in (0, 0) ..< (8, 8)
             {
-                for j:Int in 0 ..< 8
+                let t:(Float, Float) = 
+                (
+                    2 * .init(i) + 1,
+                    2 * .init(j) + 1
+                )
+                var s:Float = 0
+                for (k, h):(Int, Int) in (0, 0) ..< (8, 8)
                 {
-                    let t:(Float, Float) = 
-                    (
-                        2 * .init(i) + 1,
-                        2 * .init(j) + 1
-                    )
-                    var s:Float = 0
-                    for h:Int in 0 ..< 8 
+                    let c:Float 
+                    switch (h * k, h + k) 
                     {
-                        for k:Int in 0 ..< 8 
-                        {
-                            let c:Float 
-                            switch (h * k, h + k) 
-                            {
-                            case (0, 0):
-                                c = 1 
-                            case (0, _):
-                                c = (2 as Float).squareRoot()
-                            case (_, _):
-                                c = 2
-                            }
-                            
-                            let ω:(Float, Float) = 
-                            (
-                                .init(h) * .pi / 16, 
-                                .init(k) * .pi / 16
-                            )
-                            let a:Float = _cos(ω.0 * t.0) * _cos(ω.1 * t.1)
-                            s += a * c * .init(self[x: x, y: y, k: k, h: h])
-                        }
+                    case (0, 0):
+                        c = 1 
+                    case (0, _):
+                        c = (2 as Float).squareRoot()
+                    case (_, _):
+                        c = 2
                     }
                     
-                    $0[8 * i + j] = s / 8
+                    let ω:(Float, Float) = 
+                    (
+                        .init(h) * .pi / 16, 
+                        .init(k) * .pi / 16
+                    )
+                    let a:Float = _cos(ω.0 * t.0) * _cos(ω.1 * t.1)
+                    s += a * c * .init(self[x: x, y: y, k: k, h: h])
                 }
+                
+                $0[8 * i + j] = s / 8
             }
             
             $1 = 64
@@ -2943,18 +2907,12 @@ extension JPEG.Data.Spectral.Plane
         let values:[Float] = .init(unsafeUninitializedCapacity: count) 
         {
             let stride:Int = 8 * self.units.x
-            for y:Int in 0 ..< self.units.y 
+            for (x, y):(Int, Int) in (0, 0) ..< self.units 
             {
-                for x:Int in 0 ..< self.units.x 
+                let block:[Float] = self.idct(x: x, y: y)
+                for (j, i):(Int, Int) in (0, 0) ..< (8, 8)
                 {
-                    let block:[Float] = self.idct(x: x, y: y)
-                    for i:Int in 0 ..< 8 
-                    {
-                        for j:Int in 0 ..< 8 
-                        {
-                            $0[(8 * y + i) * stride + 8 * x + j] = block[8 * i + j]
-                        }
-                    }
+                    $0[(8 * y + i) * stride + 8 * x + j] = block[8 * i + j]
                 }
             }
             
@@ -3002,13 +2960,10 @@ extension JPEG.Data.Planar
             let count:Int   = self.size.x * self.size.y
             interleaved     = .init(unsafeUninitializedCapacity: count)
             {
-                for y:Int in 0 ..< self.size.y 
+                for (x, y):(Int, Int) in (0, 0) ..< self.size 
                 {
-                    for x:Int in 0 ..< self.size.x 
-                    {
-                        let value:Float         = self[0][x: x, y: y]
-                        $0[y * self.size.x + x] = value 
-                    }
+                    let value:Float         = self[0][x: x, y: y]
+                    $0[y * self.size.x + x] = value 
                 }
                 
                 $1 = count
@@ -3030,13 +2985,10 @@ extension JPEG.Data.Planar
                     assert(self.scale.x % plane.factor.x == 0)
                     assert(self.scale.y % plane.factor.y == 0)
                     
-                    for y:Int in 0 ..< self.size.y 
+                    for (x, y):(Int, Int) in (0, 0) ..< self.size 
                     {
-                        for x:Int in 0 ..< self.size.x 
-                        {
-                            let value:Float = plane[x: x / d.x, y: y / d.y]
-                            $0[(y * self.size.x + x) * self.count + p] = value 
-                        }
+                        let value:Float = plane[x: x / d.x, y: y / d.y]
+                        $0[(y * self.size.x + x) * self.count + p] = value 
                     }
                 }
                 

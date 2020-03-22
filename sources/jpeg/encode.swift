@@ -662,10 +662,45 @@ extension JPEG.Data.Spectral.Plane
 extension JPEG.Data.Spectral 
 {
     /* private 
-    func encode(bits b:PartialRangeFrom<Int>, components:[JPEG.Scan.Component], 
-        target:JPEG.Table.InverseHuffmanDC.Selector) 
-        -> ([UInt8], JPEG.Table.InverseHuffmanDC)
+    func encode(bits b:PartialRangeFrom<Int>, components:[JPEG.Scan.Component]) 
+        -> ([UInt8], [JPEG.Table.HuffmanDC])
     {
+        // some components may specify the same table selectors, which means 
+        // those components are sharing the same huffman table.
+        
+        // unlike in the decoder, we don’t have a good reason to allow scans to 
+        // reference components which have not been included in the spectral image, 
+        // so every component must be linked to an existing plane index (non-optional `p`)
+        typealias Descriptor = (p:Int, factor:(x:Int, y:Int), target:JPEG.Table.HuffmanDC.Selector)
+        
+        let descriptors:[Descriptor] = try components.map 
+        {
+            (self.p[$0.ci], $0.factor, $0.selectors.huffman.dc)
+        }
+        
+        if descriptors.count > 1 
+        {
+            // interleaved 
+            let count:Int = self.blocks.x * self.blocks.y * components.map 
+            {
+                $0.factor.x * $0.factor.y
+            }.reduce(0, +)
+            
+            let composites:[JPEG.Bitstream.Composite.DC] = 
+                .init(unsafeUninitializedCapacity: count)
+            {
+                for b:Int in 0 ..< self.blocks.y 
+                {
+                    for a:Int in 0 ..< self.blocks.x 
+                    {
+                        
+                    }
+                }
+            }
+            
+            var predecessor:[Int] = .init(repeating: 0, count: descriptors.count)
+        }
+        
         let count:Int                                   = self.units.x * self.units.y
         let composites:[JPEG.Bitstream.Composite.DC]    = 
             .init(unsafeUninitializedCapacity: count) 
@@ -694,8 +729,8 @@ extension JPEG.Data.Spectral
             bits.append(composite: composite, table: table)
         }
         return (bits.bytes(escaping: 0xff, with: (0xff, 0x00)), table)
-    }
-     
+    } */
+    /*
     func encode(bit b:Int) 
         ->  [UInt8]
     {
