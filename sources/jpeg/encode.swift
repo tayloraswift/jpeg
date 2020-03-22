@@ -366,14 +366,7 @@ extension JPEG.Table.Huffman
                     base += leaves 
                 }
                 
-                guard let size:(n:Int, z:Int) = Self.size(symbols.map(\.count))
-                else 
-                {
-                    fatalError("unreachable")
-                }
-                self.symbols = symbols 
-                self.target  = target 
-                self.size    = size
+                self.init(validated: symbols, target: target)
                 return 
             }
             

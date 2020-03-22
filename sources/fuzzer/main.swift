@@ -3,7 +3,7 @@ import JPEG
 extension JPEG.Bitstream 
 {
     static 
-    func composites(spectra:JPEG.Data.Spectral.Plane) -> 
+    func composites<Color>(spectra:JPEG.Data.Spectral<Color>.Plane) -> 
         (
             dc:
             (
@@ -16,6 +16,7 @@ extension JPEG.Bitstream
                 refining:[(Composite.AC, [Bool])]
             )
         )
+        where Color:JPEG.Color
     {
         var dc:(initial:[Composite.DC], refining:[Bool]), 
             ac:(initial:[Composite.AC], refining:[(Composite.AC, [Bool])])
@@ -139,4 +140,4 @@ frequencies[19] = 200
 frequencies[20] = 2
 frequencies[21] = 60
 
-let table:JPEG.Table.InverseHuffmanDC = .build(frequencies: frequencies, target: \.0)
+let table:JPEG.Table.HuffmanDC = .init(frequencies: frequencies, target: \.0)
