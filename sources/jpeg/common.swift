@@ -374,11 +374,10 @@ extension Common.Heap
     
     init<S>(_ sequence:S) where S:Sequence, S.Element == (Key, Value) 
     {
-        self.storage = .init(sequence)
+        self.storage    = .init(sequence)
         // heapify 
-        let perfect:ClosedRange<Int> = 
-            self.startIndex ... Self.parent(index: self.endIndex - 1)
-        for i:Int in perfect.reversed()
+        let halfway:Int = Self.parent(index: self.endIndex - 1) + 1
+        for i:Int in (self.startIndex ..< halfway).reversed()
         {
             self.siftDown(index: i)
         }
@@ -395,6 +394,7 @@ extension Common.Heap:ExpressibleByArrayLiteral
 // 2d iterators 
 extension Common 
 {
+    public 
     struct Range2<Bound> where Bound:Comparable 
     {
         let lowerBound:(x:Bound, y:Bound)
@@ -410,6 +410,7 @@ extension Common
         }
     }
     
+    public 
     struct Range2Iterator<Bound> where Bound:Strideable, Bound.Stride:SignedInteger
     {
         var x:Bound, 
@@ -425,7 +426,9 @@ func ..< <Bound>(lhs:(x:Bound, y:Bound), rhs:(x:Bound, y:Bound)) -> Common.Range
 
 extension Common.Range2:Sequence where Bound:Strideable, Bound.Stride:SignedInteger
 {
+    public 
     typealias Element = (x:Bound, y:Bound)
+    public 
     func makeIterator() -> Common.Range2Iterator<Bound> 
     {
         .init(x: self.lowerBound.x, y: self.lowerBound.y, 
@@ -434,7 +437,7 @@ extension Common.Range2:Sequence where Bound:Strideable, Bound.Stride:SignedInte
 }
 extension Common.Range2Iterator:IteratorProtocol
 {
-    mutating 
+    public mutating 
     func next() -> (x:Bound, y:Bound)? 
     {
         if self.x < self.bound.x.1 

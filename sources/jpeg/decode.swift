@@ -1,5 +1,5 @@
 public 
-protocol _JPEGFormat 
+protocol _JPEGFormat
 {
     static 
     func recognize(_ components:Set<JPEG.Frame.Component.Index>, precision:Int) -> Self?
@@ -34,7 +34,7 @@ enum JPEG
     public 
     struct Properties<Format> where Format:JPEG.Format 
     {
-        let format:Format 
+        let format:Format  
     }
     
     // sample types 
@@ -134,29 +134,6 @@ enum JPEG
 // compound types 
 extension JPEG 
 {
-    public 
-    enum DensityUnit
-    {
-        case none
-        case dpi 
-        case dpcm 
-        
-        init?(code:UInt8) 
-        {
-            switch code 
-            {
-            case 0:
-                self = .none 
-            case 1:
-                self = .dpi 
-            case 2:
-                self = .dpcm 
-            default:
-                return nil 
-            }
-        }
-    }
-    
     public 
     enum Process 
     {
@@ -390,11 +367,12 @@ extension JPEG.Bitstream
 
         // invert bits because we use `1`-bits as the “background”, and shift 
         // operator will only extend with `0`-bits
-        // must use << and not &<< to correctly handle shift of 16
+        // must use >> and << and not &>> and &<< to correctly handle shift of 16
+        let trimmed:UInt16 = bits | .max >> count
         let inverted:(UInt16, UInt16) = 
         (
-            ~bits &>>                     b, 
-            ~bits  << (UInt16.bitWidth &- b)
+            ~trimmed &>>                     b, 
+            ~trimmed  << (UInt16.bitWidth &- b)
         )
         
         self.atoms[a    ] &= ~inverted.0
@@ -402,36 +380,23 @@ extension JPEG.Bitstream
         self.count        += count 
     }
     
-    // strips trailing `0xff` bytes 
     func bytes(escaping escaped:UInt8, with sequence:(UInt8, UInt8)) -> [UInt8]
     {
         let unescaped:[UInt8] = .init(unsafeUninitializedCapacity: 2 * self.atoms.count)
         {
-            (buffer:inout UnsafeMutableBufferPointer<UInt8>, count:inout Int) in
-            
             for (i, atom):(Int, UInt16) in self.atoms.enumerated() 
             {
-                buffer[i << 1    ] = .init(atom >> 8)
-                buffer[i << 1 | 1] = .init(atom & 0xff)
-            }
-        }
-        // strip the trailing `0xff`’s. it is important to do this step *before* 
-        // escaping, which is why we need to do two loops 
-        var suffix:Int = 0
-        for byte:UInt8 in unescaped.reversed()
-        {
-            guard byte == 0xff 
-            else 
-            {
-                break 
+                $0[i << 1    ] = .init(atom >> 8)
+                $0[i << 1 | 1] = .init(atom & 0xff)
             }
             
-            suffix += 1
+            $1 = 2 * self.atoms.count
         }
-        
+        // figure out which of the bytes are actually part of the bitstream 
+        let count:Int = self.count >> 3 + (self.count & 0x07 != 0 ? 1 : 0)
         var bytes:[UInt8] = []
-            bytes.reserveCapacity(unescaped.count - suffix)
-        for byte:UInt8 in unescaped.dropLast(suffix) 
+            bytes.reserveCapacity(count)
+        for byte:UInt8 in unescaped.prefix(count) 
         {
             if byte == escaped 
             {
@@ -549,18 +514,21 @@ extension JPEG
         case invalidJFIFVersion((major:Int, minor:Int))
         case invalidJFIFDensityUnit(Int)
         
-        case unsupportedFrameCodingProcess(Process)
+        case invalidFrameWidth(Int)
         case invalidFramePrecision(Int, Process)
         case invalidFrameComponentCount(Int, Process)
-        case invalidFrameQuantizationSelector(Int)
+        case invalidFrameQuantizationSelectorCode(Int)
+        case invalidFrameQuantizationSelector(JPEG.Table.Quantization.Selector, Process)
         case invalidFrameComponentSamplingFactor((x:Int, y:Int), Frame.Component.Index)
         case duplicateFrameComponentIndex(Frame.Component.Index)
         
-        case invalidScanComponentCount(Int)
-        case invalidScanHuffmanSelectors((dc:Int, ac:Int), Process)
+        case invalidScanHuffmanSelectorCode(Int)
+        case invalidScanHuffmanDCSelector(JPEG.Table.HuffmanDC.Selector, Process)
+        case invalidScanHuffmanACSelector(JPEG.Table.HuffmanAC.Selector, Process)
         case undefinedScanComponentReference(Frame.Component.Index, Set<Frame.Component.Index>)
         case invalidScanSamplingVolume(Int)
-        case invalidScanProgressiveSubset(band:(Int, Int), bits:(Int, Int), Int, Process)
+        case invalidScanComponentCount(Int, Process)
+        case invalidScanProgressiveSubset(band:(Int, Int), bits:(Int, Int), Process)
         
         case invalidHuffmanTarget(Int)
         case invalidHuffmanType(Int)
@@ -609,12 +577,14 @@ extension JPEG
             case .invalidJFIFDensityUnit:
                 return "invalid JFIF density unit"
             
-            case .unsupportedFrameCodingProcess:
-                return "unsupported encoding process"
+            case .invalidFrameWidth:
+                return "invalid frame width"
             case .invalidFramePrecision:
                 return "invalid precision specifier"
             case .invalidFrameComponentCount:
                 return "invalid total component count"
+            case .invalidFrameQuantizationSelectorCode:
+                return "invalid quantization table selector code"
             case .invalidFrameQuantizationSelector:
                 return "invalid quantization table selector"
             case .invalidFrameComponentSamplingFactor:
@@ -622,16 +592,20 @@ extension JPEG
             case .duplicateFrameComponentIndex:
                 return "duplicate component indices"
             
-            case .invalidScanComponentCount:
-                return "invalid scan component count"
-            case .invalidScanHuffmanSelectors:
-                return "invalid huffman table selectors"
+            case .invalidScanHuffmanSelectorCode:
+                return "invalid huffman table selector pair code"
+            case .invalidScanHuffmanDCSelector:
+                return "invalid dc huffman table selector"
+            case .invalidScanHuffmanACSelector:
+                return "invalid ac huffman table selector"
             case .undefinedScanComponentReference:
                 return "undefined component reference"
             case .invalidScanSamplingVolume:
                 return "invalid scan component sampling volume"
+            case .invalidScanComponentCount:
+                return "invalid scan component count"
             case .invalidScanProgressiveSubset:
-                return "invalid spectral or binary subset"
+                return "invalid spectral selection or successive approximation"
             
             case .invalidHuffmanTarget:
                 return "invalid huffman table destination"
@@ -670,8 +644,8 @@ extension JPEG
             case .invalidJFIFDensityUnit(let code):
                 return "density code (\(code)) does not correspond to a valid density unit"
             
-            case .unsupportedFrameCodingProcess(let process):
-                return "frame coding process (\(process)) is not supported"
+            case .invalidFrameWidth(let width):
+                return "frame cannot have width \(width)"
             case .invalidFramePrecision(let precision, let process):
                 return "precision (\(precision)) is not allowed for frame coding process '\(process)'"
             case .invalidFrameComponentCount(let count, let process):
@@ -683,30 +657,36 @@ extension JPEG
                 {
                     return "frame (\(count) components) with coding process '\(process)' has disallowed component count"
                 }  
-            case .invalidFrameQuantizationSelector(let i):
-                return "quantization table selector (\(i)) must be within 0 ... 3"
+            case .invalidFrameQuantizationSelectorCode(let code):
+                return "quantization table selector code (\(code)) must be within 0 ... 3"
+            case .invalidFrameQuantizationSelector(let selector, let process):
+                return "quantization table selector (\(String.init(selector: selector))) is not allowed for coding process '\(process)'"
             case .invalidFrameComponentSamplingFactor(let factor, let ci):
                 return "both sampling factors (\(factor.x), \(factor.y)) for component index \(ci) must be within 1 ... 4"
             case .duplicateFrameComponentIndex(let ci):
                 return "component index (\(ci)) conflicts with previously defined component"
             
-            case .invalidScanComponentCount(let count):
+            case .invalidScanHuffmanSelectorCode(let code):
+                return "huffman table selector pair code (\(code)) must be within 0 ... 3 or 16 ... 19"
+            case .invalidScanHuffmanDCSelector(let selector, let process):
+                return "dc huffman table selector (\(String.init(selector: selector))) is not allowed for coding process '\(process)'"
+            case .invalidScanHuffmanACSelector(let selector, let process):
+                return "ac huffman table selector (\(String.init(selector: selector))) is not allowed for coding process '\(process)'"
+            case .undefinedScanComponentReference(let ci, let defined):
+                return "component with index (\(ci)) is not one of the components \(defined.sorted()) defined in frame header"
+            case .invalidScanSamplingVolume(let volume):
+                return "scan mcu sample volume (\(volume)) can be at most 10"
+            case .invalidScanComponentCount(let count, let process):
                 if count == 0 
                 {
                     return "scan must contain at least one component"
                 }
                 else 
                 {
-                    return "scan (\(count) components) cannot have more than 4 components"
+                    return "scan component count (\(count)) is not allowed for coding process '\(process)'"
                 } 
-            case .invalidScanHuffmanSelectors(let (dc: dc, ac: ac), let process):
-                return "huffman table selectors (dc: \(dc), ac: \(ac)) are not allowed for coding process '\(process)'"
-            case .undefinedScanComponentReference(let ci, let defined):
-                return "component with index (\(ci)) is not one of the components \(defined.sorted()) defined in frame header"
-            case .invalidScanSamplingVolume(let volume):
-                return "scan mcu sample volume (\(volume)) can be at most 10"
-            case .invalidScanProgressiveSubset(band: let band, bits: let bits, let count, let process):
-                return "scan (\(count) components) with coding process '\(process)' cannot define bits \(bits.0) ..< \(bits.1) for coefficients \(band.0) ..< \(band.1)"
+            case .invalidScanProgressiveSubset(band: let band, bits: let bits, let process):
+                return "scan cannot define spectral selection (\(band.0) ..< \(band.1)) with successive approximation (\(bits.0) ..< \(bits.1)) for coding process '\(process)'"
             
             case .invalidHuffmanTarget(let code):
                 return "selector code (0x\(String.init(code, radix: 16))) does not correspond to a valid huffman table destination"
@@ -743,7 +723,8 @@ extension JPEG
         case prematureEntropyCodedSegment
         case prematureEndOfImage
         
-        case unsupportedColorFormat(Set<Frame.Component.Index>, Int)
+        case unsupportedFrameCodingProcess(Process)
+        case unrecognizedColorFormat(Set<Frame.Component.Index>, Int, Any.Type)
         
         public static 
         var namespace:String 
@@ -786,9 +767,11 @@ extension JPEG
                 return "premature entropy coded segment"
             case .prematureEndOfImage:
                 return "premature end-of-image marker"
-            
-            case .unsupportedColorFormat:
-                return "unsupported color format"
+                
+            case .unsupportedFrameCodingProcess:
+                return "unsupported encoding process"
+            case .unrecognizedColorFormat:
+                return "unrecognized color format"
             }
         }
         public 
@@ -827,8 +810,10 @@ extension JPEG
             case .prematureEndOfImage:
                 return "premature end-of-image marker"
             
-            case .unsupportedColorFormat(let components, let precision):
-                return "component set \(components.sorted()) with precision \(precision) is not a JFIF color format"
+            case .unsupportedFrameCodingProcess(let process):
+                return "frame coding process (\(process)) is not supported"
+            case .unrecognizedColorFormat(let components, let precision, let type):
+                return "color format type (\(type)) could not match component identifier set \(components.sorted()) with precision \(precision) to a known value"
             }
         }
     }
@@ -1000,8 +985,30 @@ extension JPEG
     struct JFIF
     {
         public 
-        let version:(major:Int, minor:Int),
-            density:(x:Int, y:Int, unit:DensityUnit)
+        enum Version 
+        {
+            case v1_0, v1_1, v1_2
+        }
+        
+        public 
+        enum Unit
+        {
+            case none
+            case dpi 
+            case dpcm 
+        }
+        
+        public 
+        let version:Version,
+            density:(x:Int, y:Int, unit:Unit)
+        
+        // initializer has to live here due to compiler issue
+        public  
+        init(version:Version, density:(x:Int, y:Int, unit:Unit))
+        {
+            self.version = version 
+            self.density = density
+        }
     }
     
     public 
@@ -1108,6 +1115,42 @@ extension JPEG
     }
 }
 // jfif segment parsing 
+extension JPEG.JFIF.Version  
+{
+    static 
+    func parse(code:(UInt8, UInt8)) -> Self?
+    {
+        switch (major: code.0, minor: code.1)
+        {
+        case (major: 1, minor: 0):
+            return .v1_0
+        case (major: 1, minor: 1):
+            return .v1_1
+        case (major: 1, minor: 2):
+            return .v1_2
+        default:
+            return nil 
+        }
+    }
+}
+extension JPEG.JFIF.Unit 
+{
+    static 
+    func parse(code:UInt8) -> Self?
+    {
+        switch code 
+        {
+        case 0:
+            return .some(.none) 
+        case 1:
+            return .dpi 
+        case 2:
+            return .dpcm 
+        default:
+            return nil 
+        }
+    }
+}
 extension JPEG.JFIF 
 {
     static 
@@ -1130,31 +1173,24 @@ extension JPEG.JFIF
             throw JPEG.ParsingError.invalidJFIFSignature(.init(data[0 ..< 5]))
         }
 
-        let version:(major:Int, minor:Int)
-        version.major = .init(data[5])
-        version.minor = .init(data[6])
-
-        guard   1 ... 1 ~= version.major, 
-                0 ... 2 ~= version.minor
-        else
+        guard let version:Version   = .parse(code: (data[5], data[6]))
+        else 
         {
-            // bad JFIF version number (expected 1.0 ... 1.2)
-            throw JPEG.ParsingError.invalidJFIFVersion(version)
+            throw JPEG.ParsingError.invalidJFIFVersion((.init(data[5]), .init(data[6])))
         }
-
-        guard let unit:JPEG.DensityUnit = JPEG.DensityUnit.init(code: data[7])
+        guard let unit:Unit         = .parse(code: data[7])
         else
         {
             // invalid JFIF density unit
             throw JPEG.ParsingError.invalidJFIFDensityUnit(.init(data[7]))
         }
 
-        let density:(x:Int, y:Int) = 
+        let density:(x:Int, y:Int)  = 
         (
             data.load(bigEndian: UInt16.self, as: Int.self, at:  8), 
             data.load(bigEndian: UInt16.self, as: Int.self, at: 10)
         )
-
+        
         // we ignore the thumbnail data
         return .init(version: version, density: (density.x, density.y, unit))
     }
@@ -1233,13 +1269,14 @@ extension JPEG.Table.Huffman
     // internal unsafe init 
     init(validated symbols:[[Symbol]], target:Selector)
     {
+        precondition(symbols.count == 16)
         guard let size:(n:Int, z:Int) = Self.size(symbols.map(\.count))
         else 
         {
             fatalError("unreachable")
         }
         
-        self.symbols = symbols 
+        self.symbols = symbols
         self.target  = target 
         self.size    = size
     }
@@ -1262,6 +1299,7 @@ extension JPEG.Table.Huffman
     public 
     init?(_ symbols:[[Symbol]], target:Selector)
     {
+        precondition(symbols.count == 16)
         // validate leaf counts 
         guard let size:(n:Int, z:Int) = Self.size(symbols.map(\.count))
         else 
@@ -1269,7 +1307,7 @@ extension JPEG.Table.Huffman
             return nil
         }
         
-        self.symbols = symbols 
+        self.symbols = symbols
         self.target  = target 
         self.size    = size
     } 
@@ -1447,32 +1485,46 @@ extension JPEG.Table
 // frame/scan header parsing 
 extension JPEG.Frame 
 {
-    public static
-    func parse(_ data:[UInt8], process:JPEG.Process) throws -> Self
+    public static 
+    func validate(process:JPEG.Process, precision:Int, size:(x:Int, y:Int), 
+        components:[Component.Index: Component]) throws -> Self 
     {
-        switch process 
+        guard size.x > 0 
+        else 
         {
-        case    .baseline, 
-                .extended(coding: .huffman, differential: false),
-                .progressive(coding: .huffman, differential: false):
-            break 
-        default:
-            throw JPEG.ParsingError.unsupportedFrameCodingProcess(process)
+            throw JPEG.ParsingError.invalidFrameWidth(size.x)
         }
         
-        guard data.count >= 6
-        else
+        for (ci, component):(Component.Index, Component) in components 
         {
-            throw JPEG.ParsingError.mismatched(marker: .frame(process), 
-                count: data.count, minimum: 6)
+            guard   1 ... 4 ~= component.factor.x,
+                    1 ... 4 ~= component.factor.y
+            else
+            {
+                throw JPEG.ParsingError.invalidFrameComponentSamplingFactor(
+                    component.factor, ci)
+            }
+            
+            if case .baseline = process 
+            {
+                // make sure only selectors 0 and 1 are used 
+                switch component.selector 
+                {
+                case \.0, \.1:
+                    break 
+                default:
+                    throw JPEG.ParsingError.invalidFrameQuantizationSelector(component.selector, 
+                        process)
+                }
+            }
         }
-
-        let precision:Int = .init(data[0])
+        
         switch (process, precision) 
         {
         case    (.baseline,     8), 
                 (.extended,     8), (.extended,     12), 
-                (.progressive,  8), (.progressive,  12):
+                (.progressive,  8), (.progressive,  12), 
+                (.lossless,     2 ... 16):
             break
 
         default:
@@ -1480,25 +1532,40 @@ extension JPEG.Frame
             throw JPEG.ParsingError.invalidFramePrecision(precision, process)
         }
         
+        switch (process, components.count) 
+        {
+        case    (.baseline,     1 ... 255), 
+                (.extended,     1 ... 255), 
+                (.progressive,  1 ...   4), 
+                (.lossless,     1 ... 255):
+            break
+
+        default:
+            // invalid count
+            throw JPEG.ParsingError.invalidFrameComponentCount(components.count, process)
+        }
+        
+        return .init(process: process, precision: precision, size: size, 
+            components: components)
+    }
+    public static
+    func parse(_ data:[UInt8], process:JPEG.Process) throws -> Self
+    {
+        guard data.count >= 6
+        else
+        {
+            throw JPEG.ParsingError.mismatched(marker: .frame(process), 
+                count: data.count, minimum: 6)
+        }
+
+        let precision:Int       = .init(data[0])
         let size:(x:Int, y:Int) = 
         (
             data.load(bigEndian: UInt16.self, as: Int.self, at: 3),
             data.load(bigEndian: UInt16.self, as: Int.self, at: 1)
         )
-
-        let count:Int = .init(data[5])
-        switch (process, count) 
-        {
-        case    (.baseline,     1 ... .max), 
-                (.extended,     1 ... .max), 
-                (.progressive,  1 ... 4   ):
-            break
-
-        default:
-            // invalid count
-            throw JPEG.ParsingError.invalidFrameComponentCount(count, process)
-        }
-
+        let count:Int           = .init(data[5])
+        
         guard data.count == 3 * count + 6
         else
         {
@@ -1520,14 +1587,7 @@ extension JPEG.Frame
                 JPEG.Table.Quantization.parse(selector: byte.2)
             else 
             {
-                throw JPEG.ParsingError.invalidFrameQuantizationSelector(.init(byte.2))
-            }
-            
-            guard   1 ... 4 ~= factor.x,
-                    1 ... 4 ~= factor.y
-            else
-            {
-                throw JPEG.ParsingError.invalidFrameComponentSamplingFactor(factor, ci)
+                throw JPEG.ParsingError.invalidFrameQuantizationSelectorCode(.init(byte.2))
             }
             
             let component:Component = .init(factor: factor, selector: selector)
@@ -1539,7 +1599,8 @@ extension JPEG.Frame
             }
         }
 
-        return .init(process: process, precision: precision, size: size, components: components)
+        return try .validate(process: process, precision: precision, size: size, 
+            components: components)
     }
     
     // parse DNL segment 
@@ -1558,6 +1619,76 @@ extension JPEG.Frame
 extension JPEG.Scan 
 {
     public static 
+    func validate(process:JPEG.Process, band:Range<Int>, bits:Range<Int>, 
+        components:[Component]) throws -> Self 
+    {
+        for component:Component in components 
+        {
+            if case .baseline = process 
+            {
+                // make sure only selectors 0 and 1 are used 
+                let dc:JPEG.Table.HuffmanDC.Selector, 
+                    ac:JPEG.Table.HuffmanAC.Selector
+                (dc, ac) = component.selectors.huffman
+                switch dc
+                {
+                case \.0, \.1:
+                    break 
+                default:
+                    throw JPEG.ParsingError.invalidScanHuffmanDCSelector(dc, process)
+                }
+                switch ac
+                {
+                case \.0, \.1:
+                    break 
+                default:
+                    throw JPEG.ParsingError.invalidScanHuffmanACSelector(ac, process)
+                }
+            }
+        }
+        
+        // validate sampling factor sum 
+        let volume:Int = components.map{ $0.factor.x * $0.factor.y }.reduce(0, +) 
+        guard 0 ... 10 ~= volume
+        else 
+        {
+            throw JPEG.ParsingError.invalidScanSamplingVolume(volume)
+        }
+        
+        // validate subsetting 
+        let a:Int = bits.lowerBound
+        switch (process, (band.lowerBound, band.upperBound), (bits.lowerBound, bits.upperBound)) 
+        {
+        case    (.baseline,    (0,       64), (0,  .max)), 
+                (.extended,    (0,       64), (0,  .max)), 
+                (.progressive, (0,        1), (_,  .max)), // unlimited bits per initial scan
+                (.progressive, (0,        1), (_, a + 1)): // 1 bit per refining scan 
+            guard 1 ... 4 ~= components.count
+            else 
+            {
+                throw JPEG.ParsingError.invalidScanComponentCount(components.count, 
+                    process)
+            }  
+        case    (.progressive, (_, 2 ... 64), (_,  .max)), 
+                (.progressive, (_, 2 ... 64), (_, a + 1)): 
+            guard 1 ... 1 ~= components.count
+            else 
+            {
+                // progressive scans that code for AC components cannot be interleaved
+                throw JPEG.ParsingError.invalidScanComponentCount(components.count, 
+                    process)
+            }
+        
+        default:
+            throw JPEG.ParsingError.invalidScanProgressiveSubset(
+                band: (band.lowerBound, band.upperBound), 
+                bits: (bits.lowerBound, bits.upperBound), 
+                process)
+        }
+        
+        return .init(band: band, bits: bits, components: components)
+    }
+    public static 
     func parse(_ data:[UInt8], frame:JPEG.Frame) 
         throws -> Self
     {
@@ -1569,11 +1700,6 @@ extension JPEG.Scan
         }
         
         let count:Int = .init(data[0])
-        guard 1 ... 4 ~= count
-        else 
-        {
-            throw JPEG.ParsingError.invalidScanComponentCount(count)
-        } 
         
         guard data.count == 2 * count + 4
         else 
@@ -1589,25 +1715,13 @@ extension JPEG.Scan
             let byte:(UInt8, UInt8) = (data[base], data[base + 1])
             
             let ci:JPEG.Frame.Component.Index = .init(byte.0)
-            switch (frame.process, byte.1 >> 4, byte.1 & 0x0f) 
-            {
-            case    (.baseline,     0 ... 1, 0 ... 1), 
-                    (.extended,     0 ... 3, 0 ... 3), 
-                    (.progressive,  0 ... 3, 0 ... 3):
-                break 
-            
-            default:
-                throw JPEG.ParsingError.invalidScanHuffmanSelectors(
-                    (.init(byte.1 >> 4), .init(byte.1 & 0x0f)), frame.process)
-            }
-            
             guard   let dc:JPEG.Table.HuffmanDC.Selector = 
                     JPEG.Table.HuffmanDC.parse(selector: byte.1 >> 4), 
                     let ac:JPEG.Table.HuffmanAC.Selector = 
                     JPEG.Table.HuffmanAC.parse(selector: byte.1 & 0xf)
             else 
             {
-                fatalError("unreachable") 
+                throw JPEG.ParsingError.invalidScanHuffmanSelectorCode(.init(byte.1))
             }
             
             guard let component:JPEG.Frame.Component = frame.components[ci]
@@ -1619,14 +1733,6 @@ extension JPEG.Scan
             
             return .init(ci: ci, factor: component.factor, 
                 selectors: ((dc, ac), component.selector))
-        }
-        
-        // validate sampling factor sum 
-        let volume:Int = components.map{ $0.factor.x * $0.factor.y }.reduce(0, +) 
-        guard 0 ... 10 ~= volume
-        else 
-        {
-            throw JPEG.ParsingError.invalidScanSamplingVolume(volume)
         }
         
         // parse spectral parameters 
@@ -1644,32 +1750,12 @@ extension JPEG.Scan
                 bits.0 < bits.1
         else 
         {
-            throw JPEG.ParsingError.invalidScanProgressiveSubset(
-                band: band, bits: bits, count, frame.process)
+            throw JPEG.ParsingError.invalidScanProgressiveSubset(band: band, bits: bits, 
+                frame.process)
         }
         
-        switch (frame.process, band, bits) 
-        {
-        case    (.baseline,    (0,       64), (0,       .max)), 
-                (.extended,    (0,       64), (0,       .max)), 
-                (.progressive, (0,        1), (_,       .max)), // unlimited bits per initial scan
-                (.progressive, (0,        1), (_, bits.0 + 1)): // 1 bit per refining scan 
-            break 
-        case    (.progressive, (_, 2 ... 64), (_,       .max)), 
-                (.progressive, (_, 2 ... 64), (_, bits.0 + 1)): 
-            guard count == 1 
-            else 
-            {
-                // progressive scans that code for AC components cannot be interleaved
-                fallthrough
-            }
-        
-        default:
-            throw JPEG.ParsingError.invalidScanProgressiveSubset(
-                band: band, bits: bits, count, frame.process)
-        }
-        
-        return .init(band: band.0 ..< band.1, bits: bits.0 ..< bits.1, components: components)
+        return try .validate(process: frame.process, 
+            band: band.0 ..< band.1, bits: bits.0 ..< bits.1, components: components)
     }
 }
 
@@ -1948,7 +2034,7 @@ extension JPEG
     enum Data 
     {
         public 
-        struct Spectral<Color> where Color:JPEG.Color 
+        struct Spectral<Format> where Format:JPEG.Format 
         {
             public 
             struct Plane 
@@ -1999,7 +2085,7 @@ extension JPEG
             }
             
             public 
-            let properties:Properties<Color.Format>
+            let properties:Properties<Format>
             
             public  
             let scale:(x:Int, y:Int)
@@ -2027,7 +2113,7 @@ extension JPEG
         }
         
         public 
-        struct Planar<Color> where Color:JPEG.Color
+        struct Planar<Format> where Format:JPEG.Format
         {
             public 
             struct Plane 
@@ -2063,7 +2149,7 @@ extension JPEG
             }
             
             public 
-            let properties:Properties<Color.Format>, 
+            let properties:Properties<Format>, 
                 size:(x:Int, y:Int)
             public  
             let scale:(x:Int, y:Int)
@@ -2123,6 +2209,49 @@ extension JPEG.Data.Planar:RandomAccessCollection
     var endIndex:Int 
     {
         self.planes.endIndex
+    }
+}
+// `indices` property for plane types 
+extension JPEG.Data.Spectral.Plane 
+{
+    public 
+    var indices:Common.Range2<Int> 
+    {
+        (0, 0) ..< self.units 
+    }
+}
+extension JPEG.Data.Planar.Plane 
+{
+    public 
+    var indices:Common.Range2<Int> 
+    {
+        (0, 0) ..< self.size 
+    }
+}
+// “with” regulated accessors for plane mutation by component index 
+extension JPEG.Data.Spectral 
+{
+    // cannot have both of them named `with(ci:_)` since this leads to ambiguity 
+    // at the call site
+    public 
+    func read<R>(ci:JPEG.Frame.Component.Index, body:(Plane) throws -> R) rethrows -> R
+    {
+        guard let p:Int = self.p[ci] 
+        else 
+        {
+            fatalError("component index out of range")
+        }
+        return try body(self[p])
+    }
+    public mutating 
+    func with<R>(ci:JPEG.Frame.Component.Index, body:(inout Plane) throws -> R) rethrows -> R
+    {
+        guard let p:Int = self.p[ci] 
+        else 
+        {
+            fatalError("component index out of range")
+        }
+        return try body(&self[p])
     }
 }
 
@@ -2194,7 +2323,7 @@ extension JPEG.Data.Spectral
     }
     
     public 
-    init(frame:JPEG.Frame, format:Color.Format)  
+    init(frame:JPEG.Frame, format:Format)  
     {
         self.properties     = .init(format: format)
         self.scale          = frame.components.values.reduce((0, 0))
@@ -2334,7 +2463,9 @@ extension JPEG.Bitstream
         let binade:Int      = Int16.bitWidth &- position
         
         let sign:UInt16     = .init(bitPattern: x) &>> (Int16.bitWidth - 1)
-        let tail:UInt16     = .init(bitPattern: x) & .max &>> position &- sign 
+        // okay to use &<< here since the only time overshift can happen is when 
+        // `x` is already 0
+        let tail:UInt16     = (.init(bitPattern: x) &- sign) &<< position 
         
         return (binade: binade, tail: tail)
     }
@@ -2931,7 +3062,7 @@ extension JPEG.Data.Spectral.Plane
         }
         return values 
     }
-    func idct() -> JPEG.Data.Planar<Color>.Plane
+    func idct() -> JPEG.Data.Planar<Format>.Plane
     {
         let count:Int = 64 * self.units.x * self.units.y
         let values:[Float] = .init(unsafeUninitializedCapacity: count) 
@@ -2964,7 +3095,7 @@ extension JPEG.Data.Planar.Plane
 extension JPEG.Data.Spectral 
 {
     public 
-    func idct() -> JPEG.Data.Planar<Color> 
+    func idct() -> JPEG.Data.Planar<Format> 
     {
         .init(self.map{ $0.idct() }, scale: self.scale, size: self.size, 
             properties: self.properties)
@@ -2972,8 +3103,8 @@ extension JPEG.Data.Spectral
 }
 extension JPEG.Data.Planar 
 {
-    init(_ planes:[JPEG.Data.Planar<Color>.Plane], scale:(x:Int, y:Int), size:(x:Int, y:Int), 
-        properties:JPEG.Properties<Color.Format>)
+    init(_ planes:[JPEG.Data.Planar<Format>.Plane], scale:(x:Int, y:Int), size:(x:Int, y:Int), 
+        properties:JPEG.Properties<Format>)
     {
         self.properties = properties 
         self.scale      = scale
@@ -2981,8 +3112,12 @@ extension JPEG.Data.Planar
         self.planes     = planes 
     }
     
+    // normally we never overload on return type, or on generics, but in this case 
+    // the GP only affects the available APIs on the type, not the construction of 
+    // the type itself, so we omit the `as:Color.Type` parameter.
     public 
-    func interleave() -> JPEG.Data.Rectangular<Color> 
+    func interleave<Color>() -> JPEG.Data.Rectangular<Color> 
+        where Color.Format == Format
     {
         var interleaved:[Float] 
         if self.count == 1 
@@ -3043,7 +3178,7 @@ extension JPEG.Data.Rectangular
 // high-level state handling
 extension JPEG 
 {
-    struct Context<Color> where Color:JPEG.Color
+    struct Context<Format> where Format:JPEG.Format
     {
         private
         var tables:
@@ -3063,40 +3198,47 @@ extension JPEG
         var frame:Frame?  = nil, 
             scan:Scan?    = nil 
         
-        var spectral:Data.Spectral<Color>? = nil
+        var spectral:Data.Spectral<Format>? = nil
     }
 }
 extension JPEG.Context 
 {
+    @discardableResult
     mutating
-    func handle(huffman data:[UInt8]) throws
+    func handle(huffman data:[UInt8]) 
+        throws -> (dc:[JPEG.Table.HuffmanDC], ac:[JPEG.Table.HuffmanAC])
     {
         let tables:(dc:[JPEG.Table.HuffmanDC], ac:[JPEG.Table.HuffmanAC]) = 
             try JPEG.Table.parse(data, as: (JPEG.Table.HuffmanDC.self, JPEG.Table.HuffmanAC.self))
         for table:JPEG.Table.HuffmanDC in tables.dc 
         {
-            print(table)
             self.tables.huffman.dc[keyPath: table.target] = table
         }
         for table:JPEG.Table.HuffmanAC in tables.ac 
         {
-            print(table)
             self.tables.huffman.ac[keyPath: table.target] = table
         }
+        
+        return tables
     }
+    @discardableResult
     mutating 
-    func handle(quantization data:[UInt8]) throws
+    func handle(quantization data:[UInt8]) 
+        throws -> [JPEG.Table.Quantization]
     {
         let tables:[JPEG.Table.Quantization] = 
             try JPEG.Table.parse(data, as: JPEG.Table.Quantization.self)
         for table:JPEG.Table.Quantization in tables 
         {
-            print(table)
             self.tables.quantization[keyPath: table.target] = table
         }
+        
+        return tables
     }
+    @discardableResult
     mutating 
-    func handle(frame data:[UInt8], process:JPEG.Process) throws
+    func handle(frame data:[UInt8], process:JPEG.Process) 
+        throws -> JPEG.Frame
     {
         guard self.frame == nil 
         else 
@@ -3104,23 +3246,37 @@ extension JPEG.Context
             throw JPEG.DecodingError.duplicateFrameHeader
         }
         
+        // catch unsupported processes
+        switch process 
+        {
+        case    .baseline, 
+                .extended   (coding: .huffman, differential: false),
+                .progressive(coding: .huffman, differential: false):
+            break 
+        default:
+            throw JPEG.DecodingError.unsupportedFrameCodingProcess(process)
+        }
+        
         let frame:JPEG.Frame    = try .parse(data, process: process)
         
         // parse format 
-        guard let format:Color.Format = 
+        guard let format:Format = 
             .recognize(.init(frame.components.keys), precision: frame.precision)
         else 
         {
-            throw JPEG.DecodingError.unsupportedColorFormat(
-                .init(frame.components.keys), frame.precision)
+            throw JPEG.DecodingError.unrecognizedColorFormat(
+                .init(frame.components.keys), frame.precision, Format.self)
         }
         
         self.spectral           = .init(frame: frame, format: format)
         self.frame              = frame
-        print(frame)
+        
+        return frame
     }
+    @discardableResult
     mutating 
-    func handle(scan data:[UInt8]) throws 
+    func handle(scan data:[UInt8]) 
+        throws -> JPEG.Scan 
     {
         guard let frame:JPEG.Frame = self.frame 
         else 
@@ -3128,8 +3284,9 @@ extension JPEG.Context
             throw JPEG.DecodingError.prematureScanHeader
         }
         
-        self.scan               = try .parse(data, frame: frame)
-        self.scan.map{ print($0) }
+        let scan:JPEG.Scan  = try .parse(data, frame: frame)
+        self.scan           = scan 
+        return scan 
     }
     mutating 
     func handle(height data:[UInt8]) throws 
@@ -3151,7 +3308,7 @@ extension JPEG.Context
     {
         guard   let frame:JPEG.Frame    = self.frame, 
                 let scan:JPEG.Scan      = self.scan, 
-                var spectral:JPEG.Data.Spectral = self.spectral 
+                var spectral:JPEG.Data.Spectral<Format> = self.spectral 
         else 
         {
             throw JPEG.DecodingError.prematureEntropyCodedSegment
@@ -3171,7 +3328,7 @@ extension JPEG.Context
     }
     
     static 
-    func decompress<Source>(stream:inout Source) throws -> JPEG.Data.Spectral<Color> 
+    func decompress<Source>(stream:inout Source) throws -> JPEG.Data.Spectral<Format> 
         where Source:JPEG.Bytestream.Source
     {
         var marker:(type:JPEG.Marker, data:[UInt8]) 
@@ -3226,7 +3383,7 @@ extension JPEG.Context
                 try context.handle(interval: marker.data)
             
             case .end:
-                guard let spectral:JPEG.Data.Spectral = context.spectral
+                guard let spectral:JPEG.Data.Spectral<Format> = context.spectral
                 else 
                 {
                     throw JPEG.DecodingError.prematureEndOfImage
@@ -3272,7 +3429,7 @@ extension JPEG.Data.Planar
     public static 
     func decompress(path:String) throws -> Self?
     {
-        guard let spectral:JPEG.Data.Spectral<Color> = try .decompress(path: path)
+        guard let spectral:JPEG.Data.Spectral<Format> = try .decompress(path: path)
         else 
         {
             return nil 
@@ -3285,7 +3442,7 @@ extension JPEG.Data.Rectangular
     public static 
     func decompress(path:String) throws -> Self? 
     {
-        guard let planar:JPEG.Data.Planar<Color> = try .decompress(path: path) 
+        guard let planar:JPEG.Data.Planar<Color.Format> = try .decompress(path: path) 
         else 
         {
             return nil 

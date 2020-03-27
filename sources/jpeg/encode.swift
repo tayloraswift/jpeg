@@ -1,18 +1,3 @@
-extension JPEG.DensityUnit 
-{
-    var code:UInt8 
-    {
-        switch self 
-        {
-        case .none:
-            return 0
-        case .dpi:
-            return 1
-        case .dpcm:
-            return 2
-        }
-    }
-}
 extension JPEG.Marker 
 {
     var code:UInt8 
@@ -167,6 +152,190 @@ extension JPEG
     }
 }
 
+// strict constructors 
+extension JPEG.JFIF 
+{
+    // due to a compiler issue, this initializer has to live in `decode.swift`
+}
+extension JPEG.Format 
+{
+    public 
+    func frame(process:JPEG.Process, size:(x:Int, y:Int), 
+        selectors:[JPEG.Frame.Component.Index: JPEG.Table.Quantization.Selector], 
+        factors:[JPEG.Frame.Component.Index: (x:Int, y:Int)] = [:]) 
+        -> JPEG.Frame 
+    {
+        let components:[JPEG.Frame.Component.Index: JPEG.Frame.Component] = 
+            .init(uniqueKeysWithValues: self.components.map 
+        {
+            let factor:(x:Int, y:Int) = factors[$0] ?? (1, 1)
+            guard let selector:JPEG.Table.Quantization.Selector = selectors[$0]
+            else 
+            {
+                fatalError("each component must have a quantization table selector specified")
+            }
+            
+            return ($0, .init(factor: factor, selector: selector))
+        })
+        
+        do 
+        {
+            return try .validate(process: process, precision: self.precision, 
+                size: size, components: components)
+        }
+        catch 
+        {
+            fatalError((error as? JPEG.Error)?.message ?? "\(error)")
+        }
+    }
+}
+extension JPEG.Frame 
+{
+    // this is an extremely boilerplatey api but i consider it necessary to avoid 
+    // having to provide huge amounts of (visually noisy) extraneous information 
+    // in the constructor (ie. huffman table selectors for refining dc scans)
+    public 
+    func sequential(_ components:
+        [(
+            ci:Component.Index, 
+            dc:JPEG.Table.HuffmanDC.Selector, 
+            ac:JPEG.Table.HuffmanAC.Selector
+        )])
+        -> JPEG.Scan 
+    {
+        let components:[JPEG.Scan.Component] = components.map 
+        {
+            guard let component:JPEG.Frame.Component = self.components[$0.ci]
+            else 
+            {
+                fatalError("component (\($0.ci)) not defined in frame header")
+            }
+            
+            return .init(ci: $0.ci, factor: component.factor, 
+                selectors: (($0.dc, $0.ac), component.selector))
+        }
+        
+        do 
+        {
+            return try .validate(process: self.process, 
+                band: 0 ..< 64, bits: 0 ..< .max, components: components)
+        }
+        catch 
+        {
+            fatalError((error as? JPEG.Error)?.message ?? "\(error)")
+        }
+    }
+    
+    public 
+    func progressive(_ components:[(ci:Component.Index, dc:JPEG.Table.HuffmanDC.Selector)], 
+        bits:PartialRangeFrom<Int>)
+        -> JPEG.Scan 
+    {
+        let components:[JPEG.Scan.Component] = components.map 
+        {
+            guard let component:JPEG.Frame.Component = self.components[$0.ci]
+            else 
+            {
+                fatalError("component (\($0.ci)) not defined in frame header")
+            }
+            
+            return .init(ci: $0.ci, factor: component.factor, 
+                selectors: (($0.dc, \.0), component.selector))
+        }
+        
+        do 
+        {
+            return try .validate(process: self.process, 
+                band: 0 ..< 1, bits: bits.lowerBound ..< .max, components: components)
+        }
+        catch 
+        {
+            fatalError((error as? JPEG.Error)?.message ?? "\(error)")
+        }
+    }
+    public 
+    func progressive(_ components:[Component.Index], 
+        bit:Int)
+        -> JPEG.Scan 
+    {
+        let components:[JPEG.Scan.Component] = components.map 
+        {
+            guard let component:JPEG.Frame.Component = self.components[$0]
+            else 
+            {
+                fatalError("component (\($0)) not defined in frame header")
+            }
+            
+            return .init(ci: $0, factor: component.factor, 
+                selectors: ((\.0, \.0), component.selector))
+        }
+        
+        do 
+        {
+            return try .validate(process: self.process, 
+                band: 0 ..< 1, bits: bit ..< bit + 1, components: components)
+        }
+        catch 
+        {
+            fatalError((error as? JPEG.Error)?.message ?? "\(error)")
+        }
+    }
+    
+    public 
+    func progressive(_ component:(ci:Component.Index, ac:JPEG.Table.HuffmanAC.Selector), 
+        band:Range<Int>, bits:PartialRangeFrom<Int>)
+        -> JPEG.Scan 
+    {
+        let component:JPEG.Scan.Component = 
+        {
+            guard let component:JPEG.Frame.Component = self.components[$0.ci]
+            else 
+            {
+                fatalError("component (\($0.ci)) not defined in frame header")
+            }
+            
+            return .init(ci: $0.ci, factor: component.factor, 
+                selectors: ((\.0, $0.ac), component.selector))
+        }(component)
+        
+        do 
+        {
+            return try .validate(process: self.process, 
+                band: band, bits: bits.lowerBound ..< .max, components: [component])
+        }
+        catch 
+        {
+            fatalError((error as? JPEG.Error)?.message ?? "\(error)")
+        }
+    }
+    public 
+    func progressive(_ component:(ci:Component.Index, ac:JPEG.Table.HuffmanAC.Selector), 
+        band:Range<Int>, bit:Int)
+        -> JPEG.Scan 
+    {
+        let component:JPEG.Scan.Component = 
+        {
+            guard let component:JPEG.Frame.Component = self.components[$0.ci]
+            else 
+            {
+                fatalError("component (\($0.ci)) not defined in frame header")
+            }
+            
+            return .init(ci: $0.ci, factor: component.factor, 
+                selectors: ((\.0, $0.ac), component.selector))
+        }(component)
+        
+        do 
+        {
+            return try .validate(process: self.process, 
+                band: band, bits: bit ..< bit + 1, components: [component])
+        }
+        catch 
+        {
+            fatalError((error as? JPEG.Error)?.message ?? "\(error)")
+        }
+    }
+}
 
 extension JPEG.Table.Huffman 
 {
@@ -365,6 +534,8 @@ extension JPEG.Table.Huffman
                     symbols.append(sorted[base ..< base + leaves].map(\.symbol))
                     base += leaves 
                 }
+                // symbols array must have length exactly equal to 16
+                symbols.append(contentsOf: repeatElement([], count: 16 - symbols.count))
                 
                 self.init(validated: symbols, target: target)
                 return 
@@ -630,6 +801,7 @@ extension JPEG.Data.Spectral.Plane
         {
             bits.append(composite: composite, table: encoder)
         }
+        
         return (bits.bytes(escaping: 0xff, with: (0xff, 0x00)), table)
     }
     
@@ -801,7 +973,7 @@ extension JPEG.Data.Spectral
             
             $1 = count 
         }
-            
+        
         // construct tables 
         let tables:[JPEG.Table.HuffmanDC] = globals.map 
         {
@@ -817,18 +989,20 @@ extension JPEG.Data.Spectral
                 ($0.target, $0.encoder())
             })
             
+            // can use `!` because we verified components.count > 1
+            let base:UnsafeMutablePointer<Descriptor> = $0.baseAddress!
+            
             var offset:Int = 0
             for (i, component) in components.enumerated()
             {
-                guard let encoder:JPEG.Table.HuffmanDC.Encoder = 
-                    encoders[component.selectors.huffman.dc]
-                else 
-                {
-                    fatalError("unreachable")
-                }
+                // `!` is unreachable
+                let encoder:JPEG.Table.HuffmanDC.Encoder = 
+                    encoders[component.selectors.huffman.dc]!
                 
                 let volume:Int  = component.factor.x * component.factor.y
-                $0[i]           = (offset: offset, volume: volume, table: encoder)
+                // cannot use direct assignment because `Descriptor` (recursively)
+                // contains a reference-counted type (array storage)
+                (base + i).initialize(to: (offset: offset, volume: volume, table: encoder))
                 offset         += volume
             }
             
@@ -843,9 +1017,9 @@ extension JPEG.Data.Spectral
             {
                 let start:Int = base  + descriptor.offset, 
                     end:Int   = start + descriptor.volume
-                for index:Int in start ..< end 
+                for composite:JPEG.Bitstream.Composite.DC in composites[start ..< end]
                 {
-                    bits.append(composite: composites[index], table: descriptor.table)
+                    bits.append(composite: composite, table: descriptor.table)
                 }
             }
         }
@@ -956,15 +1130,45 @@ extension JPEG.Data.Spectral
 }
 
 // serializers (opposite of parsers)
+extension JPEG.JFIF.Version 
+{
+    var serialized:(UInt8, UInt8) 
+    {
+        switch self 
+        {
+        case .v1_0:
+            return (1, 0)
+        case .v1_1:
+            return (1, 1)
+        case .v1_2:
+            return (1, 2)
+        }
+    }
+}
+extension JPEG.JFIF.Unit 
+{
+    var serialized:UInt8 
+    {
+        switch self 
+        {
+        case .none:
+            return 0
+        case .dpi:
+            return 1
+        case .dpcm:
+            return 2
+        }
+    }
+}
 extension JPEG.JFIF 
 {
     public 
     func serialize() -> [UInt8] 
     {
         var bytes:[UInt8] = Self.signature 
-        bytes.append(.init(self.version.major))
-        bytes.append(.init(self.version.minor))
-        bytes.append(self.density.unit.code)
+        bytes.append(self.version.serialized.0)
+        bytes.append(self.version.serialized.1)
+        bytes.append(self.density.unit.serialized)
         bytes.append(contentsOf: [UInt8].store(self.density.x, asBigEndian: UInt16.self))
         bytes.append(contentsOf: [UInt8].store(self.density.y, asBigEndian: UInt16.self))
         // no thumbnail 
@@ -1070,7 +1274,9 @@ extension JPEG.Frame
         bytes.append(contentsOf: [UInt8].store(self.size.x, asBigEndian: UInt16.self))
         bytes.append(.init(self.components.count))
         
-        for (ci, component):(Component.Index, Component) in self.components 
+        // must be sorted, as ordering in scan header must match ordering in frame header
+        for (ci, component):(Component.Index, Component) in 
+            self.components.sorted(by: { $0.key < $1.key })
         {
             bytes.append(.init(ci.value))
             bytes.append(.init(component.factor.x) << 4 | .init(component.factor.y))
@@ -1121,6 +1327,15 @@ extension JPEG.Bytestream
 }
 extension JPEG.Bytestream.Destination 
 {
+    public mutating 
+    func format(marker:JPEG.Marker) throws 
+    {
+        guard let _:Void    = self.write([0xff, marker.code])
+        else 
+        {
+            throw JPEG.FormattingError.invalidDestination 
+        }
+    }
     public mutating 
     func format(marker:JPEG.Marker, tail:[UInt8]) throws 
     {

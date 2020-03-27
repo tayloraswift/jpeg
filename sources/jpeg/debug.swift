@@ -88,15 +88,9 @@ extension JPEG.Frame:CustomStringConvertible
             initial size    : (\(self.size.x), \(self.size.y)), 
             components      : 
             [
-                \(self.components.keys.sorted().map
+                \(self.components.sorted(by: { $0.key < $1.key }).map
                 {
-                    guard let component:Component = self.components[$0]
-                    else 
-                    {
-                        return "[\($0)]: "
-                    }
-                    
-                    return "[\($0)]: \(component)"
+                    return "[\($0.key)]: \($0.value)"
                 }.joined(separator: ", \n        "))
             ]
         }
