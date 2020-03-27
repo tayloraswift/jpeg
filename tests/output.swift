@@ -51,15 +51,15 @@ enum Highlight
     func highlight<F>(_ string:String, _ color:(r:F, g:F, b:F)) -> String 
         where F:BinaryFloatingPoint 
     {
-        let c:
-        (
-            bg:(r:UInt8, g:UInt8, b:UInt8), 
-            fg:(r:UInt8, g:UInt8, b:UInt8)
-        )
-        c.bg = Self.quantize(color)
-        c.fg = (color.r + color.g + color.b) / 3 < 0.5 ? (.max, .max, .max) : (0, 0, 0)
+        return Self.highlight(string, Self.quantize(color))
+    }
+    static 
+    func highlight(_ string:String, _ bg:(r:UInt8, g:UInt8, b:UInt8)) -> String 
+    {
+        let fg:(r:UInt8, g:UInt8, b:UInt8) = 
+            (bg.r / 3 + bg.g / 3 + bg.b / 3) < 128 ? (.max, .max, .max) : (0, 0, 0)
         
-        return "\(Self.bg(c.bg))\(Self.fg(c.fg))\(string)\(Self.fg(nil))\(Self.bg(nil))"
+        return "\(Self.bg(bg))\(Self.fg(fg))\(string)\(Self.fg(nil))\(Self.bg(nil))"
     }
     static 
     func swatch<F>(_ color:(r:F, g:F, b:F)) -> String 
@@ -76,6 +76,11 @@ enum Highlight
     static 
     func square<F>(_ color:(r:F, g:F, b:F)) -> String 
         where F:BinaryFloatingPoint 
+    {
+        return Self.highlight("  ", color)
+    }
+    static 
+    func square(_ color:(r:UInt8, g:UInt8, b:UInt8)) -> String 
     {
         return Self.highlight("  ", color)
     }

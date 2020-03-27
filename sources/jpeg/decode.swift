@@ -3515,7 +3515,6 @@ extension JPEG.Color
 extension JPEG.YCbCr where Component == UInt8 
 {
     // y cb cr conversion is only defined for 8-bit precision 
-    
     public 
     var rgb:JPEG.RGB<UInt8>
     {
