@@ -15,14 +15,14 @@ enum Test
     {
         do
         {
-            guard let rectangular:JPEG.Data.Rectangular<JPEG.YCbCr<UInt8>> = 
+            guard let rectangular:JPEG.Data.Rectangular<JPEG.JFIF.Format> = 
                 try .decompress(path: jpegPath)
             else
             {
                 return "failed to open file '\(jpegPath)'"
             }
             
-            let image:[JPEG.YCbCr<UInt8>] = rectangular.pixels()
+            let image:[JPEG.YCbCr<UInt8>] = rectangular.pixels(as: JPEG.YCbCr<UInt8>.self)
             for i:Int in 0 ..< rectangular.size.y 
             {
                 let line:String = (4 * rectangular.size.x / 16 ..< 8 * rectangular.size.x / 16).map 

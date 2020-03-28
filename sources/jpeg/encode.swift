@@ -702,11 +702,11 @@ extension JPEG.Data.Spectral.Plane
         let composites:[JPEG.Bitstream.Composite.DC] = 
             .init(unsafeUninitializedCapacity: count) 
         {
-            var predecessor:Int = 0
+            var predecessor:Int32 = 0
             for (x, y):(Int, Int) in (0, 0) ..< self.units
             {
-                let high:Int                = self[x: x, y: y, z: 0] >> a.lowerBound
-                $0[y * self.units.x + x]    = .init(difference: high - predecessor)
+                let high:Int32              = self[x: x, y: y, z: 0] >> a.lowerBound
+                $0[y * self.units.x + x]    = .init(difference: high &- predecessor)
                 predecessor                 = high 
             }
             
@@ -757,10 +757,10 @@ extension JPEG.Data.Spectral.Plane
                 var zeroes = 0
                 for z:Int in band
                 {
-                    let coefficient:Int = self[x: x, y: y, z: z]
-                    
-                    let sign:Int = coefficient < 0 ? -1 : 1
-                    let high:Int = sign * abs(coefficient) >> a.lowerBound 
+                    let coefficient:Int32 = self[x: x, y: y, z: z]
+                    // TODO: overflow probably possible here
+                    let sign:Int32 = coefficient < 0 ? -1 : 1
+                    let high:Int32 = sign * abs(coefficient) >> a.lowerBound 
                     
                     if high == 0 
                     {
@@ -820,11 +820,12 @@ extension JPEG.Data.Spectral.Plane
                 var refinements:[Bool]  = []
                 for z:Int in band
                 {
-                    let coefficient:Int = self[x: x, y: y, z: z]
+                    let coefficient:Int32 = self[x: x, y: y, z: z]
                     
-                    let sign:Int = coefficient < 0 ? -1 : 1
-                    let high:Int = sign * abs(coefficient)         >> (a + 1) 
-                    let low:Int  = (coefficient - high << (a + 1)) >>  a
+                    // TODO: overflow probably possible here
+                    let sign:Int32 = coefficient < 0 ? -1 : 1
+                    let high:Int32 = sign *         abs(coefficient) >> (a + 1) 
+                    let low:Int32  = (coefficient - high << (a + 1)) >>  a
                     
                     if high == 0 
                     {
@@ -936,18 +937,18 @@ extension JPEG.Data.Spectral
                 // to avoid doing tons of dictionary lookups, maintain a local 
                 // frequency count, and then merge it into the dictionary one 
                 var frequencies:[Int]   = .init(repeating: 0, count: 256)
-                var predecessor:Int     = 0
+                var predecessor:Int32   = 0
                 for (mx, my):(Int, Int) in (0, 0) ..< self.blocks 
                 {
                     let start:(x:Int, y:Int) = (     mx * factor.x,      my * factor.y), 
                         end:(x:Int, y:Int)   = (start.x + factor.x, start.y + factor.y) 
                     for (i, (x, y)):(Int, (x:Int, y:Int)) in (start ..< end).enumerated() 
                     {
-                        let high:Int    = self[p][x: x, y: y, z: 0] >> a.lowerBound
+                        let high:Int32  = self[p][x: x, y: y, z: 0] >> a.lowerBound
                         
                         let index:Int   = (my * self.blocks.x + mx) * stride + offset + i
                         let composite:JPEG.Bitstream.Composite.DC   = 
-                            .init(difference: high - predecessor)
+                            .init(difference: high &- predecessor)
                         let symbol:JPEG.Bitstream.Symbol.DC         = 
                             composite.decomposed.symbol 
                         

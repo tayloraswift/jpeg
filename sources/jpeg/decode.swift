@@ -20,7 +20,7 @@ protocol _JPEGColor
     associatedtype Format:JPEG.Format 
     
     static 
-    func pixels(_ interleaved:[Float], format:Format) -> [Self]
+    func pixels(_ interleaved:[UInt16], format:Format) -> [Self]
 }
 
 public 
@@ -298,7 +298,7 @@ extension JPEG.Bitstream
     }
     
     // single bit (0 or 1)
-    subscript(i:Int) -> Int 
+    subscript<I>(i:Int, as _:I.Type) -> I where I:BinaryInteger
     {
         let a:Int           = i >> 4, 
             b:Int           = i & 0x0f
@@ -325,7 +325,7 @@ extension JPEG.Bitstream
     // integer is 1 or 0 (ignoring higher bits), we avoid using `Bool` here 
     // since this is not semantically a logic parameter
     mutating 
-    func append(bit:Int) 
+    func append<I>(bit:I) where I:BinaryInteger 
     {
         let a:Int           = self.count >> 4, 
             b:Int           = self.count & 0x0f
@@ -707,7 +707,7 @@ extension JPEG
     {
         case truncatedEntropyCodedSegment
         
-        case invalidCompositeValue(Int, expected:ClosedRange<Int>)
+        case invalidCompositeValue(Int32, expected:ClosedRange<Int>)
         
         case undefinedScanHuffmanDCReference(Table.HuffmanDC.Selector)
         case undefinedScanHuffmanACReference(Table.HuffmanAC.Selector)
@@ -2021,7 +2021,7 @@ extension JPEG.Table.Huffman.Decoder
 }
 extension JPEG.Table.Quantization 
 {
-    subscript(z z:Int) -> Int 
+    subscript(z z:Int) -> Int32 
     {
         .init(self.storage[z])
     }
@@ -2053,11 +2053,11 @@ extension JPEG
                 var factor:(x:Int, y:Int) 
                 
                 private 
-                var buffer:[Int]
+                var buffer:[Int32]
                 
                 // subscript with a zigzag coordinate
                 public 
-                subscript(x x:Int, y y:Int, z z:Int) -> Int 
+                subscript(x x:Int, y y:Int, z z:Int) -> Int32 
                 {
                     get 
                     {
@@ -2132,10 +2132,10 @@ extension JPEG
                 var factor:(x:Int, y:Int) 
                 
                 private 
-                var buffer:[Float]
+                var buffer:[UInt16]
                 
                 public 
-                subscript(x x:Int, y y:Int) -> Float
+                subscript(x x:Int, y y:Int) -> UInt16
                 {
                     get 
                     {
@@ -2172,14 +2172,14 @@ extension JPEG
         }
         
         public 
-        struct Rectangular<Color> where Color:JPEG.Color
+        struct Rectangular<Format> where Format:JPEG.Format 
         {
             public 
-            let properties:Properties<Color.Format>, 
+            let properties:Properties<Format>, 
                 size:(x:Int, y:Int)
             
             private 
-            let values:[Float]
+            let values:[UInt16]
         }
     }
 }
@@ -2300,7 +2300,7 @@ extension JPEG.Data.Spectral.Plane
     // order, and provide a subscript that converts 2-d coordinates into 
     // zig-zag coordinates 
     public 
-    subscript(x x:Int, y y:Int, k k:Int, h h:Int) -> Int 
+    subscript(x x:Int, y y:Int, k k:Int, h h:Int) -> Int32 
     {
         get 
         {
@@ -2422,10 +2422,10 @@ extension JPEG.Bitstream
         struct DC 
         {
             public 
-            let difference:Int 
+            let difference:Int32 
             
             public 
-            init(difference:Int) 
+            init(difference:Int32) 
             {
                 self.difference = difference
             }
@@ -2433,7 +2433,7 @@ extension JPEG.Bitstream
         public 
         enum AC 
         {
-            case run(Int, value:Int)
+            case run(Int, value:Int32)
             case eob(Int)
         }
     }
@@ -2470,7 +2470,7 @@ extension JPEG.Bitstream
         return (binade: binade, tail: tail)
     }
     
-    func refinement(_ i:inout Int) throws -> Int
+    func refinement(_ i:inout Int) throws -> Int32
     {
         guard i < self.count 
         else 
@@ -2482,7 +2482,7 @@ extension JPEG.Bitstream
         {
             i += 1
         }
-        return self[i] 
+        return self[i, as: Int32.self]
     }
     
     func composite(_ i:inout Int, table:JPEG.Table.HuffmanDC.Decoder) throws -> Composite.DC  
@@ -2515,7 +2515,7 @@ extension JPEG.Bitstream
             i += binade
         }
         
-        let value:Int = Self.extend(binade: binade, self[i, count: binade], as: Int.self)
+        let value:Int32 = Self.extend(binade: binade, self[i, count: binade], as: Int32.self)
         return .init(difference: value)
     }
     
@@ -2566,7 +2566,7 @@ extension JPEG.Bitstream
                 i += binade
             }
             
-            let value:Int = Self.extend(binade: binade, self[i, count: binade], as: Int.self)
+            let value:Int32 = Self.extend(binade: binade, self[i, count: binade], as: Int32.self)
             return .run(zeroes, value: value)
         }
     }
@@ -2588,7 +2588,7 @@ extension JPEG.Data.Spectral.Plane
         let table:JPEG.Table.HuffmanDC.Decoder  = huffman.decoder()
         let bits:JPEG.Bitstream                 = .init(data)
         var b:Int                               = 0
-        var predecessor:Int                     = 0
+        var predecessor:Int32                   = 0
         row: 
         for y:Int in 0... 
         {
@@ -2607,7 +2607,9 @@ extension JPEG.Data.Spectral.Plane
             for x:Int in 0 ..< self.units.x 
             {
                 let composite:JPEG.Bitstream.Composite.DC = try bits.composite(&b, table: table)
-                predecessor            += composite.difference
+                // it’s not well-defined what should happen if the dc coefficients 
+                // overflow, so we just use Int32 wraparound to avoid crashing 
+                predecessor           &+= composite.difference
                 self[x: x, y: y, z: 0]  = predecessor << a.lowerBound
             }
         }
@@ -2620,7 +2622,7 @@ extension JPEG.Data.Spectral.Plane
         var b:Int               = 0
         for (x, y):(Int, Int) in (0, 0) ..< self.units 
         {
-            let refinement:Int      = try bits.refinement(&b)
+            let refinement:Int32    = try bits.refinement(&b)
             self[x: x, y: y, z: 0] |= refinement << a
         }
     }
@@ -2647,7 +2649,8 @@ extension JPEG.Data.Spectral.Plane
             {
                 // we spell the body of this loop this way to match the 
                 // flow logic of `refining(ac:scan:tables)`
-                let (zeroes, value):(Int, Int) 
+                let zeroes:Int, 
+                    value:Int32
                 if skip > 0 
                 {
                     zeroes = 64 
@@ -2706,7 +2709,8 @@ extension JPEG.Data.Spectral.Plane
             frequency:
             while z < band.upperBound  
             {
-                let (zeroes, delta):(Int, Int) 
+                let zeroes:Int, 
+                    delta:Int32
                 if skip > 0 
                 {
                     zeroes = 64 
@@ -2742,7 +2746,7 @@ extension JPEG.Data.Spectral.Plane
                         z += 1
                     }
                     
-                    let unrefined:Int = self[x: x, y: y, z: z]
+                    let unrefined:Int32 = self[x: x, y: y, z: z]
                     if unrefined == 0 
                     {
                         guard skipped < zeroes 
@@ -2756,8 +2760,8 @@ extension JPEG.Data.Spectral.Plane
                     }
                     else 
                     {
-                        let delta:Int = (unrefined < 0 ? -1 : 1) * (try bits.refinement(&b))
-                        self[x: x, y: y, z: z] += delta << a
+                        let delta:Int32 = (unrefined < 0 ? -1 : 1) * (try bits.refinement(&b))
+                        self[x: x, y: y, z: z] &+= delta << a
                     }
                 } while z < band.upperBound
                 
@@ -2808,7 +2812,7 @@ extension JPEG.Data.Spectral
         
         let bits:JPEG.Bitstream = .init(data)
         var b:Int               = 0
-        var predecessor:[Int]   = .init(repeating: 0, count: descriptors.count)
+        var predecessor:[Int32] = .init(repeating: 0, count: descriptors.count)
         row:
         for my:Int in 0... 
         {
@@ -2851,7 +2855,7 @@ extension JPEG.Data.Spectral
                             continue 
                         }
                         
-                        predecessor[c]             += composite.difference 
+                        predecessor[c]            &+= composite.difference 
                         self[p][x: x, y: y, z: 0]   = predecessor[c] << a.lowerBound
                     }
                 }
@@ -2893,7 +2897,7 @@ extension JPEG.Data.Spectral
                     end:(x:Int, y:Int)   = (start.x + factor.x, start.y + factor.y) 
                 for (x, y):(Int, Int) in start ..< end 
                 {
-                    let refinement:Int = try bits.refinement(&b) 
+                    let refinement:Int32 = try bits.refinement(&b) 
                     
                     guard let p:Int = p 
                     else 
@@ -3011,7 +3015,10 @@ extension JPEG.Data.Spectral
             {
                 for z:Int in scan.band 
                 {
-                    self[p][x: x, y: y, z: z] *= table[z: z]
+                    // use wrapping multiplication since it is easily possible 
+                    // to construct a semi-invalid bitstream that would crash 
+                    // the decoder 
+                    self[p][x: x, y: y, z: z] &*= table[z: z]
                 }
             }
         }
@@ -3021,10 +3028,12 @@ extension JPEG.Data.Spectral
 // signal processing and upscaling 
 extension JPEG.Data.Spectral.Plane 
 {
-    func idct(x:Int, y:Int) -> [Float] 
+    func idct(x:Int, y:Int, precision:Int) -> [UInt16] 
     {
-        let values:[Float] = .init(unsafeUninitializedCapacity: 64) 
+        let values:[UInt16] = .init(unsafeUninitializedCapacity: 64) 
         {
+            let level:Int32 = 1 << (precision - 1 as Int), 
+                limit:Int32 = 1 <<  precision - 1
             for (j, i):(Int, Int) in (0, 0) ..< (8, 8)
             {
                 let t:(Float, Float) = 
@@ -3055,22 +3064,23 @@ extension JPEG.Data.Spectral.Plane
                     s += a * c * .init(self[x: x, y: y, k: k, h: h])
                 }
                 
-                $0[8 * i + j] = s / 8
+                let integer:Int32 = .init((s / 8).rounded()) &+ level
+                $0[8 * i + j] = .init(max(0, min(integer, limit)))
             }
             
             $1 = 64
         }
         return values 
     }
-    func idct() -> JPEG.Data.Planar<Format>.Plane
+    func idct(precision:Int) -> JPEG.Data.Planar<Format>.Plane
     {
         let count:Int = 64 * self.units.x * self.units.y
-        let values:[Float] = .init(unsafeUninitializedCapacity: count) 
+        let values:[UInt16] = .init(unsafeUninitializedCapacity: count) 
         {
-            let stride:Int = 8 * self.units.x
+            let stride:Int      = 8 * self.units.x
             for (x, y):(Int, Int) in (0, 0) ..< self.units 
             {
-                let block:[Float] = self.idct(x: x, y: y)
+                let block:[UInt16] = self.idct(x: x, y: y, precision: precision)
                 for (j, i):(Int, Int) in (0, 0) ..< (8, 8)
                 {
                     $0[(8 * y + i) * stride + 8 * x + j] = block[8 * i + j]
@@ -3084,7 +3094,7 @@ extension JPEG.Data.Spectral.Plane
 }
 extension JPEG.Data.Planar.Plane 
 {
-    init(_ values:[Float], units:(x:Int, y:Int), factor:(x:Int, y:Int))
+    init(_ values:[UInt16], units:(x:Int, y:Int), factor:(x:Int, y:Int))
     {
         self.buffer     = values 
         self.units      = units 
@@ -3097,8 +3107,8 @@ extension JPEG.Data.Spectral
     public 
     func idct() -> JPEG.Data.Planar<Format> 
     {
-        .init(self.map{ $0.idct() }, scale: self.scale, size: self.size, 
-            properties: self.properties)
+        .init(self.map{ $0.idct(precision: self.properties.format.precision) }, 
+            scale: self.scale, size: self.size, properties: self.properties)
     }
 }
 extension JPEG.Data.Planar 
@@ -3116,10 +3126,9 @@ extension JPEG.Data.Planar
     // the GP only affects the available APIs on the type, not the construction of 
     // the type itself, so we omit the `as:Color.Type` parameter.
     public 
-    func interleave<Color>() -> JPEG.Data.Rectangular<Color> 
-        where Color.Format == Format
+    func interleave() -> JPEG.Data.Rectangular<Format> 
     {
-        var interleaved:[Float] 
+        var interleaved:[UInt16] 
         if self.count == 1 
         {
             let count:Int   = self.size.x * self.size.y
@@ -3127,8 +3136,7 @@ extension JPEG.Data.Planar
             {
                 for (x, y):(Int, Int) in (0, 0) ..< self.size 
                 {
-                    let value:Float         = self[0][x: x, y: y]
-                    $0[y * self.size.x + x] = value 
+                    $0[y * self.size.x + x] = self[0][x: x, y: y] 
                 }
                 
                 $1 = count
@@ -3152,7 +3160,7 @@ extension JPEG.Data.Planar
                     
                     for (x, y):(Int, Int) in (0, 0) ..< self.size 
                     {
-                        let value:Float = plane[x: x / d.x, y: y / d.y]
+                        let value:UInt16 = plane[x: x / d.x, y: y / d.y]
                         $0[(y * self.size.x + x) * self.count + p] = value 
                     }
                 }
@@ -3166,8 +3174,7 @@ extension JPEG.Data.Planar
 }
 extension JPEG.Data.Rectangular 
 {
-    init(_ values:[Float], size:(x:Int, y:Int), 
-        properties:JPEG.Properties<Color.Format>)
+    init(_ values:[UInt16], size:(x:Int, y:Int), properties:JPEG.Properties<Format>)
     {
         self.properties = properties 
         self.size       = size
@@ -3442,7 +3449,7 @@ extension JPEG.Data.Rectangular
     public static 
     func decompress(path:String) throws -> Self? 
     {
-        guard let planar:JPEG.Data.Planar<Color.Format> = try .decompress(path: path) 
+        guard let planar:JPEG.Data.Planar<Format> = try .decompress(path: path) 
         else 
         {
             return nil 
@@ -3499,22 +3506,20 @@ extension JPEG.JFIF.Format:JPEG.Format
 extension JPEG.Data.Rectangular 
 {
     public 
-    func pixels() -> [Color]
+    func pixels<Color>(as _:Color.Type) -> [Color] 
+        where Color:JPEG.Color, Color.Format == Format 
     {
         Color.pixels(self.values, format: self.properties.format)
-    }
-}
-extension JPEG.Color 
-{
-    fileprivate static 
-    func clamp8(_ x:Float) -> UInt8 
-    {
-        .init(max(.init(UInt8.min), min(x, .init(UInt8.max))))
     }
 }
 extension JPEG.YCbCr where Component == UInt8 
 {
     // y cb cr conversion is only defined for 8-bit precision 
+    private static 
+    func clamp8(_ x:Float) -> UInt8 
+    {
+        .init(max(.init(UInt8.min), min(x, .init(UInt8.max))))
+    }
     public 
     var rgb:JPEG.RGB<UInt8>
     {
@@ -3531,23 +3536,25 @@ extension JPEG.YCbCr where Component == UInt8
 extension JPEG.YCbCr:JPEG.Color where Component == UInt8
 {
     public static 
-    func pixels(_ interleaved:[Float], format:JPEG.JFIF.Format) -> [Self]
+    func pixels(_ interleaved:[UInt16], format:JPEG.JFIF.Format) -> [Self]
     {
+        // no need to clamp uint16 to uint8,, the idct should have already done 
+        // this alongside the level shift 
         switch format 
         {
         case .y8:
             return interleaved.map 
             {
-                .init(y: Self.clamp8($0 + 128))
+                .init(y: .init($0))
             }
         
         case .ycc8:
             return stride(from: 0, to: interleaved.count, by: 3).map 
             {
                 .init(
-                    y:  Self.clamp8(interleaved[$0    ] + 128), 
-                    cb: Self.clamp8(interleaved[$0 + 1] + 128), 
-                    cr: Self.clamp8(interleaved[$0 + 2] + 128))
+                    y:  .init(interleaved[$0    ]), 
+                    cb: .init(interleaved[$0 + 1]), 
+                    cr: .init(interleaved[$0 + 2]))
             }
         }
     }
@@ -3556,14 +3563,14 @@ extension JPEG.YCbCr:JPEG.Color where Component == UInt8
 extension JPEG.RGB:JPEG.Color where Component == UInt8
 {
     public static 
-    func pixels(_ interleaved:[Float], format:JPEG.JFIF.Format) -> [Self]
+    func pixels(_ interleaved:[UInt16], format:JPEG.JFIF.Format) -> [Self]
     {
         switch format 
         {
         case .y8:
             return interleaved.map 
             {
-                let ycc:JPEG.YCbCr<UInt8> = .init(y: Self.clamp8($0 + 128))
+                let ycc:JPEG.YCbCr<UInt8> = .init(y: .init($0))
                 return ycc.rgb 
             }
         
@@ -3571,9 +3578,9 @@ extension JPEG.RGB:JPEG.Color where Component == UInt8
             return stride(from: 0, to: interleaved.count, by: 3).map 
             {
                 let ycc:JPEG.YCbCr<UInt8> = .init(
-                    y:  Self.clamp8(interleaved[$0    ] + 128), 
-                    cb: Self.clamp8(interleaved[$0 + 1] + 128), 
-                    cr: Self.clamp8(interleaved[$0 + 2] + 128))
+                    y:  .init(interleaved[$0    ]), 
+                    cb: .init(interleaved[$0 + 1]), 
+                    cr: .init(interleaved[$0 + 2]))
                 return ycc.rgb 
             }
         }

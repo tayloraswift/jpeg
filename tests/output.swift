@@ -5,6 +5,11 @@ extension String
     {
         .init(repeating: " ", count: count - string.count) + string
     }
+    static 
+    func pad(_ string:String, right count:Int) -> Self 
+    {
+        string + .init(repeating: " ", count: count - string.count)
+    }
 }
 enum Highlight 
 {
