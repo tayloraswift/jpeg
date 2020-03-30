@@ -1,0 +1,90 @@
+#!/bin/bash
+DEFAULT_BUILD_CONFIGURATION="debug"
+DEFAULT_COUNT="16"
+DEFAULT_PREFIX="tests/fuzz/data"
+
+usage() 
+{
+    echo "usage: utils/fuzz-test [OPTION...]
+  -c, --configuration       swift build configuration mode, default '$DEFAULT_BUILD_CONFIGURATION'
+  -n, --count               number of 8x8 test jpegs to generate, default $DEFAULT_COUNT
+  -p, --prefix              directory to write test images to, default '$DEFAULT_PREFIX'"
+}
+
+error()
+{
+    echo $1 
+    exit 1
+}
+
+check()
+{
+    message=$1
+    shift 
+    echo $@
+    "$@" || error "$message"
+}
+
+until [ $PWD == "/" ] || [ $PWD == $HOME ] || [ -f "Package.swift" ]; do
+    cd .. || break
+done
+
+if ! [ -f "Package.swift" ]; then
+    error "error: not an spm repository"
+fi
+
+prefix=$DEFAULT_PREFIX
+count=$DEFAULT_COUNT
+build_configuration=$DEFAULT_BUILD_CONFIGURATION
+
+JPEG_DIRECTORY_NAME="jpeg" 
+YCC_DIRECTORY_NAME="ycc" 
+JPEG_EXTENSION="jpg" 
+YCC_EXTENSION="ycc"
+
+while [ "$1" != "" ] ; do
+    case $1 in 
+    -c | --configuration ) 
+        shift
+        build_configuration=$1
+        ;;
+    -n | --count ) 
+        shift 
+        count=$1
+        ;;
+    -p | --prefix ) 
+        shift 
+        prefix=$1
+        ;;
+    * )
+        usage 
+        exit 1
+    esac 
+    shift 
+done 
+
+jpeg_pattern=$prefix/*.$JPEG_EXTENSION
+ycc_pattern=$prefix/*.$YCC_EXTENSION
+
+check   "error: swift build failed" \
+        swift build -c $build_configuration
+
+binaries=".build/$build_configuration"
+if ! [ -f $binaries/fuzzer ]; then
+    error "error: missing fuzzer tool"
+fi
+
+mkdir   $prefix         &> /dev/null
+rm      $jpeg_pattern   &> /dev/null
+
+check   "error: test image generation failed" \
+        $binaries/fuzzer --count $count --path $prefix
+
+rm      $ycc_pattern    &> /dev/null
+
+for file in $jpeg_pattern ; do 
+    check   "error: system jpeg-to-data conversion failed" \
+            convert -depth 8 "jpeg:$file" "ycbcr:$file.$YCC_EXTENSION"
+done 
+
+$binaries/comparator $jpeg_pattern
