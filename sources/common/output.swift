@@ -53,6 +53,18 @@ enum Highlight
         return (r, g, b)
     }
     static 
+    func color<F>(_ string:String, _ color:(r:F, g:F, b:F)) -> String 
+        where F:BinaryFloatingPoint 
+    {
+        return Self.color(string, Self.quantize(color))
+    }
+    static 
+    func color(_ string:String, _ fg:(r:UInt8, g:UInt8, b:UInt8)) -> String 
+    {
+        return "\(Self.fg(fg))\(string)\(Self.fg(nil))"
+    }
+    
+    static 
     func highlight<F>(_ string:String, _ color:(r:F, g:F, b:F)) -> String 
         where F:BinaryFloatingPoint 
     {
@@ -100,9 +112,15 @@ enum Highlight
     }
     
     static 
-    func print<F>(_ string:String, _ color:(r:F, g:F, b:F))  
+    func print<F>(_ string:String, highlight color:(r:F, g:F, b:F))  
         where F:BinaryFloatingPoint 
     {
         Swift.print(Self.highlight(string, color))
+    }
+    static 
+    func print<F>(_ string:String, color:(r:F, g:F, b:F))  
+        where F:BinaryFloatingPoint 
+    {
+        Swift.print(Self.color(string, color))
     }
 }

@@ -3,17 +3,15 @@ import JPEG
 func discrepancy(jpeg:String, reference:String) 
     throws -> (average:Double, max:Double)
 {
-    guard let rectangular:JPEG.Data.Rectangular<JPEG.JFIF.Format> = 
+    guard let rectangular:JPEG.Data.Rectangular<JPEG.Common> = 
         try .decompress(path: jpeg)
     else
     {
         fatalError("failed to open file '\(jpeg)'")
     }
     
-    let output:[JPEG.YCbCr<UInt8>]          = 
-        rectangular.pixels(as: JPEG.YCbCr<UInt8>.self)
-    guard let expected:[JPEG.YCbCr<UInt8>]  =
-        (Common.File.Source.open(path: reference)
+    let output:[JPEG.YCbCr]         =  rectangular.pixels(as: JPEG.YCbCr.self)
+    guard let expected:[JPEG.YCbCr] = (Common.File.Source.open(path: reference)
     {
         guard let data:[UInt8] = $0.read(count: 3 * output.count)
         else
@@ -50,14 +48,14 @@ func discrepancy(jpeg:String, reference:String)
         {
             (j:Int) in 
             
-            let c:JPEG.RGB<UInt8> = output[j + i * rectangular.size.x].rgb
+            let c:JPEG.RGB = output[j + i * rectangular.size.x].rgb
             return Highlight.square((c.r, c.g, c.b))
         }.joined(separator: "")
         let line2:String = (0 ..< rectangular.size.x).map 
         {
             (j:Int) in 
             
-            let c:JPEG.RGB<UInt8> = expected[j + i * rectangular.size.x].rgb
+            let c:JPEG.RGB = expected[j + i * rectangular.size.x].rgb
             return Highlight.square((c.r, c.g, c.b))
         }.joined(separator: "")
         let line3:String = (0 ..< rectangular.size.x).map 
@@ -86,7 +84,7 @@ func discrepancy(jpeg:String, reference:String)
     var total:Int   = 0, 
         max:Int     = 0
     
-    for (a, b):(JPEG.YCbCr<UInt8>, JPEG.YCbCr<UInt8>) in zip(output, expected) 
+    for (a, b):(JPEG.YCbCr, JPEG.YCbCr) in zip(output, expected) 
     {
         let difference:Int = abs(.init(a.y) - .init(b.y))
         

@@ -153,6 +153,10 @@ extension JPEG
 }
 
 // strict constructors 
+extension JPEG.Properties 
+{
+    // due to a compiler issue, this initializer has to live in `decode.swift`
+}
 extension JPEG.JFIF 
 {
     // due to a compiler issue, this initializer has to live in `decode.swift`
@@ -466,9 +470,8 @@ extension JPEG.Table.Huffman
         {
             for _ in 0 ..< leaves 
             {
-                let bits:UInt16 = counter &<< (UInt16.bitWidth &- length)
+                codewords.append(.init(bits: counter, length: length))
                 counter        += 1
-                codewords.append(.init(bits: bits, length: length))
             }
             
             counter <<= 1
@@ -1164,7 +1167,7 @@ extension JPEG.JFIF.Unit
 extension JPEG.JFIF 
 {
     public 
-    func serialize() -> [UInt8] 
+    func serialized() -> [UInt8] 
     {
         var bytes:[UInt8] = Self.signature 
         bytes.append(self.version.serialized.0)
@@ -1202,7 +1205,7 @@ extension JPEG.AnyTable
 extension JPEG.Table.Huffman 
 {
     // bytes 1 ..< 17 + count (does not include selector byte)
-    func serialize() -> [UInt8]
+    func serialized() -> [UInt8]
     {
         return self.symbols.map{ .init($0.count) } + self.symbols.flatMap{ $0.map(\.value) }
     }
@@ -1210,7 +1213,7 @@ extension JPEG.Table.Huffman
 extension JPEG.Table.Quantization 
 {
     // bytes 1 ..< 1 + 64 * stride (does not include selector byte)
-    func serialize() -> [UInt8]
+    func serialized() -> [UInt8]
     {
         switch self.precision 
         {
@@ -1230,12 +1233,12 @@ extension JPEG.Table
         for table:HuffmanDC in dc 
         {
             bytes.append(0x00 | HuffmanDC.serialize(selector: table.target))
-            bytes.append(contentsOf: table.serialize())
+            bytes.append(contentsOf: table.serialized())
         }
         for table:HuffmanAC in ac 
         {
             bytes.append(0x10 | HuffmanAC.serialize(selector: table.target))
-            bytes.append(contentsOf: table.serialize())
+            bytes.append(contentsOf: table.serialized())
         }
         
         return bytes 
@@ -1254,10 +1257,10 @@ extension JPEG.Table
             {
             case .uint8:
                 bytes.append(0x00 | Quantization.serialize(selector: table.target))
-                bytes.append(contentsOf: table.serialize())
+                bytes.append(contentsOf: table.serialized())
             case .uint16:
                 bytes.append(0x10 | Quantization.serialize(selector: table.target))
-                bytes.append(contentsOf: table.serialize())
+                bytes.append(contentsOf: table.serialized())
             }
         }
         
@@ -1268,7 +1271,7 @@ extension JPEG.Table
 extension JPEG.Frame 
 {
     public 
-    func serialize() -> [UInt8]
+    func serialized() -> [UInt8]
     {
         var bytes:[UInt8] = [.init(self.precision)]
         bytes.append(contentsOf: [UInt8].store(self.size.y, asBigEndian: UInt16.self))
@@ -1290,7 +1293,7 @@ extension JPEG.Frame
 extension JPEG.Scan 
 {
     public 
-    func serialize() -> [UInt8] 
+    func serialized() -> [UInt8] 
     {
         var bytes:[UInt8] = [.init(self.components.count)]
         for component:Component in self.components 

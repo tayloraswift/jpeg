@@ -32,44 +32,53 @@ enum JPEG
     typealias Color  = _JPEGColor
     
     public 
+    enum Metadata 
+    {
+        // case exif(EXIF)
+        case jfif(JFIF)
+        case unknown(application:Int, [UInt8])
+    }
+    
+    public 
     struct Properties<Format> where Format:JPEG.Format 
     {
+        public 
         let format:Format  
+        public 
+        let metadata:[Metadata]
+        
+        // initializer has to live here 
+        public 
+        init(format:Format, metadata:[JPEG.Metadata])
+        {
+            self.format     = format 
+            self.metadata   = metadata
+        }
     }
     
     // sample types 
     @frozen 
     public 
-    struct YCbCr<Component>:Hashable where Component:FixedWidthInteger & UnsignedInteger 
+    struct YCbCr:Hashable 
     {
         /// The luminance component of this color. 
         public 
-        var y:Component 
+        var y:UInt8 
         /// The blue component of this color. 
         public 
-        var cb:Component 
+        var cb:UInt8 
         /// The red component of this color. 
         public 
-        var cr:Component 
+        var cr:UInt8 
         
-        @_specialize(exported: true, where Component == UInt8)
-        @_specialize(exported: true, where Component == UInt16)
-        @_specialize(exported: true, where Component == UInt32)
-        @_specialize(exported: true, where Component == UInt64)
-        @_specialize(exported: true, where Component == UInt)
         public 
-        init(y:Component) 
+        init(y:UInt8) 
         {
             self.init(y: y, cb: 0, cr: 0)
         }
         
-        @_specialize(exported: true, where Component == UInt8)
-        @_specialize(exported: true, where Component == UInt16)
-        @_specialize(exported: true, where Component == UInt32)
-        @_specialize(exported: true, where Component == UInt64)
-        @_specialize(exported: true, where Component == UInt)
         public 
-        init(y:Component, cb:Component, cr:Component) 
+        init(y:UInt8, cb:UInt8, cr:UInt8) 
         {
             self.y  = y 
             self.cb = cb 
@@ -78,51 +87,37 @@ enum JPEG
     }
     @frozen
     public 
-    struct RGB<Component>:Hashable where Component:FixedWidthInteger & UnsignedInteger
+    struct RGB:Hashable 
     {
         /// The red component of this color.
         public
-        var r:Component
+        var r:UInt8
         /// The green component of this color.
         public
-        var g:Component
+        var g:UInt8
         /// The blue component of this color.
         public
-        var b:Component
+        var b:UInt8
         
         /// Creates an opaque grayscale color with all color components set to the given
         /// value sample.
         /// 
-        /// *Specialized* for `Component` types `UInt8`, `UInt16`, `UInt32`, UInt64,
-        ///     and `UInt`.
         /// - Parameters:
         ///     - value: The value to initialize all color components to.
-        @_specialize(exported: true, where Component == UInt8)
-        @_specialize(exported: true, where Component == UInt16)
-        @_specialize(exported: true, where Component == UInt32)
-        @_specialize(exported: true, where Component == UInt64)
-        @_specialize(exported: true, where Component == UInt)
         public
-        init(_ value:Component)
+        init(_ value:UInt8)
         {
             self.init(value, value, value)
         }
         
         /// Creates an opaque color with the given color samples.
         /// 
-        /// *Specialized* for `Component` types `UInt8`, `UInt16`, `UInt32`, UInt64,
-        ///     and `UInt`.
         /// - Parameters:
         ///     - red: The value to initialize the red component to.
         ///     - green: The value to initialize the green component to.
         ///     - blue: The value to initialize the blue component to.
-        @_specialize(exported: true, where Component == UInt8)
-        @_specialize(exported: true, where Component == UInt16)
-        @_specialize(exported: true, where Component == UInt32)
-        @_specialize(exported: true, where Component == UInt64)
-        @_specialize(exported: true, where Component == UInt)
         public
-        init(_ red:Component, _ green:Component, _ blue:Component)
+        init(_ red:UInt8, _ green:UInt8, _ blue:UInt8)
         {
             self.r = red 
             self.g = green 
@@ -344,6 +339,7 @@ extension JPEG.Bitstream
         self.atoms[a]      &= inverted 
         self.count         += 1
     }
+    // relevant bits in the least significant positions 
     mutating 
     func append(_ bits:UInt16, count:Int) 
     {
@@ -368,7 +364,7 @@ extension JPEG.Bitstream
         // invert bits because we use `1`-bits as the “background”, and shift 
         // operator will only extend with `0`-bits
         // must use >> and << and not &>> and &<< to correctly handle shift of 16
-        let trimmed:UInt16 = bits | .max >> count
+        let trimmed:UInt16 = bits &<< (UInt16.bitWidth &- count) | .max >> count
         let inverted:(UInt16, UInt16) = 
         (
             ~trimmed &>>                     b, 
@@ -511,18 +507,18 @@ extension JPEG
         case extraneousMarkerSegmentData(Marker, Int, expected:Int)
         
         case invalidJFIFSignature([UInt8])
-        case invalidJFIFVersion((major:Int, minor:Int))
-        case invalidJFIFDensityUnit(Int)
+        case invalidJFIFVersionCode((major:UInt8, minor:UInt8))
+        case invalidJFIFDensityUnitCode(UInt8)
         
         case invalidFrameWidth(Int)
         case invalidFramePrecision(Int, Process)
         case invalidFrameComponentCount(Int, Process)
-        case invalidFrameQuantizationSelectorCode(Int)
+        case invalidFrameQuantizationSelectorCode(UInt8)
         case invalidFrameQuantizationSelector(JPEG.Table.Quantization.Selector, Process)
         case invalidFrameComponentSamplingFactor((x:Int, y:Int), Frame.Component.Index)
         case duplicateFrameComponentIndex(Frame.Component.Index)
         
-        case invalidScanHuffmanSelectorCode(Int)
+        case invalidScanHuffmanSelectorCode(UInt8)
         case invalidScanHuffmanDCSelector(JPEG.Table.HuffmanDC.Selector, Process)
         case invalidScanHuffmanACSelector(JPEG.Table.HuffmanAC.Selector, Process)
         case undefinedScanComponentReference(Frame.Component.Index, Set<Frame.Component.Index>)
@@ -530,12 +526,12 @@ extension JPEG
         case invalidScanComponentCount(Int, Process)
         case invalidScanProgressiveSubset(band:(Int, Int), bits:(Int, Int), Process)
         
-        case invalidHuffmanTarget(Int)
-        case invalidHuffmanType(Int)
+        case invalidHuffmanTargetCode(UInt8)
+        case invalidHuffmanTypeCode(UInt8)
         case invalidHuffmanTable
         
-        case invalidQuantizationTarget(Int)
-        case invalidQuantizationPrecision(Int)
+        case invalidQuantizationTargetCode(UInt8)
+        case invalidQuantizationPrecisionCode(UInt8)
         
         static 
         func mismatched(marker:Marker, count:Int, minimum:Int) -> Self 
@@ -572,9 +568,9 @@ extension JPEG
             
             case .invalidJFIFSignature:
                 return "invalid JFIF signature"
-            case .invalidJFIFVersion:
+            case .invalidJFIFVersionCode:
                 return "invalid JFIF version"
-            case .invalidJFIFDensityUnit:
+            case .invalidJFIFDensityUnitCode:
                 return "invalid JFIF density unit"
             
             case .invalidFrameWidth:
@@ -607,16 +603,16 @@ extension JPEG
             case .invalidScanProgressiveSubset:
                 return "invalid spectral selection or successive approximation"
             
-            case .invalidHuffmanTarget:
+            case .invalidHuffmanTargetCode:
                 return "invalid huffman table destination"
-            case .invalidHuffmanType:
+            case .invalidHuffmanTypeCode:
                 return "invalid huffman table type specifier"
             case .invalidHuffmanTable:
                 return "malformed huffman table"
             
-            case .invalidQuantizationTarget:
+            case .invalidQuantizationTargetCode:
                 return "invalid quantization table destination"
-            case .invalidQuantizationPrecision:
+            case .invalidQuantizationPrecisionCode:
                 return "invalid quantization table precision specifier"
             }
         }
@@ -639,9 +635,9 @@ extension JPEG
             
             case .invalidJFIFSignature(let string):
                 return "string (\(string.map{ "0x\(String.init($0, radix: 16))" }.joined(separator: ", "))) is not a valid JFIF signature"
-            case .invalidJFIFVersion(let version):
-                return "version (\(version.major).\(version.minor)) must be within 1.0 ... 1.2"
-            case .invalidJFIFDensityUnit(let code):
+            case .invalidJFIFVersionCode(let (major, minor)):
+                return "version (\(major).\(minor)) must be within 1.0 ... 1.2"
+            case .invalidJFIFDensityUnitCode(let code):
                 return "density code (\(code)) does not correspond to a valid density unit"
             
             case .invalidFrameWidth(let width):
@@ -688,16 +684,16 @@ extension JPEG
             case .invalidScanProgressiveSubset(band: let band, bits: let bits, let process):
                 return "scan cannot define spectral selection (\(band.0) ..< \(band.1)) with successive approximation (\(bits.0) ..< \(bits.1)) for coding process '\(process)'"
             
-            case .invalidHuffmanTarget(let code):
+            case .invalidHuffmanTargetCode(let code):
                 return "selector code (0x\(String.init(code, radix: 16))) does not correspond to a valid huffman table destination"
-            case .invalidHuffmanType(let code):
+            case .invalidHuffmanTypeCode(let code):
                 return "code (\(code)) does not correspond to a valid huffman table type"
             case .invalidHuffmanTable:
                 return nil
             
-            case .invalidQuantizationTarget(let code):
+            case .invalidQuantizationTargetCode(let code):
                 return "selector code (0x\(String.init(code, radix: 16))) does not correspond to a valid quantization table destination"
-            case .invalidQuantizationPrecision(let code):
+            case .invalidQuantizationPrecisionCode(let code):
                 return "code (\(code)) does not correspond to a valid quantization table precision"
             }
         }
@@ -715,7 +711,6 @@ extension JPEG
         case invalidScanQuantizationPrecision(Table.Quantization.Precision, Table.Quantization.Selector)
         
         case missingStartOfImage(Marker)
-        case missingJFIFHeader(Marker)
         case duplicateStartOfImage
         case duplicateFrameHeader
         case prematureScanHeader
@@ -753,8 +748,6 @@ extension JPEG
             
             case .missingStartOfImage:
                 return "missing start-of-image marker"
-            case .missingJFIFHeader:
-                return "missing JFIF header"
             case .duplicateStartOfImage:
                 return "duplicate start-of-image marker"
             case .duplicateFrameHeader:
@@ -795,8 +788,6 @@ extension JPEG
             
             case .missingStartOfImage:
                 return "start-of-image marker must be the first marker in image"
-            case .missingJFIFHeader:
-                return "JFIF header must be the second marker segment in image"
             case .duplicateStartOfImage:
                 return "start-of-image marker cannot occur more than once"
             case .duplicateFrameHeader:
@@ -1176,13 +1167,13 @@ extension JPEG.JFIF
         guard let version:Version   = .parse(code: (data[5], data[6]))
         else 
         {
-            throw JPEG.ParsingError.invalidJFIFVersion((.init(data[5]), .init(data[6])))
+            throw JPEG.ParsingError.invalidJFIFVersionCode((data[5], data[6]))
         }
         guard let unit:Unit         = .parse(code: data[7])
         else
         {
             // invalid JFIF density unit
-            throw JPEG.ParsingError.invalidJFIFDensityUnit(.init(data[7]))
+            throw JPEG.ParsingError.invalidJFIFDensityUnitCode(data[7])
         }
 
         let density:(x:Int, y:Int)  = 
@@ -1421,11 +1412,11 @@ extension JPEG.Table
                 continue 
             
             default:
-                throw JPEG.ParsingError.invalidHuffmanType(.init(data[base] >> 4)) 
+                throw JPEG.ParsingError.invalidHuffmanTypeCode(data[base] >> 4)
             }
             
             // huffman table has invalid binding index
-            throw JPEG.ParsingError.invalidHuffmanTarget(.init(data[base] & 0x0f))
+            throw JPEG.ParsingError.invalidHuffmanTargetCode(data[base] & 0x0f)
         }
         
         return tables
@@ -1443,7 +1434,7 @@ extension JPEG.Table
             guard let target:Quantization.Selector = Quantization.parse(selector: data[base])
             else 
             {
-                throw JPEG.ParsingError.invalidQuantizationTarget(.init(data[base] & 0x0f)) 
+                throw JPEG.ParsingError.invalidQuantizationTargetCode(data[base] & 0x0f)
             }
             
             let table:Quantization
@@ -1473,7 +1464,7 @@ extension JPEG.Table
                 base += 129 
             
             default:
-                throw JPEG.ParsingError.invalidQuantizationPrecision(.init(data[base] >> 4))
+                throw JPEG.ParsingError.invalidQuantizationPrecisionCode(data[base] >> 4)
             }
             
             tables.append(table)
@@ -1587,7 +1578,7 @@ extension JPEG.Frame
                 JPEG.Table.Quantization.parse(selector: byte.2)
             else 
             {
-                throw JPEG.ParsingError.invalidFrameQuantizationSelectorCode(.init(byte.2))
+                throw JPEG.ParsingError.invalidFrameQuantizationSelectorCode(byte.2)
             }
             
             let component:Component = .init(factor: factor, selector: selector)
@@ -1721,7 +1712,7 @@ extension JPEG.Scan
                     JPEG.Table.HuffmanAC.parse(selector: byte.1 & 0xf)
             else 
             {
-                throw JPEG.ParsingError.invalidScanHuffmanSelectorCode(.init(byte.1))
+                throw JPEG.ParsingError.invalidScanHuffmanSelectorCode(byte.1)
             }
             
             guard let component:JPEG.Frame.Component = frame.components[ci]
@@ -2033,154 +2024,157 @@ extension JPEG
     public 
     enum Data 
     {
+    }
+}
+extension JPEG.Data 
+{
+    public 
+    struct Spectral<Format> where Format:JPEG.Format 
+    {
         public 
-        struct Spectral<Format> where Format:JPEG.Format 
+        struct Plane 
         {
             public 
-            struct Plane 
+            var units:(x:Int, y:Int)
+            public 
+            var size:(x:Int, y:Int) 
             {
-                public 
-                var units:(x:Int, y:Int)
-                public 
-                var size:(x:Int, y:Int) 
-                {
-                    (8 * self.units.x, 8 * self.units.y)
-                }
-                
-                // have to be `Int32` to circumvent compiler size limits for `_read` and `_modify`
-                @Common.Storage2<Int32>
-                public 
-                var factor:(x:Int, y:Int) 
-                
-                private 
-                var buffer:[Int32]
-                
-                // subscript with a zigzag coordinate
-                public 
-                subscript(x x:Int, y y:Int, z z:Int) -> Int32 
-                {
-                    get 
-                    {
-                        guard   0 ..< self.units.x ~= x, 
-                                0 ..< self.units.y ~= y 
-                        else 
-                        {
-                            return 0 
-                        }
-                        
-                        return self.buffer[64 * (self.units.x * y + x) + z]
-                    }
-                    set(value) 
-                    {
-                        guard   0 ..< self.units.x ~= x, 
-                                0 ..< self.units.y ~= y 
-                        else 
-                        {
-                            return 
-                        }
-                        
-                        self.buffer[64 * (self.units.x * y + x) + z] = value 
-                    }
-                }
+                (8 * self.units.x, 8 * self.units.y)
             }
             
+            // have to be `Int32` to circumvent compiler size limits for `_read` and `_modify`
+            @Common.Storage2<Int32>
             public 
-            let properties:Properties<Format>
-            
-            public  
-            let scale:(x:Int, y:Int)
-            public private(set)
-            var blocks:(x:Int, y:Int), 
-                size:(x:Int, y:Int)
+            var factor:(x:Int, y:Int) 
             
             private 
-            var planes:[Plane] 
-            // mapping from component index to plane index 
-            let p:[JPEG.Frame.Component.Index: Int]
+            var buffer:[Int32]
             
+            // subscript with a zigzag coordinate
             public 
-            subscript(p:Int) -> Plane 
+            subscript(x x:Int, y y:Int, z z:Int) -> Int32 
             {
-                _read  
+                get 
                 {
-                    yield self.planes[p]
+                    guard   0 ..< self.units.x ~= x, 
+                            0 ..< self.units.y ~= y 
+                    else 
+                    {
+                        return 0 
+                    }
+                    
+                    return self.buffer[64 * (self.units.x * y + x) + z]
                 }
-                _modify
+                set(value) 
                 {
-                    yield &self.planes[p]
+                    guard   0 ..< self.units.x ~= x, 
+                            0 ..< self.units.y ~= y 
+                    else 
+                    {
+                        return 
+                    }
+                    
+                    self.buffer[64 * (self.units.x * y + x) + z] = value 
                 }
             }
         }
         
         public 
-        struct Planar<Format> where Format:JPEG.Format
+        let properties:JPEG.Properties<Format>
+        
+        public  
+        let scale:(x:Int, y:Int)
+        public private(set)
+        var blocks:(x:Int, y:Int), 
+            size:(x:Int, y:Int)
+        
+        private 
+        var planes:[Plane] 
+        // mapping from component index to plane index 
+        let p:[JPEG.Frame.Component.Index: Int]
+        
+        public 
+        subscript(p:Int) -> Plane 
+        {
+            _read  
+            {
+                yield self.planes[p]
+            }
+            _modify
+            {
+                yield &self.planes[p]
+            }
+        }
+    }
+    
+    public 
+    struct Planar<Format> where Format:JPEG.Format
+    {
+        public 
+        struct Plane 
         {
             public 
-            struct Plane 
+            let units:(x:Int, y:Int)
+            public 
+            var size:(x:Int, y:Int) 
             {
-                public 
-                let units:(x:Int, y:Int)
-                public 
-                var size:(x:Int, y:Int) 
-                {
-                    (8 * self.units.x, 8 * self.units.y)
-                }
-                
-                // have to be `Int32` to circumvent compiler size limits for `_read` and `_modify`
-                @Common.Storage2<Int32>
-                public 
-                var factor:(x:Int, y:Int) 
-                
-                private 
-                var buffer:[UInt16]
-                
-                public 
-                subscript(x x:Int, y y:Int) -> UInt16
-                {
-                    get 
-                    {
-                        self.buffer[x + self.size.x * y]
-                    }
-                    set(value) 
-                    {
-                        self.buffer[x + self.size.x * y] = value 
-                    }
-                }
+                (8 * self.units.x, 8 * self.units.y)
             }
             
+            // have to be `Int32` to circumvent compiler size limits for `_read` and `_modify`
+            @Common.Storage2<Int32>
             public 
-            let properties:Properties<Format>, 
-                size:(x:Int, y:Int)
-            public  
-            let scale:(x:Int, y:Int)
+            var factor:(x:Int, y:Int) 
             
             private 
-            var planes:[Plane] 
+            var buffer:[UInt16]
             
             public 
-            subscript(p:Int) -> Plane 
+            subscript(x x:Int, y y:Int) -> UInt16
             {
-                _read  
+                get 
                 {
-                    yield self.planes[p]
+                    self.buffer[x + self.size.x * y]
                 }
-                _modify
+                set(value) 
                 {
-                    yield &self.planes[p]
+                    self.buffer[x + self.size.x * y] = value 
                 }
             }
         }
         
         public 
-        struct Rectangular<Format> where Format:JPEG.Format 
+        let properties:JPEG.Properties<Format>, 
+            size:(x:Int, y:Int)
+        public  
+        let scale:(x:Int, y:Int)
+        
+        private 
+        var planes:[Plane] 
+        
+        public 
+        subscript(p:Int) -> Plane 
         {
-            public 
-            let properties:Properties<Format>, 
-                size:(x:Int, y:Int)
-            
-            private 
-            let values:[UInt16]
+            _read  
+            {
+                yield self.planes[p]
+            }
+            _modify
+            {
+                yield &self.planes[p]
+            }
         }
+    }
+    
+    public 
+    struct Rectangular<Format> where Format:JPEG.Format 
+    {
+        public 
+        let properties:JPEG.Properties<Format>, 
+            size:(x:Int, y:Int)
+        
+        private 
+        let values:[UInt16]
     }
 }
 
@@ -2323,9 +2317,9 @@ extension JPEG.Data.Spectral
     }
     
     public 
-    init(frame:JPEG.Frame, format:Format)  
+    init(frame:JPEG.Frame, properties:JPEG.Properties<Format>)  
     {
-        self.properties     = .init(format: format)
+        self.properties     = properties
         self.scale          = frame.components.values.reduce((0, 0))
         {
             (Swift.max($0.x, $1.factor.x), Swift.max($0.y, $1.factor.y))
@@ -2335,7 +2329,7 @@ extension JPEG.Data.Spectral
         var planes:[Plane]                      = [ ], 
             p:[JPEG.Frame.Component.Index: Int] = [:]
         // loop through *ordered* components to assign plane indices 
-        for ci:JPEG.Frame.Component.Index in format.components 
+        for ci:JPEG.Frame.Component.Index in properties.format.components 
         {
             guard let component:JPEG.Frame.Component = frame.components[ci]
             else 
@@ -2442,6 +2436,7 @@ extension JPEG.Bitstream
     func extend<I>(binade:Int, _ tail:UInt16, as _:I.Type) -> I
         where I:FixedWidthInteger & SignedInteger
     {
+        assert(binade > 0)
         // 0 for lower half of range, 1 for upper half 
         let sign:UInt16     = tail &>> (binade &- 1)
         // [0000 0000 0000 0000]
@@ -2463,10 +2458,9 @@ extension JPEG.Bitstream
         let binade:Int      = Int16.bitWidth &- position
         
         let sign:UInt16     = .init(bitPattern: x) &>> (Int16.bitWidth - 1)
-        // okay to use &<< here since the only time overshift can happen is when 
-        // `x` is already 0
-        let tail:UInt16     = (.init(bitPattern: x) &- sign) &<< position 
-        
+        // can use &<< because binade is always less than 16 (because of abs(_:) when 
+        // computing `position`)
+        let tail:UInt16     = (.init(bitPattern: x) &- sign) & ~(.max &<< binade)
         return (binade: binade, tail: tail)
     }
     
@@ -3202,8 +3196,8 @@ extension JPEG
         )
         
         private 
-        var frame:Frame?  = nil, 
-            scan:Scan?    = nil 
+        var frame:Frame?                    = nil, 
+            scan:Scan?                      = nil 
         
         var spectral:Data.Spectral<Format>? = nil
     }
@@ -3244,7 +3238,7 @@ extension JPEG.Context
     }
     @discardableResult
     mutating 
-    func handle(frame data:[UInt8], process:JPEG.Process) 
+    func handle(frame data:[UInt8], process:JPEG.Process, metadata:[JPEG.Metadata]) 
         throws -> JPEG.Frame
     {
         guard self.frame == nil 
@@ -3275,8 +3269,10 @@ extension JPEG.Context
                 .init(frame.components.keys), frame.precision, Format.self)
         }
         
-        self.spectral           = .init(frame: frame, format: format)
-        self.frame              = frame
+        let properties:JPEG.Properties<Format> = .init(format: format, metadata: metadata)
+        
+        self.spectral   = .init(frame: frame, properties: properties)
+        self.frame      = frame
         
         return frame
     }
@@ -3348,24 +3344,41 @@ extension JPEG.Context
             throw JPEG.DecodingError.missingStartOfImage(marker.type)
         }
         
-        // jfif header (must immediately follow start of image)
+        // read metadata headers. jfif and exif standard are incompatible (both 
+        // segments are supposed to be the second segment in the file), but since 
+        // many applications include both of them, we look for all “application”
+        // segments immediately following the start-of-image 
+        var metadata:[JPEG.Metadata] = []
         marker = try stream.segment()
-        guard case .application(0) = marker.type 
-        else 
+        preamble: 
+        while true 
         {
-            throw JPEG.DecodingError.missingJFIFHeader(marker.type)
+            switch marker.type
+            {
+            case .application(0): // JFIF 
+                let jfif:JPEG.JFIF = try .parse(marker.data)
+                metadata.append(.jfif(jfif))
+            
+            case .application(1): // EXIF 
+                // unsupported 
+                break  
+            
+            default:
+                break preamble 
+            }
+            
+            marker = try stream.segment() 
         }
-        let image:JPEG.JFIF = try .parse(marker.data) 
         
         var context:Self = .init()
-        marker = try stream.segment()
         loop:
         while true 
         {
             switch marker.type 
             {
             case .frame(let process):
-                try context.handle(frame: marker.data, process: process)
+                try context.handle(frame: marker.data, process: process, 
+                    metadata: metadata)
             
             case .quantization:
                 try context.handle(quantization: marker.data) 
@@ -3460,16 +3473,16 @@ extension JPEG.Data.Rectangular
 }
 
 // pixel accessors 
-extension JPEG.JFIF 
+extension JPEG  
 {
     public 
-    enum Format 
+    enum Common 
     {
         case y8
         case ycc8
     }
 }
-extension JPEG.JFIF.Format:JPEG.Format
+extension JPEG.Common:JPEG.Format
 {
     public static 
     func recognize(_ components:Set<JPEG.Frame.Component.Index>, precision:Int) -> Self? 
@@ -3505,6 +3518,8 @@ extension JPEG.JFIF.Format:JPEG.Format
 
 extension JPEG.Data.Rectangular 
 {
+    // @_specialize(exported: true, where Color == JPEG.YCbCr, Format == JPEG.Common)
+    // @_specialize(exported: true, where Color == JPEG.RGB, Format == JPEG.Common)
     public 
     func pixels<Color>(as _:Color.Type) -> [Color] 
         where Color:JPEG.Color, Color.Format == Format 
@@ -3512,7 +3527,7 @@ extension JPEG.Data.Rectangular
         Color.pixels(self.values, format: self.properties.format)
     }
 }
-extension JPEG.YCbCr where Component == UInt8 
+extension JPEG.YCbCr
 {
     // y cb cr conversion is only defined for 8-bit precision 
     private static 
@@ -3521,7 +3536,7 @@ extension JPEG.YCbCr where Component == UInt8
         .init(max(.init(UInt8.min), min(x, .init(UInt8.max))))
     }
     public 
-    var rgb:JPEG.RGB<UInt8>
+    var rgb:JPEG.RGB
     {
         let y:Float     = .init(self.y),
             cr:Float    = .init(self.cr),
@@ -3533,10 +3548,10 @@ extension JPEG.YCbCr where Component == UInt8
     }
 }
 
-extension JPEG.YCbCr:JPEG.Color where Component == UInt8
+extension JPEG.YCbCr:JPEG.Color 
 {
     public static 
-    func pixels(_ interleaved:[UInt16], format:JPEG.JFIF.Format) -> [Self]
+    func pixels(_ interleaved:[UInt16], format:JPEG.Common) -> [Self]
     {
         // no need to clamp uint16 to uint8,, the idct should have already done 
         // this alongside the level shift 
@@ -3560,24 +3575,24 @@ extension JPEG.YCbCr:JPEG.Color where Component == UInt8
     }
 }
 
-extension JPEG.RGB:JPEG.Color where Component == UInt8
+extension JPEG.RGB:JPEG.Color 
 {
     public static 
-    func pixels(_ interleaved:[UInt16], format:JPEG.JFIF.Format) -> [Self]
+    func pixels(_ interleaved:[UInt16], format:JPEG.Common) -> [Self]
     {
         switch format 
         {
         case .y8:
             return interleaved.map 
             {
-                let ycc:JPEG.YCbCr<UInt8> = .init(y: .init($0))
+                let ycc:JPEG.YCbCr = .init(y: .init($0))
                 return ycc.rgb 
             }
         
         case .ycc8:
             return stride(from: 0, to: interleaved.count, by: 3).map 
             {
-                let ycc:JPEG.YCbCr<UInt8> = .init(
+                let ycc:JPEG.YCbCr = .init(
                     y:  .init(interleaved[$0    ]), 
                     cb: .init(interleaved[$0 + 1]), 
                     cr: .init(interleaved[$0 + 2]))
