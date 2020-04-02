@@ -24,10 +24,11 @@ extension Test
     {
         [
             ("zigzag-ordering",                 .void(Self.zigzagOrdering)),
-            ("huffman-table-building",          .void(Self.huffmanBuilding)),
-            ("huffman-table-coding-asymmetric", .void(Self.huffmanCoding)),
             ("amplitude-coding-asymmetric",     .void(Self.amplitudeCoding)),
             ("amplitude-coding-symmetric",      .void(Self.amplitudeCodingSymmetric)),
+            ("huffman-table-building",          .void(Self.huffmanBuilding)),
+            ("huffman-table-coding-asymmetric", .void(Self.huffmanCoding)),
+            ("huffman-table-coding-symmetric",  .int (Self.huffmanCodingSymmetric(_:), [16, 256, 4096, 65536])),
         ]
     }
     
@@ -454,6 +455,48 @@ extension Test
                 return .failure(.init(message: 
                     "message decoded incorrectly (expected \(expected), got \(decoded))"))
             }
+        }
+        
+        return .success(())
+    }
+    
+    static 
+    func huffmanCodingSymmetric(_ count:Int) -> Result<Void, Failure>
+    {
+        let symbols:[JPEG.Bitstream.Symbol.AC] = (0 ..< count).map 
+        {
+            _ in
+            // biases the distribution so that values around 128 are more common 
+            .init(UInt8.random(in: 0 ..< 128) + UInt8.random(in: 0 ... 128))
+        }
+        
+        let frequencies:[Int] = JPEG.Bitstream.Symbol.AC.frequencies(of: \.self, in: symbols)
+        let table:JPEG.Table.HuffmanAC = .init(frequencies: frequencies, target: \.0)
+        let encoder:JPEG.Table.HuffmanAC.Encoder = table.encoder()
+        
+        var bits:JPEG.Bitstream = []
+        for symbol:JPEG.Bitstream.Symbol.AC in symbols 
+        {
+            let codeword:JPEG.Table.HuffmanAC.Encoder.Codeword = encoder[symbol]
+            bits.append(codeword.bits, count: codeword.length)
+        }
+        
+        let decoder:JPEG.Table.HuffmanAC.Decoder = table.decoder()
+        
+        var b:Int = 0
+        var decoded:[JPEG.Bitstream.Symbol.AC] = []
+        while b < bits.count 
+        {
+            let entry:JPEG.Table.Huffman.Decoder.Entry = decoder[bits[b, count: 16]]
+            decoded.append(entry.symbol)
+            b += entry.length 
+        }
+        
+        guard symbols == decoded 
+        else 
+        {
+            return .failure(.init(message: 
+                "huffman coder failed to round-trip symbolic sequence (\(symbols.count) symbols)"))
         }
         
         return .success(())

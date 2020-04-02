@@ -9,10 +9,11 @@ enum Test
     {
         case void(  ()         -> Result<Void, Failure>)
         case string((String)   -> Result<Void, Failure>, [String])
+        case int(   (Int)      -> Result<Void, Failure>, [Int])
     }
 }
 
-func test(_ function:Test.Function, name:String)
+func test(_ function:Test.Function, name:String) -> Void?
 {
     var successes:Int                               = 0
     var failures:[(name:String?, message:String)]   = []
@@ -35,6 +36,17 @@ func test(_ function:Test.Function, name:String)
                 successes += 1
             case .failure(let failure):
                 failures.append((argument, failure.message))
+            }
+        }
+    case .int(let function, let cases):
+        for argument:Int in cases 
+        {
+            switch function(argument)
+            {
+            case .success:
+                successes += 1
+            case .failure(let failure):
+                failures.append(("n = \(argument)", failure.message))
             }
         }
     }
@@ -73,4 +85,6 @@ func test(_ function:Test.Function, name:String)
             Highlight.print(" [\(String.pad("\(i)", left: 2))]: \(failure.message)", color: red)
         }
     }
+    
+    return failures.count > 0 ? nil : ()
 }

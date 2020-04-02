@@ -1,0 +1,25 @@
+#!/bin/bash
+error()
+{
+    echo $1 
+    exit 1
+}
+
+check()
+{
+    message=$1
+    shift 
+    echo $@
+    "$@" || error "$message"
+}
+
+check   "error: swift build failed" \
+        swift build -c debug --product unit-test 
+
+binaries=".build/debug"
+if ! [ -f $binaries/unit-test ]; then
+    error "error: missing unit-test tool"
+fi
+
+check   "error: test failures" \
+        $binaries/unit-test 

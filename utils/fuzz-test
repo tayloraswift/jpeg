@@ -67,7 +67,7 @@ jpeg_pattern=$prefix/*.$JPEG_EXTENSION
 ycc_pattern=$prefix/*.$YCC_EXTENSION
 
 check   "error: swift build failed" \
-        swift build -c $build_configuration
+        swift build -c $build_configuration --product fuzzer
 
 binaries=".build/$build_configuration"
 if ! [ -f $binaries/fuzzer ]; then
