@@ -1,11 +1,12 @@
 #!/bin/bash
 DEFAULT_BUILD_CONFIGURATION="debug"
-TOOL_NAME="integration-test"
+TOOL_NAME="regression-test"
 
 usage() 
 {
     echo "usage: utils/$TOOL_NAME [OPTION...]
-  -c, --configuration       swift build configuration mode, default '$DEFAULT_BUILD_CONFIGURATION'"
+  -c, --configuration       swift build configuration mode, default '$DEFAULT_BUILD_CONFIGURATION'
+  -u, --update              remove and regenerate golden outputs (tests will fail)"
 }
 
 error()
@@ -29,6 +30,18 @@ while [ "$1" != "" ] ; do
     -c | --configuration ) 
         shift
         build_configuration=$1
+        ;;
+    -u | --update ) 
+        shift
+        gold=(tests/regression/gold/*.jpg.ycc)
+        echo "the following ${#gold[@]} golden outputs will be removed and regenerated:"
+        for file in ${gold[@]} ; do
+            echo "    $file"
+        done 
+        echo "note: regression tests will fail. regression tests will pass on the next run."
+        echo -n "press enter to confirm>"
+        read confirmation
+        rm ${gold[@]}
         ;;
     * )
         usage 

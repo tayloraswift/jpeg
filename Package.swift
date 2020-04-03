@@ -9,6 +9,7 @@ let package = Package(
         .executable(name: "fuzzer",             targets: ["JPEGFuzzer"]),
         .executable(name: "comparator",         targets: ["JPEGComparator"]),
         .executable(name: "unit-test",          targets: ["JPEGUnitTests"]),
+        .executable(name: "regression-test",    targets: ["JPEGRegressionTests"]),
         .executable(name: "integration-test",   targets: ["JPEGIntegrationTests"]),
     ],
     targets: 
@@ -17,6 +18,7 @@ let package = Package(
         .target(name: "JPEGFuzzer",             dependencies: ["JPEG"], path: "tests/fuzz"),
         .target(name: "JPEGComparator",         dependencies: ["JPEG"], path: "tests/compare"),
         .target(name: "JPEGUnitTests",          dependencies: ["JPEG"], path: "tests/unit"),
+        .target(name: "JPEGRegressionTests",    dependencies: ["JPEG"], path: "tests/regression"),
         .target(name: "JPEGIntegrationTests",   dependencies: ["JPEG"], path: "tests/integration"),
     ], 
     swiftLanguageVersions: [.v4_2, .v5]

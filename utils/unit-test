@@ -1,4 +1,5 @@
 #!/bin/bash
+TOOL_NAME="unit-test"
 error()
 {
     echo $1 
@@ -14,12 +15,12 @@ check()
 }
 
 check   "error: swift build failed" \
-        swift build -c debug --product unit-test 
+        swift build -c debug --product $TOOL_NAME 
 
 binaries=".build/debug"
-if ! [ -f $binaries/unit-test ]; then
-    error "error: missing unit-test tool"
+if ! [ -f $binaries/$TOOL_NAME ]; then
+    error "error: missing $TOOL_NAME tool"
 fi
 
 check   "error: test failures" \
-        $binaries/unit-test 
+        $binaries/$TOOL_NAME
