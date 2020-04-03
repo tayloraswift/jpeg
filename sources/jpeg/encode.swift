@@ -161,30 +161,28 @@ extension JPEG.JFIF
 {
     // due to a compiler issue, this initializer has to live in `decode.swift`
 }
-extension JPEG.Format 
+extension JPEG.Properties  
 {
     public 
-    func frame(process:JPEG.Process, size:(x:Int, y:Int), 
-        selectors:[JPEG.Frame.Component.Index: JPEG.Table.Quantization.Selector], 
-        factors:[JPEG.Frame.Component.Index: (x:Int, y:Int)] = [:]) 
+    func frame(size:(x:Int, y:Int), 
+        selectors:[JPEG.Frame.Component.Index: JPEG.Table.Quantization.Selector]) 
         -> JPEG.Frame 
     {
         let components:[JPEG.Frame.Component.Index: JPEG.Frame.Component] = 
             .init(uniqueKeysWithValues: self.components.map 
         {
-            let factor:(x:Int, y:Int) = factors[$0] ?? (1, 1)
-            guard let selector:JPEG.Table.Quantization.Selector = selectors[$0]
+            guard let selector:JPEG.Table.Quantization.Selector = selectors[$0.key]
             else 
             {
                 fatalError("each component must have a quantization table selector specified")
             }
             
-            return ($0, .init(factor: factor, selector: selector))
+            return ($0.key, .init(factor: $0.value, selector: selector))
         })
         
         do 
         {
-            return try .validate(process: process, precision: self.precision, 
+            return try .validate(process: process, precision: self.format.precision, 
                 size: size, components: components)
         }
         catch 

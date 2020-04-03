@@ -47,12 +47,23 @@ enum JPEG
         public 
         let metadata:[Metadata]
         
+        public 
+        let process:Process, 
+            components:[Frame.Component.Index: (x:Int, y:Int)]
+        
         // initializer has to live here 
         public 
-        init(format:Format, metadata:[JPEG.Metadata])
+        init(format:Format, metadata:[JPEG.Metadata], 
+            process:Process, 
+            factors:[JPEG.Frame.Component.Index: (x:Int, y:Int)] = [:])
         {
             self.format     = format 
             self.metadata   = metadata
+            self.process    = process 
+            self.components = .init(uniqueKeysWithValues: format.components.map 
+            {
+                ($0, factors[$0] ?? (1, 1))
+            })
         }
     }
     
@@ -74,7 +85,7 @@ enum JPEG
         public 
         init(y:UInt8) 
         {
-            self.init(y: y, cb: 0, cr: 0)
+            self.init(y: y, cb: 128, cr: 128)
         }
         
         public 
@@ -704,6 +715,7 @@ extension JPEG
         case truncatedEntropyCodedSegment
         
         case invalidCompositeValue(Int32, expected:ClosedRange<Int>)
+        case invalidCompositeBlockRun(Int, expected:ClosedRange<Int>)
         
         case undefinedScanHuffmanDCReference(Table.HuffmanDC.Selector)
         case undefinedScanHuffmanACReference(Table.HuffmanAC.Selector)
@@ -736,6 +748,8 @@ extension JPEG
                 
             case .invalidCompositeValue:
                 return "invalid composite value"
+            case .invalidCompositeBlockRun:
+                return "invalid composite end-of-band run length"
             
             case .undefinedScanHuffmanDCReference:
                 return "undefined dc huffman table reference"
@@ -776,6 +790,8 @@ extension JPEG
                 return "not enough data in entropy coded segment bitstream"
             case .invalidCompositeValue(let value, expected: let expected):
                 return "magnitude-tail encoded value (\(value)) must be within \(expected.lowerBound) ... \(expected.upperBound)"
+            case .invalidCompositeBlockRun(let value, expected: let expected):
+                return "magnitude-tail encoded end-of-band run length (\(value)) must be within \(expected.lowerBound) ... \(expected.upperBound)"
             
             case .undefinedScanHuffmanDCReference(let selector):
                 return "no dc huffman table has been installed at the location <\(String.init(selector: selector))>"
@@ -2566,23 +2582,97 @@ extension JPEG.Bitstream
     }
 }
 
-// progressive decoding processes
+// decoding processes
 extension JPEG.Data.Spectral.Plane 
 {
+    // sequential mode 
+    mutating 
+    func decode(_ data:[UInt8], component:JPEG.Scan.Component, 
+        tables slots:(dc:JPEG.Table.HuffmanDC.Slots, ac:JPEG.Table.HuffmanAC.Slots)) throws 
+    {
+        guard let dc:JPEG.Table.HuffmanDC.Decoder = 
+            slots.dc[keyPath: component.selectors.huffman.dc]?.decoder()
+        else 
+        {
+            throw JPEG.DecodingError.undefinedScanHuffmanDCReference(component.selectors.huffman.dc)
+        }
+        guard let ac:JPEG.Table.HuffmanAC.Decoder = 
+            slots.ac[keyPath: component.selectors.huffman.ac]?.decoder()
+        else 
+        {
+            throw JPEG.DecodingError.undefinedScanHuffmanACReference(component.selectors.huffman.ac)
+        }
+        
+        let bits:JPEG.Bitstream = .init(data)
+        var b:Int               = 0
+        var predecessor:Int32   = 0
+        row: 
+        for y:Int in 0... 
+        {
+            guard b < bits.count, bits[b, count: 16] != 0xffff 
+            else 
+            {
+                break row 
+            }
+            
+            if y >= self.units.y
+            {
+                self.resize(to: y + 1)
+            }
+            
+            column:
+            for x:Int in 0 ..< self.units.x 
+            {
+                // dc
+                let composite:JPEG.Bitstream.Composite.DC = try bits.composite(&b, table: dc)
+                predecessor           &+= composite.difference
+                self[x: x, y: y, z: 0]  = predecessor 
+                
+                // ac
+                var z:Int = 1
+                frequency: 
+                while z < 64
+                {
+                    switch try bits.composite(&b, table: ac)
+                    {
+                    case .run(let run, value: let v):
+                        z += run 
+                        
+                        guard z < 64
+                        else 
+                        {
+                            break frequency
+                        }
+                        
+                        self[x: x, y: y, z: z] = v 
+                        z += 1
+                    
+                    case .eob(1):
+                        break frequency
+                    
+                    case .eob(let v):
+                        throw JPEG.DecodingError.invalidCompositeBlockRun(v, expected: 1 ... 1)
+                    }
+                } 
+            }
+        }
+    }
+    
+    // progressive mode 
     mutating 
     func decode(_ data:[UInt8], bits a:PartialRangeFrom<Int>, component:JPEG.Scan.Component, 
         tables slots:JPEG.Table.HuffmanDC.Slots) throws 
     {
-        guard let huffman:JPEG.Table.HuffmanDC = slots[keyPath: component.selectors.huffman.dc]
+        guard let table:JPEG.Table.HuffmanDC.Decoder = 
+            slots[keyPath: component.selectors.huffman.dc]?.decoder()
         else 
         {
             throw JPEG.DecodingError.undefinedScanHuffmanDCReference(component.selectors.huffman.dc)
         }
         
-        let table:JPEG.Table.HuffmanDC.Decoder  = huffman.decoder()
-        let bits:JPEG.Bitstream                 = .init(data)
-        var b:Int                               = 0
-        var predecessor:Int32                   = 0
+        let bits:JPEG.Bitstream = .init(data)
+        var b:Int               = 0
+        var predecessor:Int32   = 0
         row: 
         for y:Int in 0... 
         {
@@ -2641,44 +2731,31 @@ extension JPEG.Data.Spectral.Plane
             frequency: 
             while z < band.upperBound  
             {
-                // we spell the body of this loop this way to match the 
-                // flow logic of `refining(ac:scan:tables)`
-                let zeroes:Int, 
-                    value:Int32
-                if skip > 0 
+                guard skip == 0
+                else  
                 {
-                    zeroes = 64 
-                    value  = 0
-                    skip  -= 1
+                    skip -= 1
+                    break frequency 
                 } 
-                else 
-                {
-                    switch try bits.composite(&b, table: table)
-                    {
-                    case .run(let run, value: let v):
-                        zeroes = run 
-                        value  = v 
-                    
-                    case .eob(let blocks):
-                        zeroes = 64 
-                        value  = 0 
-                        skip   = blocks - 1
-                    }
-                }
                 
-                z += zeroes 
-                if z < band.upperBound 
+                switch try bits.composite(&b, table: table)
                 {
-                    defer 
+                case .run(let run, value: let v):
+                    z += run 
+                    
+                    guard z < band.upperBound 
+                    else 
                     {
-                        z += 1
+                        break frequency
                     }
                     
-                    self[x: x, y: y, z: z] = value << a.lowerBound
-                    continue frequency  
-                }
+                    self[x: x, y: y, z: z] = v << a.lowerBound
+                    z += 1
                 
-                break frequency
+                case .eob(let blocks):
+                    skip   = blocks - 1
+                    break frequency 
+                }
             } 
         }
     }
@@ -2766,6 +2843,133 @@ extension JPEG.Data.Spectral.Plane
 }
 extension JPEG.Data.Spectral  
 {
+    // sequential mode 
+    private mutating 
+    func decode(_ data:[UInt8], components:[JPEG.Scan.Component], 
+        tables slots:(dc:JPEG.Table.HuffmanDC.Slots, ac:JPEG.Table.HuffmanAC.Slots)) throws 
+    {
+        guard components.count > 1 
+        else 
+        {
+            // noninterleaved
+            precondition(components.count == 1, "components array cannot be empty")
+            let component:JPEG.Scan.Component = components[0]
+            
+            guard let p:Int = self.p[component.ci]
+            else 
+            {
+                return 
+            }
+            
+            try self[p].decode(data, component: component, tables: slots)
+            return 
+        }
+        
+        typealias Descriptor = 
+        (
+            p:Int?, 
+            factor:(x:Int, y:Int), 
+            table:(dc:JPEG.Table.HuffmanDC.Decoder, ac:JPEG.Table.HuffmanAC.Decoder)
+        )
+        let descriptors:[Descriptor] = try components.map 
+        {
+            guard let dc:JPEG.Table.HuffmanDC = slots.dc[keyPath: $0.selectors.huffman.dc]
+            else 
+            {
+                throw JPEG.DecodingError.undefinedScanHuffmanDCReference($0.selectors.huffman.dc)
+            }
+            guard let ac:JPEG.Table.HuffmanAC = slots.ac[keyPath: $0.selectors.huffman.ac]
+            else 
+            {
+                throw JPEG.DecodingError.undefinedScanHuffmanACReference($0.selectors.huffman.ac)
+            }
+            
+            return (self.p[$0.ci], $0.factor, (dc.decoder(), ac.decoder()))
+        }
+        
+        let bits:JPEG.Bitstream = .init(data)
+        var b:Int               = 0
+        var predecessor:[Int32] = .init(repeating: 0, count: descriptors.count)
+        row:
+        for my:Int in 0... 
+        {
+            guard b < bits.count, bits[b, count: 16] != 0xffff 
+            else 
+            {
+                break row 
+            }
+            
+            for (p, factor, _):Descriptor in descriptors 
+            {
+                guard let p:Int = p 
+                else 
+                {
+                    continue 
+                }
+                
+                let height:Int = (my + 1) * factor.y
+                if height > self[p].units.y
+                {
+                    self[p].resize(to: height)
+                }
+            }
+            
+            column:
+            for mx:Int in 0 ..< self.blocks.x 
+            {
+                for (c, (p, factor, table)):(Int, Descriptor) in zip(predecessor.indices, descriptors)
+                {
+                    let start:(x:Int, y:Int) = (     mx * factor.x,      my * factor.y), 
+                        end:(x:Int, y:Int)   = (start.x + factor.x, start.y + factor.y) 
+                    for (x, y):(Int, Int) in start ..< end 
+                    {
+                        // dc 
+                        let composite:JPEG.Bitstream.Composite.DC = 
+                            try bits.composite(&b, table: table.dc)
+                        
+                        if let p:Int = p 
+                        {
+                            predecessor[c]            &+= composite.difference 
+                            self[p][x: x, y: y, z: 0]   = predecessor[c]  
+                        }
+                        
+                        // ac
+                        var z:Int = 1
+                        frequency: 
+                        while z < 64
+                        {
+                            switch try bits.composite(&b, table: table.ac)
+                            {
+                            case .run(let run, value: let v):
+                                z += run 
+                                
+                                guard z < 64
+                                else 
+                                {
+                                    break frequency 
+                                } 
+                                
+                                if let p:Int = p 
+                                {
+                                    self[p][x: x, y: y, z: z] = v  
+                                }
+                                
+                                z += 1
+                            
+                            case .eob(1):
+                                break frequency
+                            
+                            case .eob(let v):
+                                throw JPEG.DecodingError.invalidCompositeBlockRun(v, expected: 1 ... 1)
+                            }
+                        } 
+                    }
+                }
+            }
+        }
+    }
+    
+    // progressive mode 
     private mutating 
     func decode(_ data:[UInt8], bits a:PartialRangeFrom<Int>, 
         components:[JPEG.Scan.Component], tables slots:JPEG.Table.HuffmanDC.Slots) throws
@@ -2913,7 +3117,7 @@ extension JPEG.Data.Spectral
         {
         case (initial: true,  band: 0 ..< 64):
             // sequential mode jpeg
-            fatalError("unsupported")
+            try self.decode(data, components: scan.components, tables: tables)
         
         case (initial: false, band: 0 ..< 64):
             // successive approximation cannot happen without spectral selection. 
@@ -3269,7 +3473,11 @@ extension JPEG.Context
                 .init(frame.components.keys), frame.precision, Format.self)
         }
         
-        let properties:JPEG.Properties<Format> = .init(format: format, metadata: metadata)
+        let properties:JPEG.Properties<Format> = 
+            .init(format:   format, 
+                metadata:   metadata, 
+                process:    process, 
+                factors:    frame.components.mapValues(\.factor))
         
         self.spectral   = .init(frame: frame, properties: properties)
         self.frame      = frame

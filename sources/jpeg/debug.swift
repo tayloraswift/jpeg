@@ -147,3 +147,19 @@ extension JPEG.Table.Quantization:CustomStringConvertible
         """
     }
 }
+
+extension JPEG.JFIF:CustomStringConvertible
+{
+    public 
+    var description:String 
+    {
+        """
+        metadata (\(Self.self))
+        {
+            version  : \(self.version)
+            unit     : \(self.density.unit)
+            density  : (\(self.density.x), \(self.density.y))
+        }
+        """
+    }
+}

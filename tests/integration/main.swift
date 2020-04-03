@@ -1,19 +1,14 @@
-#if os(macOS)
-import Darwin
-#elseif os(Linux)
-import Glibc
-#endif
+import func Foundation.exit
 
-var succeeded:Bool = true  
-for group:Group in 
-[
-    .init(name: "decode", expectation: true, functions: .string(Test.decode(_:), 
-    [
-        ("karlie (99 @ 4:4:4 progressive)", "karlie-kloss-diane-von-fürstenberg-99-4-4-4-p")
-    ]))
-]
+var failed = false 
+for (name, function):(String, Test.Function) in Test.cases 
 {
-    succeeded = group.run(filter: []) && succeeded 
+    guard let _:Void = test(function, name: name)
+    else 
+    {
+        failed = true 
+        continue 
+    }
 }
 
-exit(succeeded ? 0 : -1)
+failed ? Foundation.exit(-1) : Foundation.exit(0)

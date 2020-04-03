@@ -8,13 +8,14 @@ func fuzz<RNG>(rng:inout RNG, path:String) throws where RNG:RandomNumberGenerato
         Cr:JPEG.Frame.Component.Index           = format.components[2]
     
     let jfif:JPEG.JFIF = .init(version: .v1_2, density: (1, 1, .dpcm))
-    let properties:JPEG.Properties<JPEG.Common> = 
-        .init(format: format, metadata: [.jfif(jfif)])
+    let properties:JPEG.Properties<JPEG.Common> = .init(
+        format:     format, 
+        metadata:   [.jfif(jfif)], 
+        process:    .progressive(coding: .huffman, differential: false))
     
-    let frame:JPEG.Frame                        = properties.format.frame(
-        process:   .progressive(coding: .huffman, differential: false), 
-        size:      (8, 8), 
-        selectors: [Y: \.0, Cb: \.0, Cr: \.0])
+    let frame:JPEG.Frame                        = properties.frame(
+        size:       (8, 8), 
+        selectors:  [Y: \.0, Cb: \.0, Cr: \.0])
         
     let quantization:JPEG.Table.Quantization    = 
         .init(precision: .uint8, values: .init(repeating: 1, count: 64), target: \.0)
