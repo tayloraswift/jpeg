@@ -49,21 +49,23 @@ extension Test
             print(
             """
             
-            \(Highlight.bold)\(path)\(Highlight.reset) (\(image.properties.format))
+            \(Highlight.bold)\(path)\(Highlight.reset) (\(image.layout.format))
             {
                 size        : (\(image.size.x), \(image.size.y))
-                process     : \(image.properties.process)
-                precision   : \(image.properties.format.precision)
+                process     : \(image.layout.process)
+                precision   : \(image.layout.format.precision)
                 components  : 
                 [
-                    \(image.properties.components.sorted(by: { $0.key < $1.key }).map 
+                    \(image.layout.residents.sorted(by: { $0.key < $1.key }).map 
                     {
-                        "[\($0.key)]: (\($0.value.x), \($0.value.y))"
+                        let (x, y):(Int, Int) = 
+                            image.layout.components[$0.value.component].value.factor
+                        return "[\($0.key)]: (\(x), \(y))"
                     }.joined(separator: "\n        "))
                 ]
             }
             """)
-            for metadata:JPEG.Metadata in image.properties.metadata
+            for metadata:JPEG.Metadata in image.metadata
             {
                 switch metadata 
                 {

@@ -2,26 +2,57 @@ import JPEG
 
 func fuzz<RNG>(rng:inout RNG, path:String) throws where RNG:RandomNumberGenerator
 {
-    let format:JPEG.Common                      = .ycc8
-    let Y:JPEG.Frame.Component.Index            = format.components[0],
-        Cb:JPEG.Frame.Component.Index           = format.components[1],
-        Cr:JPEG.Frame.Component.Index           = format.components[2]
+    let format:JPEG.Common              = .ycc8
+    let Y:JPEG.Component.Key            = format.components[0],
+        Cb:JPEG.Component.Key           = format.components[1],
+        Cr:JPEG.Component.Key           = format.components[2]
     
-    let jfif:JPEG.JFIF = .init(version: .v1_2, density: (1, 1, .dpcm))
-    let properties:JPEG.Properties<JPEG.Common> = .init(
-        format:     format, 
-        metadata:   [.jfif(jfif)], 
-        process:    .progressive(coding: .huffman, differential: false))
+    let layout:JPEG.Layout<JPEG.Common> = .init(
+        format:     format,
+        process:    .progressive(coding: .huffman, differential: false), 
+        components: 
+        [
+            Y:  (factor: (1, 1), qi: 0), 
+            Cb: (factor: (1, 1), qi: 1), 
+            Cr: (factor: (1, 1), qi: 1),
+        ], 
+        scans: 
+        [
+            .progressive((Y,  \.0), (Cb, \.1), (Cr, \.1),  bits: 2...),
+            .progressive( Y,         Cb,        Cr      ,  bit:  1   ),
+            .progressive( Y,         Cb,        Cr      ,  bit:  0   ),
+            
+            .progressive((Y,  \.0),        band: 1 ..< 64, bits: 1...), 
+            
+            .progressive((Cb, \.0),        band: 1 ..<  6, bits: 1...), 
+            .progressive((Cr, \.0),        band: 1 ..<  6, bits: 1...), 
+            
+            .progressive((Cb, \.0),        band: 6 ..< 64, bits: 1...), 
+            .progressive((Cr, \.0),        band: 6 ..< 64, bits: 1...), 
+            
+            .progressive((Y,  \.0),        band: 1 ..< 64, bit:  0   ), 
+            .progressive((Cb, \.0),        band: 1 ..< 64, bit:  0   ), 
+            .progressive((Cr, \.0),        band: 1 ..< 64, bit:  0   ), 
+        ])
+
+    let quanta:([UInt16], [UInt16]) = 
+    (
+        .init(repeating: 1, count: 64),
+        .init(repeating: 1, count: 64)
+    )
     
-    let frame:JPEG.Frame                        = properties.frame(
+    var spectral:JPEG.Data.Spectral<JPEG.Common> = .init(
         size:       (8, 8), 
-        selectors:  [Y: \.0, Cb: \.0, Cr: \.0])
-        
-    let quantization:JPEG.Table.Quantization    = 
-        .init(precision: .uint8, values: .init(repeating: 1, count: 64), target: \.0)
-    
-    var spectral:JPEG.Data.Spectral<JPEG.Common> = 
-        .init(frame: frame, properties: properties)
+        layout:     layout, 
+        quanta:     
+        [
+            0: quanta.0,
+            1: quanta.1,
+        ], 
+        metadata:   
+        [
+            .jfif(.init(version: .v1_2, density: (1, 1, .dpcm))),
+        ])
     
     spectral.with(ci: Y)
     {
@@ -29,7 +60,7 @@ func fuzz<RNG>(rng:inout RNG, path:String) throws where RNG:RandomNumberGenerato
         {
             for z:Int in 0 ..< 64
             {
-                $0[x: x, y: y, z: z] = Int32.random(in: -75 ..< 75)
+                $0[x: x, y: y, z: z] = Int16.random(in: -75 ..< 75) / .init($1[z: z])
             }
         }
     }
@@ -37,42 +68,23 @@ func fuzz<RNG>(rng:inout RNG, path:String) throws where RNG:RandomNumberGenerato
     {
         for (x, y):(Int, Int) in $0.indices
         {
-            $0[x: x, y: y, z: 1] = 180
+            $0[x: x, y: y, z: 1] = 180 / .init($1[z: 1])
         }
     }
     spectral.with(ci: Cr)
     {
         for (x, y):(Int, Int) in $0.indices
         {
-            $0[x: x, y: y, z: 2] = 180
+            $0[x: x, y: y, z: 2] = 180 / .init($1[z: 2])
         }
     }
-    
-    let scans:[JPEG.Scan] = 
-    [
-        frame.progressive([(Y, \.0), (Cb, \.1), (Cr, \.1)], bits: 2...),
-        frame.progressive([ Y,        Cb,        Cr      ], bit:  1   ),
-        frame.progressive([ Y,        Cb,        Cr      ], bit:  0   ),
-        
-        frame.progressive((Y,  \.0),        band: 1 ..< 64, bits: 1...), 
-        
-        frame.progressive((Cb, \.0),        band: 1 ..<  6, bits: 1...), 
-        frame.progressive((Cr, \.0),        band: 1 ..<  6, bits: 1...), 
-        
-        frame.progressive((Cb, \.0),        band: 6 ..< 64, bits: 1...), 
-        frame.progressive((Cr, \.0),        band: 6 ..< 64, bits: 1...), 
-        
-        frame.progressive((Y,  \.0),        band: 1 ..< 64, bit:  0   ), 
-        frame.progressive((Cb, \.0),        band: 1 ..< 64, bit:  0   ), 
-        frame.progressive((Cr, \.0),        band: 1 ..< 64, bit:  0   ), 
-    ]
     
     guard let _:Void = (try Common.File.Destination.open(path: path) 
     {
         (stream:inout Common.File.Destination) in 
         
         try stream.format(marker: .start)
-        for metadata:JPEG.Metadata in properties.metadata 
+        for metadata:JPEG.Metadata in spectral.metadata 
         {
             switch metadata 
             {
@@ -83,15 +95,38 @@ func fuzz<RNG>(rng:inout RNG, path:String) throws where RNG:RandomNumberGenerato
             }
         }
         
-        try stream.format(marker: .quantization, tail: JPEG.Table.serialize([quantization]))
+        let frame:JPEG.Header.Frame = spectral.encode() 
         try stream.format(marker: .frame(frame.process), tail: frame.serialized())
-        for scan:JPEG.Scan in scans
+        for (qi, scans):([JPEG.Table.Quantization.Key], [JPEG.Scan]) in 
+            spectral.layout.definitions 
         {
-            let (ecs, dc, ac):([UInt8], [JPEG.Table.HuffmanDC], [JPEG.Table.HuffmanAC]) = 
-                spectral.encode(scan: scan)
-            try stream.format(marker: .huffman, tail: JPEG.Table.serialize(dc, ac))
-            try stream.format(marker: .scan,    tail: scan.serialized())
-            try stream.format(prefix: ecs)
+            let quanta:[JPEG.Table.Quantization] = qi.compactMap
+            { 
+                spectral.quanta.index(forKey: $0).map{ spectral.quanta[$0] }
+            }
+            
+            if !quanta.isEmpty
+            {
+                try stream.format(marker: .quantization, tail: JPEG.Table.serialize(quanta))
+            }
+            
+            for scan:JPEG.Scan in scans 
+            {
+                let dc:[JPEG.Table.HuffmanDC],
+                    ac:[JPEG.Table.HuffmanAC],
+                    header:JPEG.Header.Scan, 
+                    ecs:[UInt8]
+                
+                (dc, ac, header, ecs) = spectral.encode(scan: scan)
+                
+                if !dc.isEmpty || !ac.isEmpty 
+                {
+                    try stream.format(marker: .huffman, tail: JPEG.Table.serialize(dc, ac))
+                }
+                
+                try stream.format(marker: .scan, tail: header.serialized())
+                try stream.format(prefix: ecs)
+            }
         }
         
         try stream.format(marker: .end)
@@ -99,7 +134,7 @@ func fuzz<RNG>(rng:inout RNG, path:String) throws where RNG:RandomNumberGenerato
     else 
     {
         fatalError("failed to open file '\(path)'")
-    }
+    } 
 }
 
 func print(histogram:[Int], width:Int) 

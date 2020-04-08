@@ -163,7 +163,7 @@ extension Common
 {
     @propertyWrapper 
     public 
-    struct Storage<I> where I:FixedWidthInteger & BinaryInteger 
+    struct MutableStorage<I> where I:FixedWidthInteger & BinaryInteger 
     {
         private 
         var storage:I 
@@ -181,6 +181,29 @@ extension Common
             {
                 .init(self.storage)
             }
+            set(value)
+            {
+                self.storage = .init(value)
+            }
+        }
+    }
+    @propertyWrapper 
+    public 
+    struct Storage<I> where I:FixedWidthInteger & BinaryInteger 
+    {
+        private 
+        var storage:I 
+        
+        public 
+        init(wrappedValue:Int) 
+        {
+            self.storage = .init(truncatingIfNeeded: wrappedValue)
+        }
+        
+        public 
+        var wrappedValue:Int 
+        {
+            .init(self.storage)
         }
     }
     @propertyWrapper 
@@ -203,10 +226,7 @@ extension Common
         public 
         var wrappedValue:(x:Int, y:Int) 
         {
-            get 
-            {
-                (.init(self.storage.x), .init(self.storage.y))
-            }
+            (.init(self.storage.x), .init(self.storage.y))
         }
     }
 }

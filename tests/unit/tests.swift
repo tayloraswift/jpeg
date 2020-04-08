@@ -50,7 +50,7 @@ extension Test
         {
             for (x, expected):(Int, Int) in row.enumerated() 
             {
-                let z:Int = JPEG.Data.Spectral<JPEG.Common>.Plane.z(x: x, y: y)
+                let z:Int = JPEG.Table.Quantization.z(k: x, h: y)
                 guard z == expected 
                 else 
                 {

@@ -1,8 +1,16 @@
 // literal forms 
-extension JPEG.Frame.Component.Index:ExpressibleByIntegerLiteral 
+extension JPEG.Component.Key:ExpressibleByIntegerLiteral 
 {
     public 
     init(integerLiteral:UInt8) 
+    {
+        self.init(integerLiteral)
+    }
+}
+extension JPEG.Table.Quantization.Key:ExpressibleByIntegerLiteral 
+{
+    public 
+    init(integerLiteral:Int) 
     {
         self.init(integerLiteral)
     }
@@ -12,7 +20,7 @@ extension JPEG.Frame.Component.Index:ExpressibleByIntegerLiteral
 extension String 
 {
     public 
-    init<Table>(selector:Table.Selector) where Table:JPEG.AnyTable  
+    init<Delegate>(selector:WritableKeyPath<(Delegate?, Delegate?, Delegate?, Delegate?), Delegate?>)  
     {
         switch selector
         {
@@ -50,12 +58,12 @@ extension JPEG.Process:CustomStringConvertible
     }
 }
 
-extension JPEG.Frame.Component:CustomStringConvertible 
+extension JPEG.Component:CustomStringConvertible 
 {
     public 
     var description:String 
     {
-        "{quantization table: \(String.init(selector: self.selector)), sample factors: (\(self.factor.x), \(self.factor.y))}"
+        return "{quantization table: \(String.init(selector: self.selector)), sample factors: (\(self.factor.x), \(self.factor.y))}"
     }
 }
 extension JPEG.Scan.Component:CustomStringConvertible 
@@ -63,10 +71,10 @@ extension JPEG.Scan.Component:CustomStringConvertible
     public 
     var description:String 
     {
-        "{dc huffman table: \(String.init(selector: self.selectors.huffman.dc)), ac huffman table: \(String.init(selector: self.selectors.huffman.ac))}"
+        "{dc huffman table: \(String.init(selector: self.selector.dc)), ac huffman table: \(String.init(selector: self.selector.ac))}"
     }
 }
-extension JPEG.Frame.Component.Index:CustomStringConvertible 
+extension JPEG.Component.Key:CustomStringConvertible 
 {
     public 
     var description:String 
@@ -75,7 +83,7 @@ extension JPEG.Frame.Component.Index:CustomStringConvertible
     }
 }
 
-extension JPEG.Frame:CustomStringConvertible 
+extension JPEG.Header.Frame:CustomStringConvertible 
 {
     public 
     var description:String 
@@ -98,7 +106,7 @@ extension JPEG.Frame:CustomStringConvertible
     }
 }
 
-extension JPEG.Scan:CustomStringConvertible
+extension JPEG.Header.Scan:CustomStringConvertible
 {
     public 
     var description:String 
