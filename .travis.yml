@@ -19,4 +19,4 @@ script:
 - utils/unit-test
 - utils/integration-test -c release
 - utils/regression-test -c release
-- utils/fuzz-test -c release -n 256
+- utils/fuzz-test -c release -n 16
