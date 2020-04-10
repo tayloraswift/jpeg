@@ -68,6 +68,8 @@ ycc_pattern=$prefix/*.$YCC_EXTENSION
 
 check   "error: swift build failed" \
         swift build -c $build_configuration --product fuzzer
+check   "error: swift build failed" \
+        swift build -c $build_configuration --product comparator
 
 binaries=".build/$build_configuration"
 if ! [ -f $binaries/fuzzer ]; then
