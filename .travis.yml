@@ -1,0 +1,22 @@
+language: generic
+matrix:
+  include:
+  - os: osx
+    osx_image: xcode11.3
+    env:
+    - JOB="MacOS"
+  - os: linux
+    env:
+    - JOB="Linux"
+    dist: bionic
+script:
+- export SWIFT_VERSION=DEVELOPMENT-SNAPSHOT-2020-02-21-a
+- git clone --depth 1 https://github.com/kylef/swiftenv.git ~/.swiftenv
+- export SWIFTENV_ROOT="$HOME/.swiftenv"
+- export PATH="$SWIFTENV_ROOT/bin:$SWIFTENV_ROOT/shims:$PATH"
+- swiftenv install $SWIFT_VERSION
+- swiftenv rehash
+- utils/unit-test
+- utils/integration-test -c release
+- utils/regression-test -c release
+- utils/fuzz-test -c release -n 256
