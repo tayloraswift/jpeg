@@ -1221,7 +1221,59 @@ extension JPEG.Bytestream.Destination
     }
 }
 
-// declare conformance (as a formality)
-extension Common.File.Destination:JPEG.Bytestream.Destination 
+// staged APIs
+extension JPEG.Data.Spectral 
 {
+    public 
+    func compress<Destination>(stream:inout Destination) throws 
+        where Destination:JPEG.Bytestream.Destination
+    {
+        try stream.format(marker: .start)
+        for metadata:JPEG.Metadata in self.metadata 
+        {
+            switch metadata 
+            {
+            case .jfif(let jfif):
+                try stream.format(marker: .application(0), tail: jfif.serialized())
+            case .unknown(application: let a, let serialized):
+                try stream.format(marker: .application(a), tail: serialized)
+            }
+        }
+        
+        let frame:JPEG.Header.Frame = self.encode() 
+        try stream.format(marker: .frame(frame.process), tail: frame.serialized())
+        for (qi, scans):([JPEG.Table.Quantization.Key], [JPEG.Scan]) in 
+            self.layout.definitions 
+        {
+            let quanta:[JPEG.Table.Quantization] = qi.compactMap
+            { 
+                self.quanta.index(forKey: $0).map{ self.quanta[$0] }
+            }
+            
+            if !quanta.isEmpty
+            {
+                try stream.format(marker: .quantization, tail: JPEG.Table.serialize(quanta))
+            }
+            
+            for scan:JPEG.Scan in scans 
+            {
+                let dc:[JPEG.Table.HuffmanDC],
+                    ac:[JPEG.Table.HuffmanAC],
+                    header:JPEG.Header.Scan, 
+                    ecs:[UInt8]
+                
+                (dc, ac, header, ecs) = self.encode(scan: scan)
+                
+                if !dc.isEmpty || !ac.isEmpty 
+                {
+                    try stream.format(marker: .huffman, tail: JPEG.Table.serialize(dc, ac))
+                }
+                
+                try stream.format(marker: .scan, tail: header.serialized())
+                try stream.format(prefix: ecs)
+            }
+        }
+        
+        try stream.format(marker: .end)
+    }
 }

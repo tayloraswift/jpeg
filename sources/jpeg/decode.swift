@@ -3635,38 +3635,7 @@ extension JPEG.Layout
         private 
         var approximations:[JPEG.Component.Key: [Int]]
     }
-    
-    /* struct Completion 
-    {
-        private 
-        var spectra:UInt64
-        
-        var complete:Bool 
-        {
-            self.spectra == 0
-        }
-    } */
 }
-/* extension JPEG.Layout.Completion 
-{
-    init()
-    {
-        self.spectra = .max
-    }
-    
-    // returns completed components  
-    mutating 
-    func update(band:Range<Int>, bits:Range<Int>)
-    {
-        guard bits.lowerBound == 0 
-        else 
-        {
-            return 
-        }
-        
-        self.spectra &= ~(.max << band.lowerBound) | (.max << band.upperBound)
-    }
-} */
 extension JPEG.Layout.Progression
 {
     init<S>(_ components:S) where S:Sequence, S.Element == JPEG.Component.Key 
@@ -4454,42 +4423,32 @@ extension JPEG.Data.Planar
 }
 
 // staged APIs 
-// declare conformance (as a formality)
-extension Common.File.Source:JPEG.Bytestream.Source 
-{
-}
 extension JPEG.Data.Spectral 
 {
     public static 
-    func decompress(path:String) throws -> Self? 
+    func decompress<Source>(stream:inout Source) throws -> Self
+        where Source:JPEG.Bytestream.Source 
     {
-        return try Common.File.Source.open(path: path, JPEG.Context.decompress(stream:))
+        return try JPEG.Context.decompress(stream: &stream)
     }
 }
 extension JPEG.Data.Planar 
 {
     public static 
-    func decompress(path:String) throws -> Self?
+    func decompress<Source>(stream:inout Source) throws -> Self
+        where Source:JPEG.Bytestream.Source 
     {
-        guard let spectral:JPEG.Data.Spectral<Format> = try .decompress(path: path)
-        else 
-        {
-            return nil 
-        }
+        let spectral:JPEG.Data.Spectral<Format> = try .decompress(stream: &stream)
         return spectral.idct()
     }
 }
 extension JPEG.Data.Rectangular 
 {
     public static 
-    func decompress(path:String) throws -> Self? 
+    func decompress<Source>(stream:inout Source) throws -> Self
+        where Source:JPEG.Bytestream.Source 
     {
-        guard let planar:JPEG.Data.Planar<Format> = try .decompress(path: path) 
-        else 
-        {
-            return nil 
-        }
-        
+        let planar:JPEG.Data.Planar<Format> = try .decompress(stream: &stream) 
         return planar.interleave()
     }
 }
