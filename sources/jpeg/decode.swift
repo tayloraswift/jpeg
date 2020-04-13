@@ -4460,75 +4460,6 @@ extension JPEG.Data.Spectral.Plane
             r.0 - s.0
             )
     }
-    /* private static 
-    func _idct8(_ h:Block8x8<Float>) -> Block8x8<Float>
-    {
-        let a:(SIMD8<Float>, SIMD8<Float>) = 
-        (
-            h.1       +       h.7, 
-                  h.3 + h.5      
-        )
-        let b:(SIMD8<Float>, SIMD8<Float>) = 
-        (
-                  h.3    +    h.7, 
-            h.1    +    h.5
-        )
-        
-        let s:SIMD8<Float> = (a.0 + a.1) * 1.175875602
-        
-        let c:(SIMD8<Float>, SIMD8<Float>) = 
-        (
-            -0.899976223 * a.0,
-            -2.562915447 * a.1
-        )
-        let d:(SIMD8<Float>, SIMD8<Float>) = 
-        (
-            -1.961570560 * b.0 + s,
-            -0.390180644 * b.1 + s
-        )
-        
-        let f:(SIMD8<Float>, SIMD8<Float>, SIMD8<Float>, SIMD8<Float>) = 
-        (
-            h.1 * 1.501321110 + c.0     + d.1    ,
-            h.3 * 3.072711026 +     c.1 +     d.0,
-            h.5 * 2.053119869 +     c.1 + d.1    ,
-            h.7 * 0.298631336 + c.0     +     d.0
-        )
-        
-        let t:SIMD8<Float> = (h.2 + h.6) * 0.541196100 
-        
-        let l:(SIMD8<Float>, SIMD8<Float>) = 
-        (
-            h.0 + h.4,
-            h.0 - h.4
-        )
-        let m:(SIMD8<Float>, SIMD8<Float>) = 
-        (
-            -1.847759065 * h.6 + t,
-             0.765366865 * h.2 + t
-        )
-        
-        let n:(SIMD8<Float>, SIMD8<Float>, SIMD8<Float>, SIMD8<Float>) = 
-        (
-            l.0     +     m.1,
-                l.1 + m.0    ,
-                l.1 - m.0    ,
-            l.0     -     m.1
-        )
-        
-        return 
-            (
-            n.0 + f.0, 
-            n.1 + f.1, 
-            n.2 + f.2, 
-            n.3 + f.3, 
-            n.3 - f.3, 
-            n.2 - f.2, 
-            n.1 - f.1, 
-            n.0 - f.0
-            )
-    }
-    */
     private static 
     func idct8x8(_ h:Block8x8<Float>, shift:Float) -> Block8x8<Float>
     {
@@ -4536,53 +4467,6 @@ extension JPEG.Data.Spectral.Plane
             g:Block8x8<Float>   = Self.transpose(Self.idct8(f, shift: shift))
         return g
     }
-    /* func idct(x:Int, y:Int, quanta:JPEG.Table.Quantization, precision:Int) 
-        -> [UInt16] 
-    {
-        let values:[UInt16] = .init(unsafeUninitializedCapacity: 64) 
-        {
-            let level:Int32 = 1 << (precision - 1 as Int), 
-                limit:Int32 = 1 <<  precision - 1
-            for (j, i):(Int, Int) in (0, 0) ..< (8, 8)
-            {
-                let t:(Float, Float) = 
-                (
-                    2 * .init(i) + 1,
-                    2 * .init(j) + 1
-                )
-                var s:Float = 0
-                for (k, h):(Int, Int) in (0, 0) ..< (8, 8)
-                {
-                    let c:Float 
-                    switch (h * k, h + k) 
-                    {
-                    case (0, 0):
-                        c = 1 
-                    case (0, _):
-                        c = (2 as Float).squareRoot()
-                    case (_, _):
-                        c = 2
-                    }
-                    
-                    let ω:(Float, Float) = 
-                    (
-                        .init(h) * .pi / 16, 
-                        .init(k) * .pi / 16
-                    )
-                    let a:Float = _cos(ω.0 * t.0) * _cos(ω.1 * t.1), 
-                        q:Float = .init(          quanta[k: k, h: h]),
-                        v:Float = .init(self[x: x, y: y, k: k, h: h])
-                    s += a * c * q * v
-                }
-                
-                let integer:Int32 = .init((s / 8).rounded()) &+ level
-                $0[8 * i + j] = .init(max(0, min(integer, limit)))
-            }
-            
-            $1 = 64
-        }
-        return values 
-    } */
     func idct(quanta table:JPEG.Table.Quantization, precision:Int) 
         -> JPEG.Data.Planar<Format>.Plane
     {
