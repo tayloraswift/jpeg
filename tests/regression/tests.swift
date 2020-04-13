@@ -46,29 +46,45 @@ extension Test
                 throw Failure.init(message: "failed to open file '\(path)'")
             }
             
-            let ycc:[JPEG.YCbCr]        = image.pixels(as: JPEG.YCbCr.self)
-            guard let gold:[JPEG.YCbCr] = try (Common.File.Source.open(path: "\(path).ycc")
+            let output:(ycc:[JPEG.YCbCr], rgb:[JPEG.RGB]) = 
+            (
+                image.pixels(as: JPEG.YCbCr.self), 
+                image.pixels(as: JPEG.RGB.self)
+            )
+            guard   let ycc:[JPEG.YCbCr] = try (Common.File.Source.open(path: "\(path).ycc")
             {
-                guard let data:[UInt8] = $0.read(count: 3 * ycc.count)
+                guard let data:[UInt8] = $0.read(count: 3 * output.ycc.count)
                 else
                 {
                     throw Failure.init(message: "failed to read from file '\(path).ycc'")
                 }
 
-                return (0 ..< ycc.count).map
+                return (0 ..< output.ycc.count).map
                 {
-                    let y:UInt8  = data[$0 * 3    ],
-                        cb:UInt8 = data[$0 * 3 + 1],
-                        cr:UInt8 = data[$0 * 3 + 2]
-                    return .init(y: y, cb: cb, cr: cr)
+                    (i:Int) -> JPEG.YCbCr in 
+                    .init(y: data[i * 3], cb: data[i * 3 + 1], cr: data[i * 3 + 2])
                 }
-            }) 
+            }), 
+                    let rgb:[JPEG.RGB]   = try (Common.File.Source.open(path: "\(path).rgb")
+            {
+                guard let data:[UInt8] = $0.read(count: 3 * output.rgb.count)
+                else
+                {
+                    throw Failure.init(message: "failed to read from file '\(path).rgb'")
+                }
+
+                return (0 ..< output.rgb.count).map
+                {
+                    (i:Int) -> JPEG.RGB in 
+                    .init(data[i * 3], data[i * 3 + 1], data[i * 3 + 2])
+                }
+            })
             else
             {
                 // write new golden output if there is none at the given location 
                 guard let _:Void = try (Common.File.Destination.open(path: "\(path).ycc")
                 {
-                    guard let _:Void = $0.write(ycc.flatMap{ [$0.y, $0.cb, $0.cr] })
+                    guard let _:Void = $0.write(output.ycc.flatMap{ [$0.y, $0.cb, $0.cr] })
                     else 
                     {
                         throw Failure.init(message: "failed to write to file '\(path).ycc'")
@@ -79,11 +95,24 @@ extension Test
                     throw Failure.init(message: "failed to open file '\(path).ycc'")
                 }
                 
+                guard let _:Void = try (Common.File.Destination.open(path: "\(path).rgb")
+                {
+                    guard let _:Void = $0.write(output.rgb.flatMap{ [$0.r, $0.g, $0.b] })
+                    else 
+                    {
+                        throw Failure.init(message: "failed to write to file '\(path).rgb'")
+                    }
+                }) 
+                else
+                {
+                    throw Failure.init(message: "failed to open file '\(path).rgb'")
+                }
+                
                 throw Failure.init(message: 
-                    "no golden output for '\(path)' (new golden output written to '\(path).ycc')")
+                    "no golden output for '\(path)' (new golden output written to '\(path).ycc', '\(path).rgb')")
             }
             
-            guard ycc == gold 
+            guard output.ycc == ycc, output.rgb == rgb
             else 
             {
                 throw Failure.init(message: "decoded output does not match golden output")

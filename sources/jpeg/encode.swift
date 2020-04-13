@@ -152,6 +152,202 @@ extension JPEG
     }
 }
 
+// forward dct 
+extension JPEG.Data.Planar.Plane 
+{
+    fileprivate 
+    func load(x:Int, y:Int, limit:SIMD8<Float>) 
+        -> JPEG.Data.Spectral<Format>.Plane.Block8x8<Float>
+    {
+        @inline(__always)
+        func row(_ h:Int) -> SIMD8<Float> 
+        {
+            pointwiseMin(limit, .init(.init(
+                self[x: 8 * x + 0, y: 8 * y + h],
+                self[x: 8 * x + 1, y: 8 * y + h],
+                self[x: 8 * x + 2, y: 8 * y + h],
+                self[x: 8 * x + 3, y: 8 * y + h],
+                
+                self[x: 8 * x + 4, y: 8 * y + h],
+                self[x: 8 * x + 5, y: 8 * y + h],
+                self[x: 8 * x + 6, y: 8 * y + h],
+                self[x: 8 * x + 7, y: 8 * y + h])))
+        }
+        
+        return (row(0), row(1), row(2), row(3), row(4), row(5), row(6), row(7))
+    }
+}
+extension JPEG.Data.Spectral.Plane 
+{
+    private static 
+    var zigzag:Block8x8<Int> 
+    {
+        @inline(__always)
+        func row(_ h:Int) -> SIMD8<Int> 
+        {
+            .init(
+                JPEG.Table.Quantization.z(k: 0, h: h),
+                JPEG.Table.Quantization.z(k: 1, h: h),
+                JPEG.Table.Quantization.z(k: 2, h: h),
+                JPEG.Table.Quantization.z(k: 3, h: h),
+                JPEG.Table.Quantization.z(k: 4, h: h),
+                JPEG.Table.Quantization.z(k: 5, h: h),
+                JPEG.Table.Quantization.z(k: 6, h: h),
+                JPEG.Table.Quantization.z(k: 7, h: h)
+                )
+        }
+        return (row(0), row(1), row(2), row(3), row(4), row(5), row(6), row(7))
+    }
+    private static 
+    func fdct8(_ g:Block8x8<Float>, shift:Float) -> Block8x8<Float>
+    {
+        // even rows 
+        let a:(SIMD8<Float>, SIMD8<Float>, SIMD8<Float>, SIMD8<Float>) = 
+        (
+            g.0 + g.7,
+            g.1 + g.6, 
+            g.2 + g.5, 
+            g.3 + g.4
+        )
+        let b:(SIMD8<Float>, SIMD8<Float>, SIMD8<Float>, SIMD8<Float>) = 
+        (
+            a.0     +     a.3, 
+                a.1 + a.2    , 
+                a.1 - a.2    , 
+            a.0     -     a.3
+        )
+        let c:SIMD8<Float> = 0.707106781 * (b.2 + b.3)
+        let r:(SIMD8<Float>, SIMD8<Float>, SIMD8<Float>, SIMD8<Float>) = 
+        (
+            b.0     +     b.1 - shift,
+                b.3 + c                  , 
+            b.0     -     b.1            , 
+                b.3 - c
+        )
+        // odd rows 
+        let d:(SIMD8<Float>, SIMD8<Float>, SIMD8<Float>, SIMD8<Float>) = 
+        (
+            g.3 - g.4,
+            g.2 - g.5,
+            g.1 - g.6,
+            g.0 - g.7
+        )
+        let f:(SIMD8<Float>, SIMD8<Float>, SIMD8<Float>) = 
+        (
+            d.0 + d.1, 
+            d.1 + d.2, 
+            d.2 + d.3
+        )
+        let k:SIMD8<Float> = 0.707106781 *  f.1, 
+            l:SIMD8<Float> = 0.382683433 * (f.0 - f.2)
+        let m:(SIMD8<Float>, SIMD8<Float>) = 
+        (
+            l + f.0 * 0.541196100, 
+            l + f.2 * 1.306562965
+        )
+        let n:(SIMD8<Float>, SIMD8<Float>) = 
+        (
+            d.3 + k, 
+            d.3 - k
+        )
+        let s:(SIMD8<Float>, SIMD8<Float>, SIMD8<Float>, SIMD8<Float>) = 
+        (
+            n.0     +     m.1, 
+                n.1 - m.0    , 
+                n.1 + m.0    , 
+            n.0     -     m.1
+        )
+        return 
+            (
+            r.0, s.0, 
+            r.1, s.1, 
+            r.2, s.2, 
+            r.3, s.3
+            )
+    }
+    
+    private static 
+    func fdct8x8(_ g:Block8x8<Float>, shift:Float) -> Block8x8<Float>
+    {
+        let f:Block8x8<Float>   = Self.fdct8(Self.transpose(g), shift: shift), 
+            h:Block8x8<Float>   = Self.fdct8(Self.transpose(f), shift: 0)
+        return h
+    }
+    
+    mutating 
+    func fdct(_ plane:JPEG.Data.Planar<Format>.Plane, 
+        quanta table:JPEG.Table.Quantization, precision:Int) 
+    {
+        let count:Int               = 64 * plane.units.x * plane.units.y
+        let values:[Int16]          = .init(unsafeUninitializedCapacity: count)
+        {
+            var scale:Float 
+            {
+                0x1p3
+            }
+            let q:Block8x8<Float>   = Self.modulate(quanta: table, scale: scale)
+            let z:Block8x8<Int>     = Self.zigzag
+            
+            let stride:Int          = 64 * plane.units.x
+            // dont’s add 0.5 to the level shift, since the 0.5 is simply to 
+            // emulate nearest-integer rounding 
+            let level:Float         = 
+                .init(sign: .plus, exponent: precision - 1, significand: 1) * scale
+            let limit:SIMD8<Float>  = .init(repeating: 
+                .init(sign: .plus, exponent: precision    , significand: 1)) - 1
+            for (x, y):(Int, Int) in (0, 0) ..< plane.units 
+            {
+                let g:Block8x8<Float> = plane.load(x: x, y: y, limit: limit), 
+                    h:Block8x8<Float> = Self.fdct8x8(g, shift: level)
+                for (z, v):(SIMD8<Int>, SIMD8<Float>) in 
+                [
+                    (z.0, h.0 / q.0), 
+                    (z.1, h.1 / q.1), 
+                    (z.2, h.2 / q.2), 
+                    (z.3, h.3 / q.3), 
+                    (z.4, h.4 / q.4), 
+                    (z.5, h.5 / q.5), 
+                    (z.6, h.6 / q.6), 
+                    (z.7, h.7 / q.7)
+                ]
+                {
+                    let w:SIMD8<Int16> = .init(v, rounding: .toNearestOrAwayFromZero)
+                    for j:Int in 0 ..< 8 
+                    {
+                        $0[y * stride + 64 * x + z[j]] = w[j]
+                    }
+                }
+            }
+            
+            $1 = count
+        }
+        
+        self.set(values: values, units: plane.units)
+    }
+}
+extension JPEG.Data.Planar 
+{
+    public 
+    func fdct(quanta:[JPEG.Table.Quantization.Key: [UInt16]]) 
+        -> JPEG.Data.Spectral<Format>
+    {
+        let precision:Int                       = self.layout.format.precision
+        var spectral:JPEG.Data.Spectral<Format> = .init(layout: self.layout)
+        spectral.set(quanta: quanta)
+        for (p, plane):(Int, JPEG.Data.Planar<Format>.Plane) in 
+            zip(spectral.indices, self)
+        {
+            spectral[p].fdct(plane, quanta: spectral.quanta[spectral[p].q], 
+                precision: precision)
+        }
+        spectral.set(width:  self.size.x)
+        spectral.set(height: self.size.y)
+        spectral.metadata.append(contentsOf: self.metadata)
+        
+        return spectral
+    }
+}
+
 // strict constructors 
 extension JPEG.JFIF 
 {

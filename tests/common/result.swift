@@ -7,9 +7,10 @@ enum Test
     
     enum Function 
     {
-        case void(  ()         -> Result<Void, Failure>)
-        case string((String)   -> Result<Void, Failure>, [String])
-        case int(   (Int)      -> Result<Void, Failure>, [Int])
+        case void(       ()                       -> Result<Void, Failure>)
+        case string_int2((String, (x:Int, y:Int)) -> Result<Void, Failure>, [(String, (x:Int, y:Int))])
+        case string(     (String)                 -> Result<Void, Failure>, [String])
+        case int(        (Int)                    -> Result<Void, Failure>, [Int])
     }
 }
 
@@ -26,6 +27,17 @@ func test(_ function:Test.Function, name:String) -> Void?
             successes += 1
         case .failure(let failure):
             failures.append((nil, failure.message))
+        }
+    case .string_int2(let function, let cases):
+        for arguments:(String, (x:Int, y:Int)) in cases 
+        {
+            switch function(arguments.0, arguments.1)
+            {
+            case .success:
+                successes += 1
+            case .failure(let failure):
+                failures.append(("('\(arguments.0)', \(arguments.1))", failure.message))
+            }
         }
     case .string(let function, let cases):
         for argument:String in cases 

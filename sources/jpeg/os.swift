@@ -215,7 +215,7 @@ extension JPEG.Data.Rectangular
             return nil 
         }
         
-        return planar.interleave()
+        return planar.interleaved()
     }
 }
 

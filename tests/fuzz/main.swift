@@ -41,43 +41,41 @@ func fuzz<RNG>(rng:inout RNG, path:String) throws where RNG:RandomNumberGenerato
         .init(repeating: 1, count: 64)
     )
     
-    var spectral:JPEG.Data.Spectral<JPEG.Common> = .init(
+    var planar:JPEG.Data.Planar<JPEG.Common> = .init(
         size:       (8, 8), 
         layout:     layout, 
-        quanta:     
-        [
-            0: quanta.0,
-            1: quanta.1,
-        ], 
         metadata:   
         [
             .jfif(.init(version: .v1_2, density: (1, 1, .dpcm))),
         ])
     
-    spectral.with(ci: Y)
+    planar.with(ci: Y)
     {
         for (x, y):(Int, Int) in $0.indices
         {
-            for z:Int in 0 ..< 64
-            {
-                $0[x: x, y: y, z: z] = Int16.random(in: -75 ..< 75) / .init($1[z: z])
-            }
+            $0[x: x, y: y] = UInt16.random(in: 64 ..< 256 - 64)
         }
     }
-    spectral.with(ci: Cb)
+    planar.with(ci: Cb)
     {
         for (x, y):(Int, Int) in $0.indices
         {
-            $0[x: x, y: y, z: 1] = 180 / .init($1[z: 1])
+            $0[x: x, y: y] = .init(128 + 4 * (x + y) - 32)
         }
     }
-    spectral.with(ci: Cr)
+    planar.with(ci: Cr)
     {
         for (x, y):(Int, Int) in $0.indices
         {
-            $0[x: x, y: y, z: 2] = 180 / .init($1[z: 2])
+            $0[x: x, y: y] = .init(128 + 4 * (x - y))
         }
     }
+    
+    let spectral:JPEG.Data.Spectral<JPEG.Common> = planar.fdct(quanta:     
+        [
+            0: quanta.0,
+            1: quanta.1,
+        ])
     
     guard let _:Void = try spectral.compress(path: path)
     else 

@@ -80,6 +80,22 @@ func discrepancy(jpeg:String, reference:String)
         }.joined(separator: "")
         print("\(line1) \(line2) \(line3)")
     } 
+    for i:Int in 0 ..< rectangular.size.y
+    {
+        for j:Int in 0 ..< rectangular.size.x 
+        {
+            let y:(UInt8, UInt8) = 
+            (
+                output[j + i * rectangular.size.x].y,
+                expected[j + i * rectangular.size.x].y
+            )
+            
+            if abs(Int.init(y.0) - Int.init(y.1)) > 1 
+            {
+                print("output = \(y.0), expected = \(y.1)")
+            }
+        }
+    }
     
     var total:Int   = 0, 
         max:Int     = 0

@@ -47,3 +47,11 @@ fi
 
 check   "error: test failures" \
         $binaries/$TOOL_NAME
+
+data=(tests/integration/decode/*.jpg)
+for file in ${data[@]} ; do 
+    size=$(identify -format "%wx%h" jpg:$file)
+    convert -depth 8 -size $size "rgb:$file.rgb" "png:$file.rgb.png"
+    convert -depth 8 -size $size -define jpeg:dct-method=float "jpeg:$file" rgb:- |\
+    convert -depth 8 -size $size rgb:- "png:$file.png"
+done 

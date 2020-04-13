@@ -1,1 +1,1 @@
-../../integration/data/attribution.md
+../../integration/decode/attribution.md

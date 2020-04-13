@@ -3,3 +3,5 @@
 /Packages
 /*.xcodeproj
 /tests/fuzz/data
+/tests/integration/decode/*.png
+/tests/integration/decode/*.rgb

@@ -86,7 +86,7 @@ rm      $ycc_pattern    &> /dev/null
 
 for file in $jpeg_pattern ; do 
     check   "error: system jpeg-to-data conversion failed" \
-            convert -depth 8 "jpeg:$file" "ycbcr:$file.$YCC_EXTENSION"
+            convert -depth 8 -define jpeg:dct-method=float "jpeg:$file" "ycbcr:$file.$YCC_EXTENSION"
 done 
 
 $binaries/comparator $jpeg_pattern

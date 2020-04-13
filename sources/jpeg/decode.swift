@@ -2139,6 +2139,14 @@ extension JPEG
 }
 extension JPEG.Data 
 {
+    private static  
+    func units(_ size:Int, stride:Int) -> Int  
+    {
+        let complete:Int = size / stride, 
+            partial:Int  = size % stride != 0 ? 1 : 0 
+        return complete + partial 
+    }
+    
     public 
     struct Spectral<Format> where Format:JPEG.Format 
     {
@@ -2198,8 +2206,6 @@ extension JPEG.Data
         public private(set)
         var size:(x:Int, y:Int), 
             blocks:(x:Int, y:Int)
-        public  
-        let scale:(x:Int, y:Int)
         
         public private(set)
         var layout:JPEG.Layout<Format>
@@ -2252,8 +2258,7 @@ extension JPEG.Data
         }
         
         public 
-        let size:(x:Int, y:Int), 
-            scale:(x:Int, y:Int)
+        let size:(x:Int, y:Int)
         
         public 
         let layout:JPEG.Layout<Format>, 
@@ -2265,14 +2270,13 @@ extension JPEG.Data
         private 
         let p:[JPEG.Component.Key: Int]
         
-        init(size:(x:Int, y:Int), scale:(x:Int, y:Int), 
+        init(size:(x:Int, y:Int), 
             layout:JPEG.Layout<Format>, 
             metadata:[JPEG.Metadata],
             planes:[JPEG.Data.Planar<Format>.Plane], 
             p:[JPEG.Component.Key: Int])
         {
             self.size       = size
-            self.scale      = scale
             self.layout     = layout
             self.metadata   = metadata
             self.planes     = planes 
@@ -2537,6 +2541,27 @@ extension JPEG.Data.Planar
     }
 }
 
+// shared properties needed for initializing both planar and spectral types 
+extension JPEG.Layout 
+{
+    public 
+    var scale:(x:Int, y:Int) 
+    {
+        self.components.values.reduce((0, 0))
+        {
+            (Swift.max($0.x, $1.factor.x), Swift.max($0.y, $1.factor.y))
+        }
+    }
+    
+    func planes() -> [JPEG.Component.Key: Int]
+    {
+        .init(uniqueKeysWithValues: 
+            zip(self.recognized, self.recognized.indices).map 
+        {
+            (self.components[$0.0.component].key, $0.1)
+        })
+    }
+}
 // spectral type APIs
 extension JPEG.Data.Spectral.Plane 
 {
@@ -2548,10 +2573,24 @@ extension JPEG.Data.Spectral.Plane
         self._factor    = .init(wrappedValue: factor)
     }
     
+    // used by the `fdct(_:quanta:precision:)` function defined in `encode.swift`
+    mutating 
+    func set(values:[Int16], units:(x:Int, y:Int))
+    {
+        precondition(values.count == 64 * units.x * units.y)
+        self.buffer = values 
+        self.units  = units
+    }
     // width is in units, not pixels 
     mutating 
     func set(width x:Int) 
     {
+        guard x != self.units.x 
+        else 
+        {
+            return 
+        }
+        
         let count:Int   = 64 * x * self.units.y
         let new:[Int16] = .init(unsafeUninitializedCapacity: count) 
         {
@@ -2605,6 +2644,12 @@ extension JPEG.Data.Spectral.Plane
     mutating 
     func set(height y:Int) 
     {
+        guard y != self.units.y 
+        else 
+        {
+            return 
+        }
+        
         let count:Int   = 64 * self.units.x * y, 
             change:Int  = count - self.buffer.count
         if  change < 0
@@ -2635,14 +2680,6 @@ extension JPEG.Data.Spectral.Plane
 }
 extension JPEG.Data.Spectral 
 {
-    private static  
-    func units(_ size:Int, stride:Int) -> Int  
-    {
-        let complete:Int = size / stride, 
-            partial:Int  = size % stride != 0 ? 1 : 0 
-        return complete + partial 
-    }
-    
     // this function is supposed to match the public `encode()` function, 
     // but since it returns an incomplete Spectral struct, we don’t make it public 
     // (even if that makes the name of the `encode()` function not make any sense 
@@ -2695,11 +2732,7 @@ extension JPEG.Data.Spectral
     init(layout:JPEG.Layout<Format>)  
     {
         self.layout     = layout
-        self.p          = .init(uniqueKeysWithValues: 
-            zip(layout.recognized, layout.recognized.indices).map 
-        {
-            (layout.components[$0.0.component].key, $0.1)
-        })
+        self.p          = layout.planes()
         
         self.metadata   = [] 
         self.planes     = layout.recognized.map 
@@ -2713,35 +2746,33 @@ extension JPEG.Data.Spectral
         
         self.size       = (0, 0)
         self.blocks     = (0, 0)
-        self.scale      = layout.components.values.reduce((0, 0))
-        {
-            (Swift.max($0.x, $1.factor.x), Swift.max($0.y, $1.factor.y))
-        }
     }
     
     // width in pixels 
     public mutating 
     func set(width x:Int) 
     {
-        self.blocks.x   = Self.units(x, stride: 8 * self.scale.x)
+        let scale:Int = self.layout.scale.x
+        self.blocks.x   = JPEG.Data.units(x, stride: 8 * scale)
         self.size.x     = x
         for p:Int in self.indices
         {
             //        x * factor 
             // ceil( ------------ )
             //        8 * scale 
-            let u:Int = Self.units(x * self[p].factor.x, stride: 8 * self.scale.x)
+            let u:Int = JPEG.Data.units(x * self[p].factor.x, stride: 8 * scale)
             self[p].set(width: u)
         }
     }
     public mutating 
     func set(height y:Int) 
     {
-        self.blocks.y   = Self.units(y, stride: 8 * self.scale.y)
+        let scale:Int = self.layout.scale.y
+        self.blocks.y   = JPEG.Data.units(y, stride: 8 * scale)
         self.size.y     = y
         for p:Int in self.indices
         {
-            let u:Int = Self.units(y * self[p].factor.y, stride: 8 * self.scale.y)
+            let u:Int = JPEG.Data.units(y * self[p].factor.y, stride: 8 * scale)
             self[p].set(height: u)
         }
     }
@@ -2800,6 +2831,35 @@ extension JPEG.Data.Spectral
         
         self.layout.push(qi: qi)
         return self.quanta.push(qi: qi, quanta: quanta)
+    }
+}
+extension JPEG.Data.Planar 
+{
+    public 
+    init(size:(x:Int, y:Int), layout:JPEG.Layout<Format>, 
+        metadata:[JPEG.Metadata])
+    {
+        self.layout     = layout
+        self.p          = layout.planes()
+
+        self.size       = size
+        self.metadata   = metadata
+        
+        let scale:(x:Int, y:Int)    = layout.scale
+        let midpoint:UInt16         = 1 << (layout.format.precision - 1 as Int)
+        self.planes                 = layout.recognized.map 
+        {
+            let factor:(x:Int, y:Int) = layout.components[$0.0].value.factor
+            let units:(x:Int, y:Int)  = 
+            (
+                JPEG.Data.units(size.x * factor.x, stride: 8 * scale.x),
+                JPEG.Data.units(size.y * factor.y, stride: 8 * scale.y)
+            )
+            
+            let blank:[UInt16] = .init(repeating: midpoint, 
+                count: 64 * units.x * units.y)
+            return .init(blank, units: units, factor: factor)
+        }
     }
 }
 
@@ -4272,7 +4332,211 @@ extension JPEG.Context
 // signal processing and upscaling 
 extension JPEG.Data.Spectral.Plane 
 {
-    func idct(x:Int, y:Int, quanta:JPEG.Table.Quantization, precision:Int) 
+    typealias Block8x8<T> = 
+        (SIMD8<T>, SIMD8<T>, SIMD8<T>, SIMD8<T>, SIMD8<T>, SIMD8<T>, SIMD8<T>, SIMD8<T>) 
+        where T:SIMDScalar
+    
+    static 
+    func transpose<T>(_ h:Block8x8<T>) -> Block8x8<T> where T:SIMDScalar
+    {
+        @inline(__always)
+        func column(_ k:Int) -> SIMD8<T> 
+        {
+            .init(h.0[k], h.1[k], h.2[k], h.3[k], h.4[k], h.5[k], h.6[k], h.7[k])
+        }
+        
+        return (column(0), column(1), column(2), column(3), 
+            column(4), column(5), column(6), column(7))
+    }
+    
+    static 
+    func modulate(quanta table:JPEG.Table.Quantization, scale:Float) -> Block8x8<Float> 
+    {
+        @inline(__always)
+        func row(_ h:Int) -> SIMD8<Float> 
+        {
+            scale * .init(.init(
+                table[k: 0, h: h],
+                table[k: 1, h: h],
+                table[k: 2, h: h],
+                table[k: 3, h: h],
+                
+                table[k: 4, h: h],
+                table[k: 5, h: h],
+                table[k: 6, h: h],
+                table[k: 7, h: h]))
+        }
+        
+        let r:SIMD8<Float>          = .init(
+            1, 1.387039845, 1.306562965, 1.175875602, 
+            1, 0.785694958, 0.541196100, 0.275899379)
+        let h:Block8x8<Float>       = (r, r, r, r, r, r, r, r), 
+            v:Block8x8<Float>       = Self.transpose(h)
+        return 
+            (
+            h.0 * v.0 * row(0), 
+            h.1 * v.1 * row(1), 
+            h.2 * v.2 * row(2), 
+            h.3 * v.3 * row(3), 
+            h.4 * v.4 * row(4), 
+            h.5 * v.5 * row(5), 
+            h.6 * v.6 * row(6), 
+            h.7 * v.7 * row(7)
+            )
+    }
+    
+    fileprivate 
+    func load(x:Int, y:Int, quanta:Block8x8<Float>) -> Block8x8<Float>
+    {
+        @inline(__always)
+        func row(_ h:Int) -> SIMD8<Float> 
+        {
+            .init(.init(
+                self[x: x, y: y, k: 0, h: h],
+                self[x: x, y: y, k: 1, h: h],
+                self[x: x, y: y, k: 2, h: h],
+                self[x: x, y: y, k: 3, h: h],
+                
+                self[x: x, y: y, k: 4, h: h],
+                self[x: x, y: y, k: 5, h: h],
+                self[x: x, y: y, k: 6, h: h],
+                self[x: x, y: y, k: 7, h: h]))
+        }
+        
+        return (quanta.0 * row(0), quanta.1 * row(1), quanta.2 * row(2), quanta.3 * row(3), 
+            quanta.4 * row(4), quanta.5 * row(5), quanta.6 * row(6), quanta.7 * row(7))
+    }
+    
+    private static 
+    func idct8(_ h:Block8x8<Float>, shift:Float) -> Block8x8<Float>
+    {
+        // even rows 
+        let a:(SIMD8<Float>, SIMD8<Float>) = 
+        (
+            shift + h.0 + h.4,
+            shift + h.0 - h.4
+        )
+        let b:SIMD8<Float> =                h.2 + h.6, 
+            c:SIMD8<Float> = 1.414213562 * (h.2 - h.6) - b
+        
+        let r:(SIMD8<Float>, SIMD8<Float>, SIMD8<Float>, SIMD8<Float>) = 
+        (
+            a.0     +     b, 
+                a.1 + c, 
+                a.1 - c,
+            a.0     -     b
+        )
+        // odd rows 
+        let d:(SIMD8<Float>, SIMD8<Float>, SIMD8<Float>, SIMD8<Float>) = 
+        (
+            h.5     -     h.3,
+                h.1 + h.7    ,
+                h.1 - h.7    ,
+            h.5     +     h.3
+        )
+        let f:SIMD8<Float> = 1.414213562 * (d.1 - d.3), 
+            l:SIMD8<Float> = 1.847759065 * (d.0 + d.2)
+        let m:(SIMD8<Float>, SIMD8<Float>) = 
+        (
+            l - d.2 * 1.082392200,
+            l - d.0 * 2.613125930
+        )
+        let s:(SIMD8<Float>, SIMD8<Float>, SIMD8<Float>, SIMD8<Float>)
+        s.0 = d.1 + d.3
+        s.1 = m.1 - s.0
+        s.2 = f   - s.1
+        s.3 = m.0 - s.2
+        
+        return 
+            (
+            r.0 + s.0,
+            r.1 + s.1,
+            r.2 + s.2,
+            r.3 + s.3, 
+            
+            r.3 - s.3,
+            r.2 - s.2,
+            r.1 - s.1,
+            r.0 - s.0
+            )
+    }
+    /* private static 
+    func _idct8(_ h:Block8x8<Float>) -> Block8x8<Float>
+    {
+        let a:(SIMD8<Float>, SIMD8<Float>) = 
+        (
+            h.1       +       h.7, 
+                  h.3 + h.5      
+        )
+        let b:(SIMD8<Float>, SIMD8<Float>) = 
+        (
+                  h.3    +    h.7, 
+            h.1    +    h.5
+        )
+        
+        let s:SIMD8<Float> = (a.0 + a.1) * 1.175875602
+        
+        let c:(SIMD8<Float>, SIMD8<Float>) = 
+        (
+            -0.899976223 * a.0,
+            -2.562915447 * a.1
+        )
+        let d:(SIMD8<Float>, SIMD8<Float>) = 
+        (
+            -1.961570560 * b.0 + s,
+            -0.390180644 * b.1 + s
+        )
+        
+        let f:(SIMD8<Float>, SIMD8<Float>, SIMD8<Float>, SIMD8<Float>) = 
+        (
+            h.1 * 1.501321110 + c.0     + d.1    ,
+            h.3 * 3.072711026 +     c.1 +     d.0,
+            h.5 * 2.053119869 +     c.1 + d.1    ,
+            h.7 * 0.298631336 + c.0     +     d.0
+        )
+        
+        let t:SIMD8<Float> = (h.2 + h.6) * 0.541196100 
+        
+        let l:(SIMD8<Float>, SIMD8<Float>) = 
+        (
+            h.0 + h.4,
+            h.0 - h.4
+        )
+        let m:(SIMD8<Float>, SIMD8<Float>) = 
+        (
+            -1.847759065 * h.6 + t,
+             0.765366865 * h.2 + t
+        )
+        
+        let n:(SIMD8<Float>, SIMD8<Float>, SIMD8<Float>, SIMD8<Float>) = 
+        (
+            l.0     +     m.1,
+                l.1 + m.0    ,
+                l.1 - m.0    ,
+            l.0     -     m.1
+        )
+        
+        return 
+            (
+            n.0 + f.0, 
+            n.1 + f.1, 
+            n.2 + f.2, 
+            n.3 + f.3, 
+            n.3 - f.3, 
+            n.2 - f.2, 
+            n.1 - f.1, 
+            n.0 - f.0
+            )
+    }
+    */
+    private static 
+    func idct8x8(_ h:Block8x8<Float>, shift:Float) -> Block8x8<Float>
+    {
+        let f:Block8x8<Float>   = Self.transpose(Self.idct8(h, shift: 0)), 
+            g:Block8x8<Float>   = Self.transpose(Self.idct8(f, shift: shift))
+        return g
+    }
+    /* func idct(x:Int, y:Int, quanta:JPEG.Table.Quantization, precision:Int) 
         -> [UInt16] 
     {
         let values:[UInt16] = .init(unsafeUninitializedCapacity: 64) 
@@ -4318,21 +4582,33 @@ extension JPEG.Data.Spectral.Plane
             $1 = 64
         }
         return values 
-    }
-    func idct(quanta:JPEG.Table.Quantization, precision:Int) 
+    } */
+    func idct(quanta table:JPEG.Table.Quantization, precision:Int) 
         -> JPEG.Data.Planar<Format>.Plane
     {
-        let count:Int = 64 * self.units.x * self.units.y
-        let values:[UInt16] = .init(unsafeUninitializedCapacity: count) 
+        let count:Int               = 64 * self.units.x * self.units.y 
+        let values:[UInt16]         = .init(unsafeUninitializedCapacity: count) 
         {
-            let stride:Int  = 8 * self.units.x
+            let q:Block8x8<Float>   = Self.modulate(quanta: table, scale: 0x1p-3)
+            
+            let stride:Int          = 8 * self.units.x
+            let level:Float         = 
+                .init(sign: .plus, exponent: precision - 1, significand: 1)  + 0.5
+            let limit:SIMD8<Float>  = .init(repeating: 
+                .init(sign: .plus, exponent: precision    , significand: 1)) - 1
             for (x, y):(Int, Int) in (0, 0) ..< self.units 
             {
-                let block:[UInt16] = self.idct(x: x, y: y, 
-                    quanta: quanta, precision: precision)
-                for (j, i):(Int, Int) in (0, 0) ..< (8, 8)
+                let h:Block8x8<Float> = self.load(x: x, y: y, quanta: q),
+                    g:Block8x8<Float> = Self.idct8x8(h, shift: level)
+                for (i, t):(Int, SIMD8<Float>) in 
+                    [g.0, g.1, g.2, g.3, g.4, g.5, g.6, g.7].enumerated()
                 {
-                    $0[(8 * y + i) * stride + 8 * x + j] = block[8 * i + j]
+                    let u:SIMD8<UInt16> = 
+                        .init(t.clamped(lowerBound: .zero, upperBound: limit))
+                    for j:Int in 0 ..< 8 
+                    {
+                        $0[(8 * y + i) * stride + 8 * x + j] = u[j]
+                    }
                 }
             }
             
@@ -4361,7 +4637,7 @@ extension JPEG.Data.Spectral
         {
             self[$0].idct(quanta: self.quanta[self[$0].q], precision: precision)
         }
-        return .init(size: self.size, scale: self.scale, 
+        return .init(size: self.size, 
             layout:     self.layout, 
             metadata:   self.metadata,
             planes:     planes,
@@ -4371,7 +4647,7 @@ extension JPEG.Data.Spectral
 extension JPEG.Data.Planar 
 {
     public 
-    func interleave() -> JPEG.Data.Rectangular<Format> 
+    func interleaved() -> JPEG.Data.Rectangular<Format> 
     {
         var interleaved:[UInt16] 
         if self.count == 1 
@@ -4389,19 +4665,20 @@ extension JPEG.Data.Planar
         }
         else 
         {
-            let count:Int   = self.size.x * self.size.y * self.count
-            interleaved     = .init(unsafeUninitializedCapacity: count)
+            let scale:(x:Int, y:Int)    = self.layout.scale
+            let count:Int               = self.size.x * self.size.y * self.count
+            interleaved                 = .init(unsafeUninitializedCapacity: count)
             {
                 for (p, plane):(Int, Plane) in self.enumerated() 
                 {
                     let d:(x:Int, y:Int) = 
                     (
-                        self.scale.x / plane.factor.x,
-                        self.scale.y / plane.factor.y
+                        scale.x / plane.factor.x,
+                        scale.y / plane.factor.y
                     )
                     
-                    assert(self.scale.x % plane.factor.x == 0)
-                    assert(self.scale.y % plane.factor.y == 0)
+                    assert(scale.x % plane.factor.x == 0)
+                    assert(scale.y % plane.factor.y == 0)
                     
                     for (x, y):(Int, Int) in (0, 0) ..< self.size 
                     {
@@ -4449,7 +4726,7 @@ extension JPEG.Data.Rectangular
         where Source:JPEG.Bytestream.Source 
     {
         let planar:JPEG.Data.Planar<Format> = try .decompress(stream: &stream) 
-        return planar.interleave()
+        return planar.interleaved()
     }
 }
 
@@ -4465,6 +4742,19 @@ extension JPEG
 }
 extension JPEG.Common:JPEG.Format
 {
+    fileprivate static 
+    func clamp<T>(_ x:Float, to _:T.Type) -> T where T:FixedWidthInteger
+    {
+        .init(max(.init(T.min), min(x, .init(T.max))))
+    }
+    fileprivate static 
+    func clamp<T>(_ x:SIMD3<Float>, to _:T.Type) -> SIMD3<T> where T:FixedWidthInteger
+    {
+        .init(x.clamped(
+            lowerBound: .init(repeating: .init(T.min)), 
+            upperBound: .init(repeating: .init(T.max))))
+    }
+    
     public static 
     func recognize(_ components:Set<JPEG.Component.Key>, precision:Int) -> Self? 
     {
@@ -4510,22 +4800,39 @@ extension JPEG.Data.Rectangular
 }
 extension JPEG.YCbCr
 {
-    // y cb cr conversion is only defined for 8-bit precision 
-    private static 
-    func clamp8(_ x:Float) -> UInt8 
-    {
-        .init(max(.init(UInt8.min), min(x, .init(UInt8.max))))
-    }
     public 
     var rgb:JPEG.RGB
     {
-        let y:Float     = .init(self.y),
-            cr:Float    = .init(self.cr),
-            cb:Float    = .init(self.cb)
-        let r:UInt8     = Self.clamp8(y + 1.40200 * (cr - 128)), 
-            g:UInt8     = Self.clamp8(y - 0.34414 * (cb - 128) - 0.71414 * (cr - 128)), 
-            b:UInt8     = Self.clamp8(y + 1.77200 * (cb - 128))
-        return .init(r, g, b)
+        let matrix:(cb:SIMD3<Float>, cr:SIMD3<Float>) = 
+        (
+            .init( 0.00000, -0.34414,  1.77200),
+            .init( 1.40200, -0.71414,  0.00000)
+        )
+        let x:SIMD3<Float> = (.init(self.y)         as       Float ) + 
+            (matrix.cb *     (.init(self.cb) - 128) as SIMD3<Float>) + 
+            (matrix.cr *     (.init(self.cr) - 128) as SIMD3<Float>)
+        let c:SIMD3<UInt8> = JPEG.Common.clamp(x, to: UInt8.self)
+        return .init(c.x, c.y, c.z)
+    }
+}
+extension JPEG.RGB
+{
+    public 
+    var ycc:JPEG.YCbCr
+    {
+        let matrix:(SIMD3<Float>, r:SIMD3<Float>, g:SIMD3<Float>, b:SIMD3<Float>) = 
+        (
+            .init( 0,     128,     128     ),
+            .init( 0.2990, -0.1687,  0.5000),
+            .init( 0.5870, -0.3313, -0.4187),
+            .init( 0.1140,  0.5000, -0.0813)
+        )
+        let x:SIMD3<Float> = matrix.0                  + 
+            (matrix.r * .init(self.r) as SIMD3<Float>) + 
+            (matrix.g * .init(self.g) as SIMD3<Float>) + 
+            (matrix.b * .init(self.b) as SIMD3<Float>)
+        let c:SIMD3<UInt8> = JPEG.Common.clamp(x, to: UInt8.self)
+        return .init(y: c.x, cb: c.y, cr: c.z)
     }
 }
 
