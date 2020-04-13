@@ -31,21 +31,21 @@ extension Test
                 "tests/integration/decode/grayscale-progressive-2.jpg",
             ])),
             
-            /* ("color-sequential-encoding-robustness", .string_int2(Self.encodeColorSequential(_:_:), 
+            ("color-sequential-encoding-robustness", .string_int2(Self.encodeColorSequential(_:_:), 
             [
-                ("tests/integration/encode/color-encoding-input-1", (640, 320))
+                ("tests/integration/encode/karlie-kloss-1", (640, 320))
             ])),
             ("grayscale-sequential-encoding-robustness", .string_int2(Self.encodeGrayscaleSequential(_:_:), 
             [
-                ("tests/integration/encode/grayscale-encoding-input-1", (640, 320))
-            ])), */
+                ("tests/integration/encode/karlie-kloss-1", (640, 320))
+            ])),
             ("color-progressive-encoding-robustness", .string_int2(Self.encodeColorProgressive(_:_:), 
             [
-                ("tests/integration/encode/color-encoding-input-1", (640, 320))
+                ("tests/integration/encode/karlie-kloss-1", (640, 320))
             ])),
             ("grayscale-progressive-encoding-robustness", .string_int2(Self.encodeGrayscaleProgressive(_:_:), 
             [
-                ("tests/integration/encode/grayscale-encoding-input-1", (640, 320))
+                ("tests/integration/encode/karlie-kloss-1", (640, 320))
             ])),
         ]
     }
@@ -185,7 +185,7 @@ extension Test
             [
                 .sequential((Y,  \.0, \.0), (Cb, \.1, \.1), (Cr, \.1, \.1))
             ])
-        return Self.encode(path, size, layout: layout)
+        return Self.encode(path, suffix: "-color-sequential", size: size, layout: layout)
     }
     static 
     func encodeGrayscaleSequential(_ path:String, _ size:(x:Int, y:Int)) 
@@ -204,7 +204,7 @@ extension Test
             [
                 .sequential((Y,  \.0, \.0))
             ])
-        return Self.encode(path, size, layout: layout)
+        return Self.encode(path, suffix: "-grayscale-sequential", size: size, layout: layout)
     }
     static 
     func encodeColorProgressive(_ path:String, _ size:(x:Int, y:Int)) 
@@ -241,7 +241,7 @@ extension Test
                 .progressive((Cb, \.0),        band: 1 ..< 64, bit:  0   ), 
                 .progressive((Cr, \.0),        band: 1 ..< 64, bit:  0   ), 
             ])
-        return Self.encode(path, size, layout: layout)
+        return Self.encode(path, suffix: "-color-progressive", size: size, layout: layout)
     }
     static 
     func encodeGrayscaleProgressive(_ path:String, _ size:(x:Int, y:Int)) 
@@ -266,20 +266,20 @@ extension Test
                 .progressive((Y,  \.0),        band: 6 ..< 64, bits: 1...), 
                 .progressive((Y,  \.0),        band: 1 ..< 64, bit:  0   ), 
             ])
-        return Self.encode(path, size, layout: layout)
+        return Self.encode(path, suffix: "-grayscale-progressive", size: size, layout: layout)
     }
     private static 
-    func encode(_ path:String, _ size:(x:Int, y:Int), layout:JPEG.Layout<JPEG.Common>) 
+    func encode(_ path:String, suffix:String, size:(x:Int, y:Int), layout:JPEG.Layout<JPEG.Common>) 
         -> Result<Void, Failure> 
     {
         do 
         {
-            guard let rgb:[JPEG.RGB]    = try (Common.File.Source.open(path: path)
+            guard let rgb:[JPEG.RGB]    = try (Common.File.Source.open(path: "\(path).rgb")
             {
                 guard let data:[UInt8]  = $0.read(count: 3 * size.x * size.y)
                 else
                 {
-                    throw Failure.init(message: "failed to read from file '\(path)'")
+                    throw Failure.init(message: "failed to read from file '\(path).rgb'")
                 }
 
                 return (0 ..< size.x * size.y).map
@@ -290,7 +290,7 @@ extension Test
             })
             else 
             {
-                throw Failure.init(message: "failed to open file '\(path)'")
+                throw Failure.init(message: "failed to open file '\(path).rgb'")
             }
             
             var planar:JPEG.Data.Planar<JPEG.Common> = .init(
@@ -333,10 +333,10 @@ extension Test
                     1: quanta.1,
                 ])
             
-            guard let _:Void = try spectral.compress(path: "\(path).jpg")
+            guard let _:Void = try spectral.compress(path: "\(path)\(suffix).jpg")
             else 
             {
-                fatalError("failed to open file '\(path).jpg'")
+                fatalError("failed to open file '\(path)\(suffix).jpg'")
             } 
             
             // terminal output 

@@ -49,25 +49,33 @@ func fuzz<RNG>(rng:inout RNG, path:String) throws where RNG:RandomNumberGenerato
             .jfif(.init(version: .v1_2, density: (1, 1, .dpcm))),
         ])
     
+    let colors:[JPEG.YCbCr] = ((0 as UInt8) ..< (8 * 8 as UInt8)).map 
+    {
+        let rgb:JPEG.RGB = .init(
+            UInt8.random(in: 5 ... 250), 
+            128 + ($0      & 0x38) - 32,
+            128 + ($0 << 3 & 0x38) - 32)
+        return rgb.ycc 
+    }
     planar.with(ci: Y)
     {
         for (x, y):(Int, Int) in $0.indices
         {
-            $0[x: x, y: y] = UInt16.random(in: 64 ..< 256 - 64)
+            $0[x: x, y: y] = .init(colors[8 * y + x].y)
         }
     }
     planar.with(ci: Cb)
     {
         for (x, y):(Int, Int) in $0.indices
         {
-            $0[x: x, y: y] = .init(128 + 4 * (x + y) - 32)
+            $0[x: x, y: y] = .init(colors[8 * y + x].cb)
         }
     }
     planar.with(ci: Cr)
     {
         for (x, y):(Int, Int) in $0.indices
         {
-            $0[x: x, y: y] = .init(128 + 4 * (x - y))
+            $0[x: x, y: y] = .init(colors[8 * y + x].cr)
         }
     }
     
