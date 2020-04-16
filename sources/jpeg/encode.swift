@@ -363,12 +363,12 @@ extension JPEG.Data.Spectral
         do 
         {
             // strip the resident components
-            let recognized:Set<JPEG.Component.Key> = .init(self.layout.format.components) 
             return try .validate(
                 process:    self.layout.process, 
                 precision:  self.layout.format.precision, 
                 size:       self.size, 
-                components: self.layout.components.filter{ recognized.contains($0.key) })
+                components: .init(uniqueKeysWithValues: zip(self.layout.recognized, 
+                    self.layout.planes[self.layout.recognized.indices].map(\.component))))
         }
         catch 
         {
@@ -1018,7 +1018,7 @@ extension JPEG.Data.Spectral
 {
     // sequential mode 
     private 
-    func encode(components:[JPEG.Scan.Component]) 
+    func encode(components:[(c:Int, component:JPEG.Scan.Component)]) 
         -> ([UInt8], [JPEG.Table.HuffmanDC], [JPEG.Table.HuffmanAC])
     {
         guard components.count > 1 
@@ -1026,31 +1026,21 @@ extension JPEG.Data.Spectral
         {
             // noninterleaved
             precondition(components.count == 1, "components array cannot be empty")
-            
-            guard let p:Int = 
-                self.index(forKey: self.layout.components[components[0].ci.component].key)
+            let (p, component):(Int, JPEG.Scan.Component) = components[0]
+            guard self.indices ~= p
             else 
             {
                 fatalError("scan component not a member of this spectral image")
             }
             
             let (bytes, dc, ac):([UInt8], JPEG.Table.HuffmanDC, JPEG.Table.HuffmanAC) = 
-                self[p].encode(component: components[0])
-            
+                self[p].encode(component: component)
             return (bytes, [dc], [ac])
         }
         
-        typealias Resolved = 
-            (p:Int, factor:(x:Int, y:Int), target:
-            (
-                dc:JPEG.Table.HuffmanDC.Selector, 
-                ac:JPEG.Table.HuffmanAC.Selector
-            ))
-        let resolved:[Resolved] = components.map 
+        let factors:[(x:Int, y:Int)] = components.map 
         {
-            let (ci, component):(JPEG.Component.Key, JPEG.Component) = 
-                self.layout.components[$0.ci.component]
-            guard let p:Int = self.index(forKey: ci)
+            guard self.indices ~= $0.c
             else 
             {
                 // unlike in the decoder, we don’t have a good reason to allow scans to 
@@ -1058,14 +1048,10 @@ extension JPEG.Data.Spectral
                 // so every component must be linked to an existing plane index (non-optional `p`)
                 fatalError("scan component not a member of this spectral image")
             }
-            return (p, component.factor, $0.selector)
+            return self.layout.planes[$0.c].component.factor
         }
         
-        let stride:Int = resolved.map 
-        {
-            $0.factor.x * $0.factor.y
-        }.reduce(0, +)
-        
+        let stride:Int = factors.reduce(0){ $0 + $1.x * $1.y } 
         // some components may specify the same table selectors, which means 
         // those components are sharing the same huffman table.
         var globals:
@@ -1080,7 +1066,8 @@ extension JPEG.Data.Spectral
             .init(unsafeUninitializedCapacity: count)
         {
             var offset:Int = 0
-            for (p, factor, target):Resolved in resolved 
+            for ((p, component), factor):((Int, JPEG.Scan.Component), (x:Int, y:Int)) in 
+                zip(components, factors) 
             {
                 // to avoid doing tons of dictionary lookups, maintain a local 
                 // frequency count, and then merge it into the dictionary one 
@@ -1115,21 +1102,27 @@ extension JPEG.Data.Spectral
                 }
                 
                 // merge frequency counts 
-                if let global:[Int] = globals.dc[target.dc] 
+                if let global:[Int] = globals.dc[component.selector.dc] 
                 {
-                    globals.dc[target.dc] = zip(global, frequencies.dc).map{ $0.0 + $0.1 }
+                    globals.dc[component.selector.dc] = zip(global, frequencies.dc).map
+                    { 
+                        $0.0 + $0.1 
+                    }
                 }
                 else 
                 {
-                    globals.dc[target.dc] = frequencies.dc
+                    globals.dc[component.selector.dc] = frequencies.dc
                 }
-                if let global:[Int] = globals.ac[target.ac] 
+                if let global:[Int] = globals.ac[component.selector.ac] 
                 {
-                    globals.ac[target.ac] = zip(global, frequencies.ac).map{ $0.0 + $0.1 }
+                    globals.ac[component.selector.ac] = zip(global, frequencies.ac).map
+                    { 
+                        $0.0 + $0.1 
+                    }
                 }
                 else 
                 {
-                    globals.ac[target.ac] = frequencies.ac
+                    globals.ac[component.selector.ac] = frequencies.ac
                 }
                 
                 offset += factor.x * factor.y
@@ -1151,36 +1144,29 @@ extension JPEG.Data.Spectral
                 dc:JPEG.Table.HuffmanDC.Encoder,
                 ac:JPEG.Table.HuffmanAC.Encoder
             ))
-        let descriptors:[Descriptor] = .init(unsafeUninitializedCapacity: resolved.count) 
+        let dc:[JPEG.Table.HuffmanDC.Selector: JPEG.Table.HuffmanDC.Encoder] = 
+            .init(uniqueKeysWithValues: tables.dc.map 
         {
-            let dc:[JPEG.Table.HuffmanDC.Selector: JPEG.Table.HuffmanDC.Encoder] = 
-                .init(uniqueKeysWithValues: tables.dc.map 
-            {
-                ($0.target, $0.encoder())
-            })
-            let ac:[JPEG.Table.HuffmanAC.Selector: JPEG.Table.HuffmanAC.Encoder] = 
-                .init(uniqueKeysWithValues: tables.ac.map 
-            {
-                ($0.target, $0.encoder())
-            })
-            
-            var offset:Int = 0
-            for (i, resolved):(Int, Resolved) in resolved.enumerated()
-            {
-                let volume:Int  = resolved.factor.x * resolved.factor.y
-                // cannot use direct assignment because `Descriptor` (recursively)
-                // contains a reference-counted type (array storage)
-                // can use `!` because we verified components.count > 1
-                ($0.baseAddress! + i).initialize(to: 
-                    (
-                        offset: offset, 
-                        volume: volume, // `!` is unreachable
-                        table: (dc[resolved.target.dc]!, ac[resolved.target.ac]!)
-                    ))
-                offset += volume
-            }
-            
-            $1 = resolved.count
+            ($0.target, $0.encoder())
+        })
+        let ac:[JPEG.Table.HuffmanAC.Selector: JPEG.Table.HuffmanAC.Encoder] = 
+            .init(uniqueKeysWithValues: tables.ac.map 
+        {
+            ($0.target, $0.encoder())
+        })
+        var offset:Int                  = 0
+        var descriptors:[Descriptor]    = [] 
+            descriptors.reserveCapacity(components.count)
+        for ((_, component), factor):((Int, JPEG.Scan.Component), (x:Int, y:Int)) in 
+            zip(components, factors) 
+        {
+            let volume:Int = factor.x * factor.y
+            descriptors.append((
+                    offset: offset, 
+                    volume: volume, // `!` is unreachable
+                    table: (dc[component.selector.dc]!, ac[component.selector.ac]!)
+                ))
+            offset += volume
         }
         
         var bits:JPEG.Bitstream = []
@@ -1207,7 +1193,8 @@ extension JPEG.Data.Spectral
     }
     // progressive mode 
     private 
-    func encode(bits a:PartialRangeFrom<Int>, components:[JPEG.Scan.Component]) 
+    func encode(bits a:PartialRangeFrom<Int>, 
+        components:[(c:Int, component:JPEG.Scan.Component)]) 
         -> ([UInt8], [JPEG.Table.HuffmanDC])
     {
         guard components.count > 1 
@@ -1215,39 +1202,28 @@ extension JPEG.Data.Spectral
         {
             // noninterleaved
             precondition(components.count == 1, "components array cannot be empty")
-            
-            guard let p:Int = 
-                self.index(forKey: self.layout.components[components[0].ci.component].key)
+            let (p, component):(Int, JPEG.Scan.Component) = components[0]
+            guard self.indices ~= p
             else 
             {
                 fatalError("scan component not a member of this spectral image")
             }
-            
             let (bytes, table):([UInt8], JPEG.Table.HuffmanDC) = 
-                self[p].encode(bits: a, component: components[0])
-            
+                self[p].encode(bits: a, component: component)
             return (bytes, [table])
         }
         
-        typealias Resolved = 
-            (p:Int, factor:(x:Int, y:Int), target:JPEG.Table.HuffmanDC.Selector)
-        let resolved:[Resolved] = components.map 
+        let factors:[(x:Int, y:Int)] = components.map 
         {
-            let (ci, component):(JPEG.Component.Key, JPEG.Component) = 
-                self.layout.components[$0.ci.component]
-            guard let p:Int = self.index(forKey: ci)
+            guard self.indices ~= $0.c
             else 
             {
                 fatalError("scan component not a member of this spectral image")
             }
-            return (p, component.factor, $0.selector.dc)
+            return self.layout.planes[$0.c].component.factor
         }
-        
-        let stride:Int = resolved.map 
-        {
-            $0.factor.x * $0.factor.y
-        }.reduce(0, +)
-        
+
+        let stride:Int = factors.reduce(0){ $0 + $1.x * $1.y } 
         // some components may specify the same table selectors, which means 
         // those components are sharing the same huffman table.
         var globals:[JPEG.Table.HuffmanDC.Selector: [Int]] = [:]
@@ -1257,7 +1233,8 @@ extension JPEG.Data.Spectral
             .init(unsafeUninitializedCapacity: count)
         {
             var offset:Int = 0
-            for (p, factor, target):Resolved in resolved 
+            for ((p, component), factor):((Int, JPEG.Scan.Component), (x:Int, y:Int)) in 
+                zip(components, factors) 
             {
                 var frequencies:[Int]   = .init(repeating: 0, count: 256)
                 var predecessor:Int16   = 0
@@ -1279,13 +1256,16 @@ extension JPEG.Data.Spectral
                 }
                 
                 // merge frequency counts 
-                if let global:[Int] = globals[target] 
+                if let global:[Int] = globals[component.selector.dc] 
                 {
-                    globals[target] = zip(global, frequencies).map{ $0.0 + $0.1 }
+                    globals[component.selector.dc] = zip(global, frequencies).map
+                    { 
+                        $0.0 + $0.1 
+                    }
                 }
                 else 
                 {
-                    globals[target] = frequencies
+                    globals[component.selector.dc] = frequencies
                 }
                 
                 offset += factor.x * factor.y
@@ -1301,31 +1281,24 @@ extension JPEG.Data.Spectral
         }
         
         typealias Descriptor = (offset:Int, volume:Int, table:JPEG.Table.HuffmanDC.Encoder)
-        let descriptors:[Descriptor] = .init(unsafeUninitializedCapacity: resolved.count) 
+        let encoders:[JPEG.Table.HuffmanDC.Selector: JPEG.Table.HuffmanDC.Encoder] = 
+            .init(uniqueKeysWithValues: tables.map 
         {
-            let encoders:[JPEG.Table.HuffmanDC.Selector: JPEG.Table.HuffmanDC.Encoder] = 
-                .init(uniqueKeysWithValues: tables.map 
-            {
-                ($0.target, $0.encoder())
-            })
-            
-            var offset:Int = 0
-            for (i, resolved):(Int, Resolved) in resolved.enumerated()
-            {
-                let volume:Int  = resolved.factor.x * resolved.factor.y
-                // cannot use direct assignment because `Descriptor` (recursively)
-                // contains a reference-counted type (array storage)
-                // can use `!` because we verified components.count > 1
-                ($0.baseAddress! + i).initialize(to: 
-                    (
-                        offset: offset, 
-                        volume: volume, // `!` is unreachable
-                        table: encoders[resolved.target]!
-                    ))
-                offset += volume
-            }
-            
-            $1 = resolved.count
+            ($0.target, $0.encoder())
+        })
+        var offset:Int                  = 0
+        var descriptors:[Descriptor]    = []
+            descriptors.reserveCapacity(components.count)
+        for ((_, component), factor):((Int, JPEG.Scan.Component), (x:Int, y:Int)) in 
+            zip(components, factors) 
+        {
+            let volume:Int = factor.x * factor.y
+            descriptors.append((
+                    offset: offset, 
+                    volume: volume, // `!` is unreachable
+                    table: encoders[component.selector.dc]!
+                ))
+            offset += volume
         }
         
         var bits:JPEG.Bitstream = []
@@ -1347,7 +1320,7 @@ extension JPEG.Data.Spectral
     } 
     
     private 
-    func encode(bit a:Int, components:[JPEG.Scan.Component]) 
+    func encode(bit a:Int, components:[(c:Int, component:JPEG.Scan.Component)]) 
         ->  [UInt8]
     {
         guard components.count > 1 
@@ -1355,9 +1328,8 @@ extension JPEG.Data.Spectral
         {
             // noninterleaved
             precondition(components.count == 1, "components array cannot be empty")
-            
-            guard let p:Int = 
-                self.index(forKey: self.layout.components[components[0].ci.component].key)
+            let p:Int = components[0].c
+            guard self.indices ~= p
             else 
             {
                 fatalError("scan component not a member of this spectral image")
@@ -1369,15 +1341,13 @@ extension JPEG.Data.Spectral
         typealias Descriptor = (p:Int, factor:(x:Int, y:Int)) 
         let descriptors:[Descriptor] = components.map 
         {
-            let (ci, component):(JPEG.Component.Key, JPEG.Component) = 
-                self.layout.components[$0.ci.component]
-            guard let p:Int = self.index(forKey: ci)
+            guard self.indices ~= $0.c
             else 
             {
                 fatalError("scan component not a member of this spectral image")
             }
             
-            return (p, component.factor)
+            return ($0.c, self.layout.planes[$0.c].component.factor)
         }
         
         var bits:JPEG.Bitstream = []
@@ -1408,10 +1378,8 @@ extension JPEG.Data.Spectral
     {
         // “unresolve” the component keys 
         let header:JPEG.Header.Scan = 
-            .init(band: scan.band, bits: scan.bits, components: scan.components.map 
-        {
-            .init(ci: self.layout.components[$0.ci.component].key, selector: $0.selector)
-        })
+            .init(band: scan.band, bits: scan.bits, components: 
+                scan.components.map(\.component))
         
         switch (initial: scan.bits.upperBound == .max, band: scan.band)
         {
@@ -1436,30 +1404,28 @@ extension JPEG.Data.Spectral
         
         case (initial: true,  band: let band):
             precondition(scan.components.count == 1, "progressive ac scan cannot be interleaved")
-            
-            guard let p:Int = self.index(forKey: 
-                self.layout.components[scan.components[0].ci.component].key)
+            let (p, component):(Int, JPEG.Scan.Component) = scan.components[0]
+            guard self.indices ~= p
             else 
             {
-                fatalError("scan component not a member of this spectral image")
+                fatalError("scan component not a member of this spectral image") 
             }
             
             let (data, ac):([UInt8], JPEG.Table.HuffmanAC) = self[p].encode(
-                band: band, bits: scan.bits.lowerBound..., component: scan.components[0])
+                band: band, bits: scan.bits.lowerBound..., component: component)
             return ([], [ac], header, data)
         
         case (initial: false, band: let band):
             precondition(scan.components.count == 1, "progressive ac scan cannot be interleaved")
-            
-            guard let p:Int = self.index(forKey: 
-                self.layout.components[scan.components[0].ci.component].key)
+            let (p, component):(Int, JPEG.Scan.Component) = scan.components[0]
+            guard self.indices ~= p
             else 
             {
-                fatalError("scan component not a member of this spectral image")
+                fatalError("scan component not a member of this spectral image") 
             }
             
             let (data, ac):([UInt8], JPEG.Table.HuffmanAC) = self[p].encode(
-                band: band, bit: scan.bits.lowerBound, component: scan.components[0])
+                band: band, bit: scan.bits.lowerBound, component: component)
             return ([], [ac], header, data)
         }
     }
@@ -1628,7 +1594,7 @@ extension JPEG.Header.Scan
     func serialized() -> [UInt8] 
     {
         var bytes:[UInt8] = [.init(self.components.count)]
-        for component:Component in self.components 
+        for component:JPEG.Scan.Component in self.components 
         {
             let dc:UInt8 = JPEG.Table.HuffmanDC.serialize(selector: component.selector.dc),
                 ac:UInt8 = JPEG.Table.HuffmanAC.serialize(selector: component.selector.ac)

@@ -1,0 +1,6 @@
+#!/bin/bash
+
+utils/unit-test                     || exit 1
+utils/integration-test -c release   || exit 1
+utils/regression-test -c release    || exit 1
+utils/fuzz-test -c release -n 16    || exit 1

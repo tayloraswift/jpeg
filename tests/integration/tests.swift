@@ -113,8 +113,15 @@ extension Test
                     \(image.layout.residents.sorted(by: { $0.key < $1.key }).map 
                     {
                         let (x, y):(Int, Int) = 
-                            image.layout.components[$0.value.component].value.factor
+                            image.layout.planes[$0.value].component.factor
                         return "[\($0.key)]: (\(x), \(y))"
+                    }.joined(separator: "\n        "))
+                ]
+                scans       : 
+                [
+                    \(image.layout.scans.map 
+                    {
+                        "[band: \(String.pad("\($0.band.lowerBound)", left: 2)) ..< \(String.pad("\($0.band.upperBound)", left: 2)), bits: \(String.pad("\($0.bits.lowerBound)", left: 2)) \(String.pad($0.bits.upperBound == .max ? "..." : "..< \("\(String.pad("\($0.bits.upperBound)", left: 2))")", right: 6))]: \($0.components.map(\.ci))"
                     }.joined(separator: "\n        "))
                 ]
             }

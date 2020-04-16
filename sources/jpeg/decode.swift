@@ -145,14 +145,7 @@ extension JPEG
         struct Component 
         {
             public 
-            typealias Index = 
-            (
-                component:Dictionary<JPEG.Component.Key,           JPEG.Component>.Index, 
-                quanta:Dictionary<JPEG.Component.Key, JPEG.Table.Quantization.Key>.Index
-            )
-            
-            public 
-            let ci:Index 
+            let ci:JPEG.Component.Key
             public 
             let selector:(dc:Table.HuffmanDC.Selector, ac:Table.HuffmanAC.Selector)
         }
@@ -160,7 +153,7 @@ extension JPEG
         public 
         let band:Range<Int>, 
             bits:Range<Int>, 
-            components:[Component] 
+            components:[(c:Int, component:Component)] 
     }
     
     public 
@@ -181,13 +174,15 @@ extension JPEG
         let process:Process
         
         public 
-        let recognized:[Scan.Component.Index], 
-            residents:[Component.Key: Scan.Component.Index]
-            
+        let residents:[Component.Key: Int]
         public 
-        let components:[Component.Key: Component]
-        public private(set)
-        var quanta:[Component.Key: Table.Quantization.Key]
+        var recognized:[Component.Key] 
+        {
+            self.format.components 
+        }
+        
+        public internal(set)
+        var planes:[(component:Component, qi:Table.Quantization.Key)]
         
         public private(set)
         var definitions:[(quanta:[Table.Quantization.Key], scans:[Scan])]
@@ -1134,7 +1129,7 @@ extension JPEG
             }
             
             public 
-            typealias Delegate = Int
+            typealias Delegate = (q:Int, qi:Table.Quantization.Key)
             
             public 
             enum Precision  
@@ -1174,18 +1169,9 @@ extension JPEG
         struct Scan
         {
             public 
-            struct Component 
-            {
-                public 
-                let ci:JPEG.Component.Key
-                public 
-                let selector:(dc:Table.HuffmanDC.Selector, ac:Table.HuffmanAC.Selector)
-            }
-            
-            public 
             let band:Range<Int>, 
                 bits:Range<Int>, 
-                components:[Component] 
+                components:[JPEG.Scan.Component] 
         }
     }
 }
@@ -1699,10 +1685,10 @@ extension JPEG.Header.Scan
 {
     public static 
     func validate(process:JPEG.Process, 
-        band:Range<Int>, bits:Range<Int>, components:[Component]) 
+        band:Range<Int>, bits:Range<Int>, components:[JPEG.Scan.Component]) 
         throws -> Self 
     {
-        for component:Component in components 
+        for component:JPEG.Scan.Component in components 
         {
             if case .baseline = process 
             {
@@ -1779,7 +1765,7 @@ extension JPEG.Header.Scan
                 count: data.count, expected: 2 * count + 4)
         }
         
-        let components:[Component] = try (0 ..< count).map 
+        let components:[JPEG.Scan.Component] = try (0 ..< count).map 
         {
             let base:Int            = 2 * $0 + 1
             let byte:(UInt8, UInt8) = (data[base], data[base + 1])
@@ -2344,6 +2330,16 @@ extension JPEG.Data.Spectral.Quanta
         self.quanta.removeAll()
         self.q.removeAll()
     }
+    
+    public 
+    func mapValues(_ transform:([UInt16]) throws -> [UInt16]) 
+        rethrows -> [JPEG.Table.Quantization.Key: [UInt16]]
+    {
+        try self.q.mapValues
+        {
+            try transform(self.quanta[$0].storage)
+        }
+    }
 }
 extension JPEG.Data.Spectral.Quanta:RandomAccessCollection 
 {
@@ -2541,25 +2537,44 @@ extension JPEG.Data.Planar
     }
 }
 
-// shared properties needed for initializing both planar and spectral types 
+// shared properties needed for initializing planar, spectral, and other layout types 
 extension JPEG.Layout 
 {
     public 
     var scale:(x:Int, y:Int) 
     {
-        self.components.values.reduce((0, 0))
+        self.planes.reduce((0, 0))
         {
-            (Swift.max($0.x, $1.factor.x), Swift.max($0.y, $1.factor.y))
+            (
+                Swift.max($0.x, $1.component.factor.x), 
+                Swift.max($0.y, $1.component.factor.y)
+            )
         }
     }
     
-    func planes() -> [JPEG.Component.Key: Int]
+    public 
+    var components:
+    [
+        JPEG.Component.Key: (factor:(x:Int, y:Int), qi:JPEG.Table.Quantization.Key)
+    ] 
     {
-        .init(uniqueKeysWithValues: 
-            zip(self.recognized, self.recognized.indices).map 
+        self.residents.mapValues 
         {
-            (self.components[$0.0.component].key, $0.1)
-        })
+            (self.planes[$0].component.factor, self.planes[$0].qi)
+        }
+    }
+    
+    public 
+    var scans:[JPEG.Header.Scan] 
+    {
+        self.definitions.flatMap
+        {
+            $0.scans.map 
+            {
+                .init(band: $0.band, bits: $0.bits, 
+                    components: $0.components.map(\.component))
+            }
+        }
     }
 }
 // spectral type APIs
@@ -2732,12 +2747,15 @@ extension JPEG.Data.Spectral
     init(layout:JPEG.Layout<Format>)  
     {
         self.layout     = layout
-        self.p          = layout.planes()
+        self.p          = layout.residents.filter
+        { 
+            layout.recognized.indices ~= $0.value 
+        }
         
         self.metadata   = [] 
-        self.planes     = layout.recognized.map 
+        self.planes     = layout.recognized.indices.map 
         {
-            .init(factor: layout.components[$0.0].value.factor)
+            .init(factor: layout.planes[$0].component.factor)
         }
         self.quanta     = .init(default: .init(
             precision:  layout.format.precision > 8 ? .uint16 : .uint8, 
@@ -2781,11 +2799,9 @@ extension JPEG.Data.Spectral
     func set(quanta:[JPEG.Table.Quantization.Key: [UInt16]])
     {
         self.quanta.removeAll()
-        for (ci, c):(JPEG.Component.Key, JPEG.Scan.Component.Index) in 
-            self.layout.residents
+        for (ci, c):(JPEG.Component.Key, Int) in self.layout.residents
         {
-            let qi:JPEG.Table.Quantization.Key = self.layout.quanta[c.quanta].value
-            
+            let qi:JPEG.Table.Quantization.Key = self.layout.planes[c].qi
             let q:Int 
             if let index:Int = self.quanta.index(forKey: qi)
             {
@@ -2802,7 +2818,7 @@ extension JPEG.Data.Spectral
                 let table:JPEG.Table.Quantization = .init(
                     precision: self.layout.format.precision > 8 ? .uint16 : .uint8, 
                     values:    values, 
-                    target:    self.layout.components[c.component].value.selector)
+                    target:    self.layout.planes[c].component.selector)
                 
                 q = self.quanta.push(qi: qi, quanta: table)
             }
@@ -2840,16 +2856,19 @@ extension JPEG.Data.Planar
         metadata:[JPEG.Metadata])
     {
         self.layout     = layout
-        self.p          = layout.planes()
+        self.p          = layout.residents.filter
+        { 
+            layout.recognized.indices ~= $0.value 
+        }
 
         self.size       = size
         self.metadata   = metadata
         
         let scale:(x:Int, y:Int)    = layout.scale
         let midpoint:UInt16         = 1 << (layout.format.precision - 1 as Int)
-        self.planes                 = layout.recognized.map 
+        self.planes                 = layout.recognized.indices.map 
         {
-            let factor:(x:Int, y:Int) = layout.components[$0.0].value.factor
+            let factor:(x:Int, y:Int) = layout.planes[$0].component.factor
             let units:(x:Int, y:Int)  = 
             (
                 JPEG.Data.units(size.x * factor.x, stride: 8 * scale.x),
@@ -3324,7 +3343,7 @@ extension JPEG.Data.Spectral
 {
     // sequential mode 
     private mutating 
-    func decode(_ data:[UInt8], components:[JPEG.Scan.Component], 
+    func decode(_ data:[UInt8], components:[(c:Int, component:JPEG.Scan.Component)], 
         tables slots:(dc:JPEG.Table.HuffmanDC.Slots, ac:JPEG.Table.HuffmanAC.Slots)) throws 
     {
         guard components.count > 1 
@@ -3332,14 +3351,14 @@ extension JPEG.Data.Spectral
         {
             // noninterleaved
             precondition(components.count == 1, "components array cannot be empty")
-            guard let p:Int = 
-                self.index(forKey: self.layout.components[components[0].ci.component].key)
+            let (p, component):(Int, JPEG.Scan.Component) = components[0]
+            guard self.indices ~= p
             else 
             {
                 return 
             }
             
-            try self[p].decode(data, component: components[0], tables: slots)
+            try self[p].decode(data, component: component, tables: slots)
             return 
         }
         
@@ -3352,21 +3371,20 @@ extension JPEG.Data.Spectral
         let descriptors:[Descriptor] = try components.map 
         {
             guard let dc:JPEG.Table.HuffmanDC.Decoder = 
-                slots.dc[keyPath: $0.selector.dc]?.decoder()
+                slots.dc[keyPath: $0.component.selector.dc]?.decoder()
             else 
             {
-                throw JPEG.DecodingError.undefinedScanHuffmanDCReference($0.selector.dc)
+                throw JPEG.DecodingError.undefinedScanHuffmanDCReference($0.component.selector.dc)
             }
             guard let ac:JPEG.Table.HuffmanAC.Decoder = 
-                slots.ac[keyPath: $0.selector.ac]?.decoder()
+                slots.ac[keyPath: $0.component.selector.ac]?.decoder()
             else 
             {
-                throw JPEG.DecodingError.undefinedScanHuffmanACReference($0.selector.ac)
+                throw JPEG.DecodingError.undefinedScanHuffmanACReference($0.component.selector.ac)
             }
             
-            let key:JPEG.Component.Key = self.layout.components[$0.ci.component].key, 
-                factor:(x:Int, y:Int)  = self.layout.components[$0.ci.component].value.factor
-            return (self.index(forKey: key), factor, (dc, ac))
+            let factor:(x:Int, y:Int) = self.layout.planes[$0.c].component.factor
+            return (self.indices ~= $0.c ? $0.c : nil, factor, (dc, ac))
         }
         
         let bits:JPEG.Bitstream = .init(data)
@@ -3454,7 +3472,8 @@ extension JPEG.Data.Spectral
     // progressive mode 
     private mutating 
     func decode(_ data:[UInt8], bits a:PartialRangeFrom<Int>, 
-        components:[JPEG.Scan.Component], tables slots:JPEG.Table.HuffmanDC.Slots) throws
+        components:[(c:Int, component:JPEG.Scan.Component)], 
+        tables slots:JPEG.Table.HuffmanDC.Slots) throws
     {
         // it is allowed (in the case of a custom implementation of `Format`) for 
         // jpegs to encode components that aren’t represented by a plane in this 
@@ -3466,14 +3485,14 @@ extension JPEG.Data.Spectral
         {
             // noninterleaved
             precondition(components.count == 1, "components array cannot be empty")
-            guard let p:Int = 
-                self.index(forKey: self.layout.components[components[0].ci.component].key)
+            let (p, component):(Int, JPEG.Scan.Component) = components[0]
+            guard self.indices ~= p
             else 
             {
                 return 
             }
             
-            try self[p].decode(data, bits: a, component: components[0], tables: slots)
+            try self[p].decode(data, bits: a, component: component, tables: slots)
             return 
         }
         
@@ -3481,14 +3500,13 @@ extension JPEG.Data.Spectral
         let descriptors:[Descriptor] = try components.map 
         {
             guard let huffman:JPEG.Table.HuffmanDC.Decoder = 
-                slots[keyPath: $0.selector.dc]?.decoder()
+                slots[keyPath: $0.component.selector.dc]?.decoder()
             else 
             {
-                throw JPEG.DecodingError.undefinedScanHuffmanDCReference($0.selector.dc)
+                throw JPEG.DecodingError.undefinedScanHuffmanDCReference($0.component.selector.dc)
             }
-            let key:JPEG.Component.Key = self.layout.components[$0.ci.component].key, 
-                factor:(x:Int, y:Int)  = self.layout.components[$0.ci.component].value.factor
-            return (self.index(forKey: key), factor, huffman)
+            let factor:(x:Int, y:Int) = self.layout.planes[$0.c].component.factor
+            return (self.indices ~= $0.c ? $0.c : nil, factor, huffman)
         }
         
         let bits:JPEG.Bitstream = .init(data)
@@ -3545,15 +3563,16 @@ extension JPEG.Data.Spectral
     }
     
     private mutating 
-    func decode(_ data:[UInt8], bit a:Int, components:[JPEG.Scan.Component]) throws
+    func decode(_ data:[UInt8], bit a:Int, 
+        components:[(c:Int, component:JPEG.Scan.Component)]) throws
     {
         guard components.count > 1 
         else 
         {
             // noninterleaved
             precondition(components.count == 1, "components array cannot be empty")
-            guard let p:Int = 
-                self.index(forKey: self.layout.components[components[0].ci.component].key)
+            let p:Int = components[0].c
+            guard self.indices ~= p
             else 
             {
                 return 
@@ -3566,9 +3585,8 @@ extension JPEG.Data.Spectral
         typealias Descriptor = (p:Int?, factor:(x:Int, y:Int))
         let descriptors:[Descriptor] = components.map 
         {
-            let key:JPEG.Component.Key = self.layout.components[$0.ci.component].key, 
-                factor:(x:Int, y:Int)  = self.layout.components[$0.ci.component].value.factor
-            return (self.index(forKey: key), factor)
+            let factor:(x:Int, y:Int) = self.layout.planes[$0.c].component.factor
+            return (self.indices ~= $0.c ? $0.c : nil, factor)
         }
         
         let bits:JPEG.Bitstream = .init(data)
@@ -3599,27 +3617,27 @@ extension JPEG.Data.Spectral
     // table pointer in the relevant plane structs to the corresponding quantization 
     // table already in `self`
     private mutating 
-    func dequantize(components:[JPEG.Scan.Component], 
+    func dequantize(components:[(c:Int, component:JPEG.Scan.Component)], 
         tables slots:JPEG.Table.Quantization.Slots) throws
     {
-        for component:JPEG.Scan.Component in components 
+        for (p, _):(Int, JPEG.Scan.Component) in components 
         {
-            guard let p:Int = 
-                self.index(forKey: self.layout.components[component.ci.component].key)
+            guard self.indices ~= p
             else 
             {
                 continue  
             }
             
-            let selector:JPEG.Table.Quantization.Selector   = 
-                self.layout.components[component.ci.component].value.selector
-            guard let q:Int = slots[keyPath: selector]
+            let selector:JPEG.Table.Quantization.Selector        = 
+                self.layout.planes[p].component.selector
+            guard let (q, qi):(Int, JPEG.Table.Quantization.Key) = slots[keyPath: selector]
             else 
             {
                 throw JPEG.DecodingError.undefinedScanQuantizationReference(selector)
             }
             
-            self[p].q = q
+            self[p].q                = q
+            self.layout.planes[p].qi = qi
         }
     }
     
@@ -3660,29 +3678,29 @@ extension JPEG.Data.Spectral
             // scan initializer should have validated this
             assert(scan.components.count == 1)
             
-            guard let p:Int = self.index(forKey: 
-                self.layout.components[scan.components[0].ci.component].key)
+            let (p, component):(Int, JPEG.Scan.Component) = scan.components[0]
+            guard self.indices ~= p
             else 
             {
                 return 
             }
             
             try self[p].decode(data, band: band, bits: scan.bits.lowerBound..., 
-                component: scan.components[0], tables: slots.ac)
+                component: component, tables: slots.ac)
         
         case (initial: false, band: let band):
             // scan initializer should have validated this
             assert(scan.components.count == 1)
             
-            guard let p:Int = self.index(forKey: 
-                self.layout.components[scan.components[0].ci.component].key)
+            let (p, component):(Int, JPEG.Scan.Component) = scan.components[0]
+            guard self.indices ~= p
             else 
             {
                 return 
             }
             
             try self[p].decode(data, band: band, bit: scan.bits.lowerBound, 
-                component: scan.components[0], tables: slots.ac)
+                component: component, tables: slots.ac)
         }
     }
 }
@@ -3709,7 +3727,7 @@ extension JPEG.Layout.Progression
     mutating 
     func update(_ scan:JPEG.Header.Scan) throws 
     {
-        for component:JPEG.Header.Scan.Component in scan.components 
+        for component:JPEG.Scan.Component in scan.components 
         {
             guard var approximation:[Int] = self.approximations[component.ci]
             else 
@@ -3751,43 +3769,46 @@ extension JPEG.Layout
     private 
     init(format:Format, 
         process:JPEG.Process, 
-        combined:[JPEG.Component.Key: 
-        (
-            component:JPEG.Component, 
-            quanta:JPEG.Table.Quantization.Key
-        )])
+        components combined:
+        [
+            JPEG.Component.Key: (component:JPEG.Component, qi:JPEG.Table.Quantization.Key)
+        ])
     {
         self.format     = format 
         self.process    = process 
         
-        // closures need to access these dictionaries
-        let components:[JPEG.Component.Key: JPEG.Component]             = 
-            combined.mapValues(\.component)
-        let quanta:[JPEG.Component.Key: JPEG.Table.Quantization.Key]    = 
-            combined.mapValues(\.quanta)
-        
-        self.residents  = 
-            .init(uniqueKeysWithValues: combined.keys.map 
+        var planes:[(component:JPEG.Component, qi:JPEG.Table.Quantization.Key)] = 
+            format.components.map 
         {
-            // can use `!` here because both dictionaries come directly from 
-            // `components.mapValues`
-            ($0, (components.index(forKey: $0)!, quanta.index(forKey: $0)!))
-        })
-        self.recognized = format.components.map 
-        {
-            guard   let cc:Dictionary<JPEG.Component.Key,              JPEG.Component>.Index = 
-                    components.index(forKey: $0),
-                    let cq:Dictionary<JPEG.Component.Key, JPEG.Table.Quantization.Key>.Index = 
-                    quanta.index(forKey: $0)
+            guard let value:(component:JPEG.Component, qi:JPEG.Table.Quantization.Key) = 
+                combined[$0]
             else 
             {
                 fatalError("missing definition for component \($0) in format '\(format)'")
             }
-            return (cc, cq)
+            
+            return value 
         }
         
-        self.components  = components
-        self.quanta      = quanta
+        var residents:[JPEG.Component.Key: Int] = 
+            .init(uniqueKeysWithValues: zip(format.components, planes.indices))
+        for (ci, value):
+        (
+            JPEG.Component.Key, (component:JPEG.Component, qi:JPEG.Table.Quantization.Key)
+        ) in combined 
+        {
+            guard residents[ci] == nil 
+            else 
+            {
+                continue 
+            }
+            
+            residents[ci] = planes.endIndex
+            planes.append(value)
+        }
+        
+        self.residents   = residents
+        self.planes      = planes
         self.definitions = []
     }
     
@@ -3795,7 +3816,7 @@ extension JPEG.Layout
         process:JPEG.Process, 
         components:[JPEG.Component.Key: JPEG.Component])
     {
-        self.init(format: format, process: process, combined: components.mapValues 
+        self.init(format: format, process: process, components: components.mapValues 
         {
             ($0, -1)
         })
@@ -3815,7 +3836,7 @@ extension JPEG.Layout
         var lifetimes:[JPEG.Table.Quantization.Key: (start:Int, end:Int)] = [:]
         for (i, descriptor):(Int, JPEG.Header.Scan) in zip(scans.indices, scans) 
         {
-            for component:JPEG.Header.Scan.Component in descriptor.components 
+            for component:JPEG.Scan.Component in descriptor.components 
             {
                 guard let qi:JPEG.Table.Quantization.Key = components[component.ci]?.qi 
                 else 
@@ -3856,7 +3877,7 @@ extension JPEG.Layout
             return slots[free].selector
         }
         
-        self.init(format: format, process: process, combined: components.mapValues 
+        self.init(format: format, process: process, components: components.mapValues 
         {
             // if `q` is not in the mappings dictionary, that means that there 
             // were no scans, even ones with unrecognized components, that 
@@ -3933,20 +3954,21 @@ extension JPEG.Layout
     func push(scan header:JPEG.Header.Scan) throws -> JPEG.Scan
     {
         var volume:Int = 0 
-        let components:[JPEG.Scan.Component] = try header.components.map 
+        let components:[(c:Int, component:JPEG.Scan.Component)] = 
+            try header.components.map 
         {
             // validate sampling factor sum, and component residency
-            guard let c:JPEG.Scan.Component.Index = self.residents[$0.ci]
+            guard let c:Int = self.residents[$0.ci]
             else 
             {
                 throw JPEG.DecodingError.undefinedScanComponentReference(
                     $0.ci, .init(residents.keys))
             }
             
-            let (x, y):(Int, Int) = self.components[c.component].value.factor
+            let (x, y):(Int, Int) = self.planes[c].component.factor
             volume += x * y
             
-            return .init(ci: c, selector: $0.selector)
+            return (c, $0)
         }
         
         guard 0 ... 10 ~= volume || components.count == 1
@@ -3963,7 +3985,7 @@ extension JPEG.Layout
         let stored:JPEG.Scan = 
             .init(band: header.band, bits: header.bits, components: components.sorted 
         {
-            self.components[$0.ci.component].key < self.components[$1.ci.component].key
+            $0.component.ci < $1.component.ci
         })
         
         if self.definitions.endIndex - 1 >= self.definitions.startIndex 
@@ -4105,7 +4127,7 @@ extension JPEG.Context
     {
         self.counter        = 0
         self.spectral       = try .decode(frame: frame)
-        self.progression    = .init(self.spectral.layout.format.components)
+        self.progression    = .init(self.spectral.layout.recognized)
         self.tables         = 
         (
             (nil, nil, nil, nil),
@@ -4134,9 +4156,10 @@ extension JPEG.Context
     {
         // generate a new `qi`, and get the corresponding `q` from the 
         // `spectral.push` function
-        let q:Int     = try self.spectral.push(qi: .init(self.counter), quanta: table)
+        let qi:JPEG.Table.Quantization.Key          = .init(self.counter)
+        let q:Int     = try self.spectral.push(qi: qi, quanta: table)
         self.counter += 1
-        self.tables.quanta[keyPath: table.target] = q 
+        self.tables.quanta[keyPath: table.target]   = (q, qi)
     }
     mutating 
     func push(metadata:JPEG.Metadata) 
