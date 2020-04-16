@@ -5,7 +5,7 @@ matrix:
     env:
     - JOB="linux"
     dist: bionic
-  - script:
+    script:
     - export SWIFT_VERSION=DEVELOPMENT-SNAPSHOT-2020-02-21-a
     - git clone --depth 1 https://github.com/kylef/swiftenv.git ~/.swiftenv
     - export SWIFTENV_ROOT="$HOME/.swiftenv"
@@ -17,7 +17,7 @@ matrix:
     osx_image: xcode11.3
     env:
     - JOB="macos"
-  - script:
+    script:
     - brew install imagemagick
     - export SWIFT_VERSION=DEVELOPMENT-SNAPSHOT-2020-02-21-a
     - git clone --depth 1 https://github.com/kylef/swiftenv.git ~/.swiftenv
