@@ -47,7 +47,7 @@ In the field of image codecs, this has meant that “easier” formats such as G
 
 JPEG images as commonly encountered today are actually governed by three overlapping (and slightly contradictory) standards. The most important is the **ISO/IEC 10918-1** standard (also called the **ITU T.81** standard), which this document will refer to simply as the *JPEG standard*.
 
-The JPEG standard is color-format agnostic, meaning it supports any combination of user-defined color components (YCbCr, RGB, RGBA, and anything else). The standard defines no fewer than thirteen different *coding processes*, which are essentially distinct image formats grouped under the umbrella of “JPEG formats”. Coding processes can be classified by their *entropy coding*:
+The JPEG standard is color format agnostic, meaning it supports any combination of user-defined color components (YCbCr, RGB, RGBA, and anything else). The standard defines no fewer than thirteen different *coding processes*, which are essentially distinct image formats grouped under the umbrella of “JPEG formats”. Coding processes can be classified by their *entropy coding*:
 
 ```swift
 enum Coding 
@@ -75,13 +75,13 @@ Coding processes can also either be *hierarchical* or *non-hierarchical*. A summ
 | 12. |   lossless      |   huffman      |   true       |
 | 13. |   lossless      |   arithmetic   |   true       |
 
-> *Note: processes this project aims to support are **bolded***.
+> *Note: processes this project supports are **bolded***.
 
 Among these formats, only the baseline huffman non-hierarchical process is commonly used today, though the progressive huffman non-hierarchical process is sometimes also seen. This is in large part due to the other two technical standards relevant to the JPEG format, discussed shortly.
 
 Until very recently, the arithmetic entropy coding method was patented, which resulted in its exclusion from software implementations of the standard. The lossless and hierarchical processes are seldom-used today, and are considered out of scope for this project. However, the extended (huffman, non-hierarchical) process is a relatively straightforward derivation from the baseline process, and sees some usage in applications such as medical imaging, so this project supports this process in addition to processes 1 and 6.
 
-The framework is designed to still parse and recognize the unsupported coding processes, even if it is unable to encode or decode them. As such, it supports, for example, editing and resaving metadata for all conforming JPEG files regardless of the coding process used. 
+The framework is designed to still parse and recognize the unsupported coding processes, even if it is unable to encode or decode them. As such, it supports, for example, editing and resaving metadata for all conforming JPEG files regardless of the coding process used. In theory, users can use the lexing and parsing components of the framework to implement codec extensions implementing the unsupported processes. 
 
 ### ii.ii. color formats
 
@@ -109,6 +109,41 @@ Both the JFIF and EXIF standards use the [YCbCr color model](https://en.wikipedi
 ```
 
 The framework includes built-in support for the JFIF/EXIF color formats, which we will refer to as the *common format*. However it also provides support through Swift generics for custom user-defined color formats, which may be useful for certain applications.
+
+### ii.iii. color targets 
+
+*Color targets* are related to but distinct from color formats. A color format specifies how colors are represented and stored within a JPEG image, while a color target specifies how those colors are presented to users. This framework includes built-in support for both YCbCr and [RGB](https://en.wikipedia.org/wiki/RGB_color_model) as color targets. The conversion formula from JPEG-native YCbCr colors to RGB is defined by the JFIF/EXIF standards, and given (in matrix form) below:
+
+```
+┌   ┐   ┌                             ┐   ┌          ┐
+│ R │   │ 1.00000,  0.00000,  1.40200 │   │ Y        │
+│ G │ = │ 1.00000, -0.34414, -0.71414 │ x │ Cb - 128 │
+│ B │   │ 1.00000,  1.77200,  0.00000 │   │ Cr - 128 │
+└   ┘   └                             ┘   └          ┘
+```
+
+The inverse formula is given below:
+```
+┌          ┐   ┌                           ┐   ┌   ┐
+│ Y        │   │  0.2990,  0.5870,  0.1140 │   │ R │
+│ Cb - 128 │ = │ -0.1687, -0.3313,  0.5000 │ x │ G │
+│ Cr - 128 │   │  0.5000, -0.4187, -0.0813 │   │ B │
+└          ┘   └                           ┘   └   ┘
+```
+
+The framework supports rendering to multiple color targets from the same decoded image, without having to redecode the image for each target. As with custom color formats, the framework also supports user-defined color targets, which much also define an associated color format type since the JFIF/EXIF conversion formulas assume a specific YCbCr input format.
+
+### ii.iv. levels of abstraction
+
+Rendering to (or saving from) an RGB/YCbCr pixel array is the most common JPEG codec use-case, but it is not the only one. As is well-known, the full JPEG encoding–decoding pipeline is lossy, which results in both image degradation and increased file size each time a JPEG is reencoded. However, most of the steps in that pipeline are actually reversible, which means many common image operations (ranging from editing metadata to performing crops and rotations, and even color grading) can be done losslessly. Doing so requires a codec which exposes each abstracted stage of the coding pipeline in its API:
+
+1. structural representation 
+2. spectral representation 
+3. dequantized representation 
+4. spatial representation 
+5. color representation
+
+For example, metadata editing is best performed on the structural representation, while lossless crops, reflections, and rotations can only be performed on the spectral representation. Changing the compression level is performed on the dequantized representation, while changing the subsampling level is best performed on the spatial representation. As such, the framework allows users to interact with JPEG images at all five major levels of abstraction.
 
 ## iii. concepts 
 
