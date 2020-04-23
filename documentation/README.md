@@ -116,18 +116,18 @@ The framework includes built-in support for the JFIF/EXIF color formats, which w
 
 ```
 ┌   ┐   ┌                             ┐   ┌          ┐
-│ R │   │ 1.00000,  0.00000,  1.40200 │   │ Y        │
-│ G │ = │ 1.00000, -0.34414, -0.71414 │ x │ Cb - 128 │
-│ B │   │ 1.00000,  1.77200,  0.00000 │   │ Cr - 128 │
+│ R │   │ 1.00000   0.00000   1.40200 │   │ Y        │
+│ G │ = │ 1.00000  -0.34414  -0.71414 │ x │ Cb - 128 │
+│ B │   │ 1.00000   1.77200   0.00000 │   │ Cr - 128 │
 └   ┘   └                             ┘   └          ┘
 ```
 
 The inverse formula is given below:
 ```
 ┌          ┐   ┌                           ┐   ┌   ┐
-│ Y        │   │  0.2990,  0.5870,  0.1140 │   │ R │
-│ Cb - 128 │ = │ -0.1687, -0.3313,  0.5000 │ x │ G │
-│ Cr - 128 │   │  0.5000, -0.4187, -0.0813 │   │ B │
+│ Y        │   │  0.2990   0.5870   0.1140 │   │ R │
+│ Cb - 128 │ = │ -0.1687  -0.3313   0.5000 │ x │ G │
+│ Cr - 128 │   │  0.5000  -0.4187  -0.0813 │   │ B │
 └          ┘   └                           ┘   └   ┘
 ```
 
@@ -148,6 +148,207 @@ For example, metadata editing is best performed on the structural representation
 ## iii. concepts 
 
 > **Summary:** JPEG is a frequency transform-based compressed image format. Decompressing the file format can be roughly divided into lexing, parsing, and decoding stages. Decoding involves assembling multiple image *scans* into a single image *frame*. A scan may contain one or more color *components* (channels). In a progressive JPEG, a single scan may contain only a specific range of bits for a specific frequency band. JPEG images also use *huffman* and *quantization* tables. Huffman tables are associated with image components at the scan level. Quantization tables are associated with image components at the frame level. Multiple components can reference the same huffman or quantization table. The “compression level” of a JPEG image is almost fully determined by the quantization tables used by the image.
+
+This section is meant to give a concise overview of the JPEG format itself. For the actual format details, consult the [ISO 10918-1 standard](https://www.w3.org/Graphics/JPEG/itu-t81.pdf).
+
+### iii.i. jpeg segmented structure
+
+Structurally, JPEG files are sequences of *marker segments* and *entropy-coded segments*. It is possible to segment JPEG files without having to parse the body of each segment. Marker segments have headers, while entropy-coded segments are “naked” byte sequences. Because entropy-coded segments can have zero length, a JPEG file can be conceptualized as a sequence of alternating marker and entropy-coded segments. The terminator for an entropy-coded segment is one or more `0xFF` bytes; an entropy-coded segment together with its terminator is a *prefix*.
+
+```
+JPEG                  ::= <Marker Segment> (<Prefix> <Marker Segment>) *
+Prefix                ::= <Entropy-Coded Segment> (0xFF)+
+```
+
+Because the delimiter for an entropy-coded segment is an `0xFF` byte, this means that any `0xFF` bytes in its payload data must be escaped with the escape sequence `0xFF 0x00`.
+
+```
+Entropy-Coded Segment ::= <Escape> *
+Escape                ::= [0x00-0xFE]
+                        |  0xFF 0x00
+```
+
+Marker segments consist of a *type*, *length field*, and a *segment body*, in that order. The type is always one byte; the JPEG standard defines which values of this byte correspond to which marker segment types. The length field is a big-endian 16-bit integer. The length includes the length field itself, so the length of the segment body is always two less than the value of the length field. (Because the length of a marker segment is always known, no escaping takes place.)
+
+```
+Marker Segment        ::= <Type> <Length> <Body>
+Type                  ::= [0x01-0xFE]
+Length                ::= [0x00-0xFF] [0x00-0xFF]
+Body                  ::= [0x00-0xFF]{ (Length[0] << 8 | Length[1]) - 2 }
+```
+
+There are many different types of marker segments, but the most important are *header segments* and *table segments*.
+
+### iii.ii. header segments 
+
+There are two types of JPEG header segments: *frame headers* and *scan headers*. 
+
+#### iii.ii.i. frame headers
+
+A frame header is a header segment which describes a rectangular image as a whole. Except when the JPEG file uses a hierarchical coding process, there is only one frame, and therefore, one frame header per image. A frame header contains the following fields:
+
+* Bit depth (integer, usually 8 or 12)
+* Image width (integer, greater than zero)
+* Image height (integer)
+* Resident components (array)
+
+Note that, as a technical detail, the height can be initialized to 0 by the frame header segment, and set later by a separate segment called a *height redefinition segment*.
+
+The resident components array defines the color components in the image, and includes image-global parameters for each component. A resident component definition contains the following fields:
+
+* Component identifier (*c<sub>i</sub>*)
+* Quantization table reference (*q<sub>i</sub>*)
+* Horizontal sampling factor (integer, between 1 and 4)
+* Vertical sampling factor (integer, between 1 and 4)
+
+The sampling factors determine the chroma subsampling level of the image. All components having a sampling factor of (1,&nbsp;1) corresponds to a 4:4:4 subsampling scheme. A sampling factor of (2,&nbsp;2) for the Y channel, and (1,&nbsp;1) for the Cb and Cr channels corresponds to a 4:2:0 subsampling scheme.
+
+#### iii.ii.ii. scan headers
+
+A scan header is a header segment which describes data, a *scan*, which makes up a portion of a complete image. There can be one or more scans, and therefore, scan headers, for a single frame. The decomposition of image data into multiple scans is always done spectrally, by bit-index, and by component, never spatially, so each scan contains data for the entire spatial extent of the image. A scan header is always immediately followed by an entropy-coded segment containing the scan data the header describes.
+
+A scan header contains the following fields:
+
+* Band range (integer range, between 0 and 63)
+* Bit range (integer range)
+* Component reference array
+
+The *band range* is given in terms of discrete frequencies. The lowest frequency, 0, is the DC frequency, all other frequencies, up to a maximum of 63, are AC frequencies. 
+
+The *bit range* is given in terms of bit indices. The bit range refers to bits in the frequency-domain representation of the image, not its spatial-domain representation, so the bit range is not limited to the bit depth given in the frame header.
+
+For non-progressive coding processes, the band range is always set to [0,&nbsp;64). Likewise, the bit range is always set to [0,&nbsp;∞).
+
+For progressive coding processes, the band range can be anything within the interval [0,&nbsp;64), as long as the range doesn’t mix DC and AC frequencies. This means that [0,&nbsp;1) and [1,&nbsp;6) are both valid band ranges, but [0,&nbsp;6) is not. Furthermore, when there are multiple scans for each component, the [0,&nbsp;1) scan must come first. This decomposition is called *spectral selection*.
+
+Progressively-coded images can also optionally use a decomposition called *successive approximation*, in which the first scan for each component (called an *initial scan*) has a bit range with an upper limit of infinity, and later scans (called *refining scans*) step down one bit at a time to zero. An example of a valid successive approximation sequence is {&nbsp;[3,&nbsp;∞),&nbsp;[2,&nbsp;3),&nbsp;[1,&nbsp;2),&nbsp;[0,&nbsp;1)&nbsp;}. The sequence {&nbsp;[3,&nbsp;∞),&nbsp;[1,&nbsp;3),&nbsp;[0,&nbsp;1)&nbsp;} is invalid because the second scan contains a bit range with two bits, while the sequence {&nbsp;[3,&nbsp;∞),&nbsp;[1,&nbsp;2),&nbsp;[2,&nbsp;3),&nbsp;[0,&nbsp;1)&nbsp;} is invalid because bit&nbsp;1 is refined before bit&nbsp;2.
+
+The sequence of scan-specified band ranges and bit ranges for a particular component is called a *scan progression*. The following is a visual example of a possible scan progression for one component of a progressively-coded image:
+
+```
+    a   Scan 0 (band: 0 ..< 1, bits: 1 ...)
+z       0  1  2  3  4  5  6  7  8 ··· 61 62 63
+  
+    ∞   X 
+    ·   X
+    ·   X
+    ·   X
+    2   X
+    1   X
+    0
+                      +
+                    
+        Scan 1 (band: 6 ..< 64, bits: 1 ...)
+        0  1  2  3  4  5  6  7  8 ··· 61 62 63
+  
+    ∞                     X  X  X ··· X  X  X
+    ·                     X  X  X ··· X  X  X
+    ·                     X  X  X ··· X  X  X
+    ·                     X  X  X ··· X  X  X
+    2                     X  X  X ··· X  X  X
+    1                     X  X  X ··· X  X  X
+    0
+                      +
+                    
+        Scan 2 (band: 1 ..< 6, bits: 2 ...)
+        0  1  2  3  4  5  6  7  8 ··· 61 62 63
+  
+    ∞      X  X  X  X  X
+    ·      X  X  X  X  X
+    ·      X  X  X  X  X
+    ·      X  X  X  X  X
+    2      X  X  X  X  X
+    1      
+    0
+                      +
+                    
+        Scan 3 (band: 1 ..< 6, bits: 1 ..< 2)
+        0  1  2  3  4  5  6  7  8 ··· 61 62 63
+  
+    ∞ 
+    · 
+    · 
+    · 
+    2 
+    1      X  X  X  X  X
+    0                     
+                      +
+                      
+        Scan 4 (band: 1 ..< 64, bits: 0 ..< 1)
+        0  1  2  3  4  5  6  7  8 ··· 61 62 63
+
+    ∞ 
+    · 
+    · 
+    · 
+    2 
+    1      
+    0      X  X  X  X  X  X  X  X ··· X  X  X
+                      +
+                      
+        Scan 5 (band: 0 ..< 1, bits: 0 ..< 1)
+        0  1  2  3  4  5  6  7  8 ··· 61 62 63
+
+    ∞ 
+    · 
+    · 
+    · 
+    2 
+    1      
+    0   X
+                      =
+                      
+        Completed Frame 
+        0  1  2  3  4  5  6  7  8 ··· 61 62 63
+
+    ∞   X  X  X  X  X  X  X  X  X ··· X  X  X
+    ·   X  X  X  X  X  X  X  X  X ··· X  X  X
+    ·   X  X  X  X  X  X  X  X  X ··· X  X  X
+    ·   X  X  X  X  X  X  X  X  X ··· X  X  X
+    2   X  X  X  X  X  X  X  X  X ··· X  X  X
+    1   X  X  X  X  X  X  X  X  X ··· X  X  X     
+    0   X  X  X  X  X  X  X  X  X ··· X  X  X
+```
+
+The component reference array specifies which of the components defined in the frame header is present within the scan. If there is more than one component in a scan, then the scan is *interleaved*, otherwise it is *non-interleaved*. Interleaving is not allowed for progressive scans which define AC coefficients only, though it is allowed for non-progressive scans which define all 64 frequencies, including the AC frequencies.
+
+The ordering of component references within the array (if there are more than one) is meaningful, both because it must follow the ordering of component definitions in the frame header, and also because the ordering specifies the ordering of the interleaved data units in the entropy-coded segment following the scan header. A component reference contains the following fields:
+
+* Component reference (*c<sub>i</sub>*, matching one of the components in the frame header)
+* DC huffman table reference 
+* AC huffman table reference 
+
+Note that quantization tables (described in the next section) are associated with components at the frame level, while huffman tables (also described in the next section) are associated with components at the scan level. It is allowed (and standard practice) for the same component to use a different huffman table in each scan.
+
+### iii.iii. table segments 
+
+Table segments define resources which are referenced by the header segments. There are two types of table segments — *quantization table definitions*, and *huffman table definitions* — which define three types of resources.
+
+#### iii.iii.i. quantization tables 
+
+A quantization table definition consists of 64 multiplier values, which correspond to the 64 discrete frequencies, and some basic information about the table:
+
+* Quantization table identifier (*q<sub>i</sub>*)
+* Table precision (8- or 16-bit)
+
+The table precision is not necessarily the same as the image bit depth (though it is subject to some constraints based on the image bit depth). This field is solely used to specify the (big-endian) integer type the table values are stored as. 
+
+Note that, as a technical detail, quantization tables do not actually identify themselves with a *q<sub>i</sub>* identifier, nor do component definitions in a frame header use those identifiers to reference them. However, table identifiers are a useful conceptual model for understanding resource relationships within a JPEG file. This issue will be discussed further in the [user model](#iv-user-model) section.
+
+#### iii.iii.ii. huffman tables 
+
+Huffman table definitions are somewhat more sophisticated than quantization tables. There are two types of huffman tables — AC and DC — but they are defined by the same type of marker segment, and share the same field format.
+
+Like a quantization table definition, a huffman table definition includes some basic information about the table:
+
+* Huffman table identifier 
+* Resource type (DC table or AC table)
+
+A huffman table definition does not contain the table values verbatim. (That would be far too space-inefficient.) Rather, it specifies the shape of huffman *tree* used to generate the table, and the symbol values of the (up to 256) leaves in the tree. The algorithm for generating the huffman table from the huffman tree is discussed in more detail in the [library architecture](#v-library-architecture) section.
+
+Unlike quantization tables, huffman tables have no direct relation to frequency coefficient values themselves. They are only used to decompress entropy-coded data within a single entropy-coded segment. (It is allowed, but uncommon, for multiple entropy-coded segments to use the same huffman table.) It is for this reason that huffman tables are “locally” associated with scans while quantization tables are “globally” associated with components at the frame level.
+
+### iii.iv. blocks, planes, and MCUs
 
 ## iv. user model
 
