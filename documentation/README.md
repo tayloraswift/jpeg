@@ -350,6 +350,136 @@ Unlike quantization tables, huffman tables have no direct relation to frequency 
 
 ### iii.iv. blocks, planes, and MCUs
 
+JPEG is a *planar format*, meaning each color channel is represented independently as a monochromatic sub-image. However, *interleaving* is still possible down to the granularity determined by the *minimum-coded unit* (MCU) of the image. (Within a single minimum-coded unit, the format is fully planar.) Minimum-coded units in turn are composed of constant-size *blocks*, sometimes called *data units*, which are the smallest spatial unit of a JPEG.
+
+#### iii.iv.i. blocks 
+
+Each JPEG block contains 64 frequency coefficients which correspond to a block of pixels in the visual image. It is often stated that these are 8x8 pixel blocks, but the size actually depends on the component sampling factor. (Subsampled blocks are linearly interpolated to fill in intermediate pixels; the frequency transform is not evaluated per-pixel.)
+
+All blocks for a particular component are the same size, even if the image pixel width and height would indicate fractional blocks along the right and bottom edges of the image. In these cases, the image data is padded (when encoding) to fill an integer number of blocks, and this padding is discarded when decoding. If different components use different sampling factors, the block grid for one component may cover areas that the block grid for another component does not. 
+
+The following diagram shows the block decomposition of a 35x28 pixel image using sampling factors (2,&nbsp;2), (2,&nbsp;1), and (1,&nbsp;1). Note that all three block grids cover pixels that are outside the 35x28 pixel bounds (bolded rectangle), and furthermore, the last block grid covers pixels that the other two grids do not:
+
+```
+Image (3 components, 35x28 pixels)
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+
+    Component Y  (20 blocks)
+    sampling factor: (2, 2)
+
+   0    8    16   24   32   40   48
+ 0 ┏━━━━┯━━━━┯━━━━┯━━━━┯━┱──┐
+   ┃    │    │    │    │ ┃  │
+ 8 ┠────┼────┼────┼────┼─╂──┤
+   ┃    │    │    │    │ ┃  │
+16 ┠────┼────┼────┼────┼─╂──┤
+   ┃    │    │    │    │ ┃  │
+24 ┠────┼────┼────┼────┼─╂──┤
+   ┡━━━━┿━━━━┿━━━━┿━━━━┿━┛  │
+32 └────┴────┴────┴────┴────┘
+
+    Component Cb (10 blocks)
+    sampling factor: (2, 1)
+
+   0    8    16   24   32   40   48
+ 0 ┏━━━━┯━━━━┯━━━━┯━━━━┯━┱──┐
+   ┃    │    │    │    │ ┃  │
+ 8 ┃    │    │    │    │ ┃  │
+   ┃    │    │    │    │ ┃  │
+16 ┠────┼────┼────┼────┼─╂──┤
+   ┃    │    │    │    │ ┃  │
+24 ┃    │    │    │    │ ┃  │
+   ┡━━━━┿━━━━┿━━━━┿━━━━┿━┛  │
+32 └────┴────┴────┴────┴────┘
+
+    Component Cr (6 blocks)
+    sampling factor: (1, 1)
+
+   0    8    16   24   32   40   48
+ 0 ┏━━━━━━━━━┯━━━━━━━━━┯━┱───────┐
+   ┃         │         │ ┃       │
+ 8 ┃         │         │ ┃       │
+   ┃         │         │ ┃       │
+16 ┠─────────┼─────────┼─╂───────┤
+   ┃         │         │ ┃       │
+24 ┃         │         │ ┃       │
+   ┡━━━━━━━━━┿━━━━━━━━━┿━┛       │
+32 └─────────┴─────────┴─────────┘
+```
+
+It is important to remember that, even though less densely-sampled blocks are spatially bigger, all blocks contain the same amount of information.
+
+#### iii.iv.ii. minimum-coded units
+
+If (and only if) a JPEG scan encodes more than one component, then the blocks are organized into minimum-coded units. (Single-component scans do not use the concept of a minimum-coded unit, and simply store their blocks as a row-major rectangular array.) 
+
+The spatial size of the minimum coded unit is the size of a block with a component sampling factor of (1, 1), even if the scan contains no such component. The blocks are stored within the minimum-coded unit in the same order they were declared in the scan header. For example, the minimum-coded units from a scan containing the Y and Cb components from the previous example would look like this:
+
+```
+   Component Y        Component Cb
+   (4 blocks)         (2 blocks)
+
+   0    8    16       0    8    16  
+ 0 ┏━━━━┯━━━━┑      0 ┏━━━━┯━━━━┑   
+   ┃ A0 │ B0 │        ┃    │    │   
+ 8 ┠────┼────┤  +   8 ┃ E0 │ F0 │  +
+   ┃ C0 │ D0 │        ┃    │    │   
+16 ┖────┴────┘     16 ┖────┴────┘   
+
+   16   24   32       16   24   32  
+ 0 ┍━━━━┯━━━━┑      0 ┍━━━━┯━━━━┑   
+   │ A1 │ B1 │        │    │    │   
+ 8 ├────┼────┤  +   8 │ E1 │ F1 │  +
+   │ C1 │ D1 │        │    │    │   
+16 └────┴────┘     16 └────┴────┘   
+
+   32   40   48       32   40   48 
+ 0 ┍━┱──┬────┐      0 ┍━┱──┬────┐   
+   │ A2 │ B2 │        │ ┃  │    │   
+ 8 ├─╂──┼────┤  +   8 │ E2 │ F2 │  +
+   │ C2 │ D2 │        │ ┃  │    │   
+16 └─┸──┴────┘     16 └─┸──┴────┘   
+
+   0    8    16       0    8    16
+16 ┎────┬────┐     16 ┎────┬────┐
+   ┃ A3 │ B3 │        ┃    │    │
+24 ┠────┼────┤  +  24 ┃ E3 │ F3 │  +
+   ┡ C3 ┿ D3 ┥        ┡━━━━┿━━━━┥
+32 └────┴────┘     32 └────┴────┘
+
+   16   24   32       16   24   32
+16 ┌────┬────┐     16 ┌────┬────┐
+   │ A4 │ B4 │        │    │    │
+24 ├────┼────┤  +  24 │ E4 │ F4 │  +
+   ┝ C4 ┿ D4 ┥        ┝━━━━┿━━━━┥
+32 └────┴────┘     32 └────┴────┘
+
+   32   40   48       32   40   48
+16 ┌─┰──┬────┐     16 ┌─┰──┬────┐
+   │ A5 │ B5 │        │ ┃  │    │
+24 ├─╂──┼────┤  +  24 │ E5 │ F5 │
+   ┝ C5 │ D5 │        ┝━┛  │    │
+32 └────┴────┘     32 └────┴────┘
+
+   Sequential order:
+[
+    A0, B0, C0, D0,     E0, F0, 
+    A1, B1, C1, D1,     E1, F1, 
+    A2, B2, C2, D2,     E2, F2, 
+    A3, B3, C3, D3,     E3, F3, 
+    A4, B4, C4, D4,     E4, F4, 
+    A5, B5, C5, D5,     E5, F5
+]
+```
+
+Note that blocks B2, D2, F2, B5, D5, and F5 have been added to complete the minimum-coded units they appear in. They would not appear in a non-interleaved scan.
+
+#### iii.iv.iii. planes 
+
+Planes are a very simple concept — they are simply the collection of all the blocks for a particular component. Even though blocks may be stored in an interleaved arrangement, planes are conceptually independent. Even when interleaved, each plane uses its own huffman and quantization tables, which means that a single entropy-coded segment can actually contain codewords from multiple huffman coding schemes.
+
+Converting planes into a rectangular array of color pixels entails expanding subsampled planes, and then clipping them to the pixel dimensions of the image so that each plane has the same spatial width and height. The planes are then pixel-wise interleaved to form color tuples.
+
 ## iv. user model
 
 > **Summary:** The Swift *JPEG* encoder provides unique abstract *component key* and *quantization table key* identifiers. The component keys are equivalent in value to the component idenfiers (*c<sub>i</sub>*) in the JPEG standard, while the quantization table identifiers (*q<sub>i</sub>*) are a library concept, which obviate the need for users to assign and refer to quantization tables by their slot index, as slots may be overwritten and reused within the same JPEG file. Users also specify the *scan progression* by band range, bit range, and component key set. These relationships are combined into a *layout*, a library concept encapsulating relationships between table indices, component indices, scan component references, etc. When initializing a layout, the framework is responsible for mapping the abstract, user-specified relationships into a sequence of JPEG scan headers and table definitions.
