@@ -333,7 +333,7 @@ A quantization table definition consists of 64 multiplier values, which correspo
 
 The table precision is not necessarily the same as the image bit depth (though it is subject to some constraints based on the image bit depth). This field is solely used to specify the (big-endian) integer type the table values are stored as. 
 
-Note that, as a technical detail, quantization tables do not actually identify themselves with a *q<sub>i</sub>* identifier, nor do component definitions in a frame header use those identifiers to reference them. However, table identifiers are a useful conceptual model for understanding resource relationships within a JPEG file. This issue will be discussed further in the [user model](#iv-user-model) section.
+Note that, as a technical detail, quantization tables do not actually identify themselves with a *q<sub>i</sub>* identifier, nor do component definitions in a frame header use those identifiers to reference them. However, table identifiers are a useful conceptual model for understanding resource relationships within a JPEG file. This issue will be discussed further in the [contextual state](#iii-v-contextual-state) section.
 
 #### iii.iii.ii. huffman tables 
 
@@ -608,6 +608,52 @@ Note how tables C and D were overwritten partway through the JPEG file.
 > JPEG layout structures also contain a mapping from abstract component and quantization table keys to linear integer indices which point to the actual storage for the respective resources. (The framework notations for these indices are *c* and *q*, respectively.) The linear indices provide fast access to JPEG resources, as using them does not involve resolving hashtable lookups.
 
 > Layout structures are combined with actual quantization table values to construct *image data* structures. All image data structures (except the `Rectangular` type) are planar, and are conceptually `Collection`s of planes corresponding to a single color component. The ordering of the planes is determined by the *image format*, which is generic and can be replaced with a user-defined implementation. The framework vends a default “common format” which corresponds to the 8-bit Y and YCbCr color modes defined by the JFIF standard. Plane indices range from 0 to *p*<sub>max</sub>, where *p*<sub>max</sub> is the number of planes in the image. The library assigns linear component indices such that *c*&nbsp;=&nbsp;*p*.
+
+The JPEG format, as previously discussed, contains a great deal of complexity meant to facilitate implementation. However, much of this complexity is unnecessary for users, which is why this framework attempts to abstract away most of the user-irrelevant aspects of the format.
+
+This framework provides two sets of top-level APIs: a *segmentation API* and an *decoding/encoding API*. Both are top-level in that they are capable of interpreting or outputting a JPEG file from start to finish. The segmentation API is essentially a lexer/formatter in that it detects JPEG segment boundaries, and classifies them by type. It does not attempt to interpret the contents of the segments. The decoding/encoding API reads or writes a JPEG file as a whole; its output/input is a complete bitmap image. This API is essentially built atop of the segmentation API.
+
+While the segmentation and decoding/encoding APIs roughly correspond to the lexing/formatting and decoding/encoding stages of JPEG interpretation, there is no such top-level API for the parsing/serializing stage. This is because each lexed or formatted JPEG segment requires a different parser or serializer implementation, and which implementation it requires depends on the type of the segment. As such, a “top-level” parsing/serializing API would not be a useful abstraction, and so this framework does not seek to provide one.
+
+### iv.i. segmentation API
+
+As mentioned already, the segmentation API takes a file input (or byte stream), and divides it into its constituent segments. Its inverse API takes raw segment buffers and concatenates them with appropriate segment headers into an output bytestream.
+
+```
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃                           raw bytestream (file or file blob)                            ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+                                            ↿⇂
+┏━━━━━━┓┏━━━━━━┯━━━━━━━━━━┓┏━━━━━━┯━━━━━━━━━━┓┏━━━━━━━━━━━━━━━━┓┏━━━━━━┯━━━━━━━━━━┓┏━━━━━━┓
+┃ Type ┃┃ Type │   Body   ┃┃ Type │   Body   ┃┃     Prefix     ┃┃ Type │   Body   ┃┃ Type ┃
+┗━━━━━━┛┗━━━━━━┷━━━━━━━━━━┛┗━━━━━━┷━━━━━━━━━━┛┗━━━━━━━━━━━━━━━━┛┗━━━━━━┷━━━━━━━━━━┛┗━━━━━━┛
+   ↑             ↑                  ↑                 ↑                  ↑            ↑
+   Marker segments           Marker segment  Entropy-coded segment      Marker segments
+```
+
+Its operations can be best summarized by the pseudoswift below:
+```swift 
+var input:Source
+while true 
+{
+    let (prefix, type, body):([UInt8], JPEG.Marker, [UInt8]) = input.segment()
+    switch type 
+    {
+        ...
+    }
+}
+
+var output:Destination 
+let pairs:[([UInt8], JPEG.Marker, [UInt8])]
+for (prefix, type, body):([UInt8], JPEG.Marker, [UInt8]) in pairs 
+{
+    output.format(prefix: prefix)
+    output.format(marker: type, tail: body)
+    ...
+}
+```
+
+Note that this is *not* how the segmentation API is actually spelled, as the real API expects the user to know whether to expect an entropy-coded segment to be present, as well as to be aware of error handling.
 
 ## v. library architecture
 
