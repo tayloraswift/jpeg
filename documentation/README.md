@@ -480,6 +480,127 @@ Planes are a very simple concept — they are simply the collection of all the b
 
 Converting planes into a rectangular array of color pixels entails expanding subsampled planes, and then clipping them to the pixel dimensions of the image so that each plane has the same spatial width and height. The planes are then pixel-wise interleaved to form color tuples.
 
+### iii.v. contextual state 
+
+All of the aforementioned concepts are related by the *contextual state* of a JPEG file. The state is determined by the ordering of marker and entropy-coded segments in the file.
+
+#### iii.v.i. sections
+
+All JPEG files must start with a *preamble section*, which begins with an *start-of-image* marker segment, followed by JFIF/EXIF metadata segments, and then any number of table segments. While huffman table definitions can live in the preamble, usually it is only quantization table definitions that appear here, since quantization tables are the only JPEG resources that have a whole-frame scope.
+
+In a non-hierarchical JPEG file, the *body section* comes after the preamble. The body starts with a frame header segment, and then contains any number of scan header&nbsp;+&nbsp;entropy-coded segment pairs and table definitions. It is rare for quantization table definitions to appear in the middle of this section, so most of these table definitions are huffman table definitions. The body section, and the JPEG file as a whole, concludes with an *end-of-image* marker.
+
+#### iii.v.ii. table slots 
+
+The JPEG format establishes relationships between table resources and reference holders using the concept of *table slots*. Each type of table (there are three: quantization, DC huffman, and AC huffman) has a fixed number of binding points: 2 for the baseline coding process, and 4 for all other processes. In this document, we use the Swift keypath syntax `\.i` to denote a binding point *i*. 
+
+Whenever a table definition appears, it specifies a *table destination*, which is the binding point to which the table is attached. Whenever a consumer (such as a component definition in a frame header, which references a quantization table, or a component reference in a scan header, which includes references to a DC and/or AC huffman table) references a resource, it does so by specifying a binding point, which resolves to whatever table is attached to it at the time. Table bindings are stateful, so the same slot can be overwritten multiple times within the same JPEG file.
+
+The following is an example structure of a (sequential) JPEG from start to finish, with the state of the table slots given on the right:
+
+```
+                                              Quantization  DC Huffman  AC Huffman 
+                                                  tables      tables      tables 
+——————————————————————————————————————————       \.0 \.1     \.0 \.1     \.0 \.1
+Start-of-Image 
+——————————————————————————————————————————      [   |   ]   [   |   ]   [   |   ]
+Application Segment (JFIF metadata)
+    version     :   1.2
+    units       :   centimeters
+    ...
+——————————————————————————————————————————      [   |   ]   [   |   ]   [   |   ]
+Quantization Table Definition (Table A) 
+    destination :   \.0
+    precision   :   8-bit
+    ...
+— — — — — — — — — — — — — — — — — — — — —       [ A |   ]   [   |   ]   [   |   ]
+Quantization Table Definition (Table B)
+    destination :   \.1
+    precision   :   8-bit
+    ...
+——————————————————————————————————————————      [ A | B ]   [   |   ]   [   |   ]
+Frame Header 
+    size        :   382x479
+    precision   :   8-bit 
+    components  : 
+    {
+        [1]: 
+            sampling            : 2x2, 
+            quantization table  : \.0 (Table A)
+        [2]: 
+            sampling            : 1x1, 
+            quantization table  : \.1 (Table B)
+        [3]: 
+            sampling            : 1x1, 
+            quantization table  : \.1 (Table B)
+    }
+    ...
+——————————————————————————————————————————      [ A | B ]   [   |   ]   [   |   ]
+DC Huffman Table Definition (Table C)
+    destination :   \.0 
+    ...
+— — — — — — — — — — — — — — — — — — — — —       [ A | B ]   [ C |   ]   [   |   ]
+AC Huffman Table Definition (Table D)
+    destination :   \.0
+    ...
+——————————————————————————————————————————      [ A | B ]   [ C |   ]   [ D |   ]
+Scan Header 
+    band        :   [0, 64)
+    bits        :   [0, ∞)
+    components  :
+    [
+        {
+            ci  : [1]
+            DC huffman table: \.0 (Table C)
+            AC huffman table: \.0 (Table D)
+        }
+    ]
+——————————————————————————————————————————      [ A | B ]   [ C |   ]   [ D |   ]
+Entropy-Coded Segment 
+    ...
+——————————————————————————————————————————      [ A | B ]   [ C |   ]   [ D |   ]
+DC Huffman Table Definition (Table E)
+    destination :   \.0 
+    ...
+— — — — — — — — — — — — — — — — — — — — —       [ A | B ]   [ E |   ]   [ D |   ]
+AC Huffman Table Definition (Table F)
+    destination :   \.0
+    ...
+— — — — — — — — — — — — — — — — — — — — —       [ A | B ]   [ E |   ]   [ F |   ]
+DC Huffman Table Definition (Table G)
+    destination :   \.1 
+    ...
+— — — — — — — — — — — — — — — — — — — — —       [ A | B ]   [ E | G ]   [ F |   ]
+AC Huffman Table Definition (Table H)
+    destination :   \.1
+    ...
+——————————————————————————————————————————      [ A | B ]   [ E | G ]   [ F | H ]
+Scan Header 
+    band        :   [0, 64)
+    bits        :   [0, ∞)
+    components  :
+    [
+        {
+            ci  : [2]
+            DC huffman table: \.0 (Table E)
+            AC huffman table: \.0 (Table F)
+        },
+        {
+            ci  : [3]
+            DC huffman table: \.1 (Table G)
+            AC huffman table: \.1 (Table H)
+        }
+    ]
+——————————————————————————————————————————      [ A | B ]   [ E | G ]   [ F | H ]
+Entropy-Coded Segment 
+    ...
+——————————————————————————————————————————      [ A | B ]   [ E | G ]   [ F | H ]
+End-of-Image 
+——————————————————————————————————————————
+```
+
+Note how tables C and D were overwritten partway through the JPEG file.
+
 ## iv. user model
 
 > **Summary:** The Swift *JPEG* encoder provides unique abstract *component key* and *quantization table key* identifiers. The component keys are equivalent in value to the component idenfiers (*c<sub>i</sub>*) in the JPEG standard, while the quantization table identifiers (*q<sub>i</sub>*) are a library concept, which obviate the need for users to assign and refer to quantization tables by their slot index, as slots may be overwritten and reused within the same JPEG file. Users also specify the *scan progression* by band range, bit range, and component key set. These relationships are combined into a *layout*, a library concept encapsulating relationships between table indices, component indices, scan component references, etc. When initializing a layout, the framework is responsible for mapping the abstract, user-specified relationships into a sequence of JPEG scan headers and table definitions.
