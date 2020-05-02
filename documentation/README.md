@@ -655,6 +655,121 @@ for (prefix, type, body):([UInt8], JPEG.Marker, [UInt8]) in pairs
 
 Note that this is *not* how the segmentation API is actually spelled, as the real API expects the user to know whether to expect an entropy-coded segment to be present, as well as to be aware of error handling.
 
+### iv.ii. decoding/encoding API 
+
+While the segmentation API only goes so far as to lex or format a JPEG file, the decoding/encoding API does the heavy lifting of actually converting a JPEG to and from its bitmap data. This this is the most common use-case for JPEG, this set of APIs is likely to be the one most commonly used by users.
+
+Internally, this set of APIs handles JPEG state management, abstracting away the confusing system of table slots, plane indices, and binding points, and replacing it with resource identifiers (*c<sub>i</sub>*’s and *q<sub>i</sub>*’s) which are unique over the lifetime of the JPEG. The purpose of this abstraction is not only to present a simpler mental model for users, but also to make it harder for users to accidentally create an invalid JPEG file (for example, switching out a quantization table while its corresponding component is still being encoded.)
+
+#### iv.ii.i. keys, indices, and binding points 
+
+To users, this framework replaces the concept of resource binding points with *keys* and *indices*. (These terms are used in accordance to Swift convention.) The framework also uses the system of keys and indices to identify components, and by extension, image planes.
+
+Keys are unique identifiers for either a color component or a quantization table. The identifiers [*q<sub>i</sub>*] and [*c<sub>i</sub>*] are keys in this context, and we use the same notation to refer to them. Keys are essentially integer identifiers, and in the case of component keys, they have the same wrapped value as the component identifiers assigned in the image frame header. (Quantization table keys are a framework concept, they do not appear in the JPEG standard itself.) However, the framework uses Swift’s strong type system to distinguish them from actual indices to prevent user mixups.
+
+Indices, as the name suggests (according to Swift convention) are shortcuts used for efficient dereferencing of entities that would otherwise have to go through expensive hashtable lookups. Because the storage type is always some kind of `Array`, all indices have the type `Int`. The library API is written to discourage direct use of keys as accessors, rather, it nudges users towards looking up an index from a key once, and then using the index for all subsequent accesses.
+
+The framework uses the notation *c* and *q* for indices, corresponding to the [*q<sub>i</sub>*] and [*c<sub>i</sub>*] notation for keys.
+
+By library convention, the quanta key –1 is assigned to the “default” (all zeroes) quantization table when decoding a JPEG file. This key has index 0, so all file-defined quantization tables have indices counting up from 1. Quanta keys are assigned by the user when encoding a JPEG file. 
+
+Component keys are completely data-defined. Component indices start from 0, and are determined by the order that the component identifiers appear in the [color format](#ii-ii-color-formats). For the JFIF/EXIF common format, the key-to-index mapping is: 
+
+```
+{
+    [1]: 0, 
+    [2]: 1, 
+    [3]: 2
+}
+```
+
+Component indices are the same as plane indices, which use the notation *p* in the framework. In the above common format, component [1] would be plane *p*&nbsp;=&nbsp;0, component [2] would be plane *p*&nbsp;=&nbsp;1, and component [3] would be plane *p*&nbsp;=&nbsp;2. 
+
+While the builtin common format does not do this, custom color formats are allowed to support more *resident components* (components that a frame header can define without causing the library to emit a validation error) than *recognized components* (components that the decoder maintains pixel storage for and includes in its output). In this case, only the recognized components have corresponding planes. An example of a use-case for this kind of component subsetting is a custom RGB color format, which supports an optional alpha channel. In this case, custom RGBA JPEG images can be made compatible with another custom RGB color format using component subsetting.
+
+When a color format defines optional resident components, the recognized components get assigned contiguous indices starting from 0, and the optional components come after them.
+
+The encoder does not allow optional resident components, since it would not make sense to encode an image component for which no plane data has been provided.
+
+#### iv.ii.ii. layouts and definitions
+
+An image *layout* specifies all the parametric characteristics of the image save for the actual pixel values. It contains:
+
+* The image color format 
+* The image coding process 
+* The set of resident components 
+* The list of recognized components (which is always a subset of the residents)
+
+
+* The parameters for image planes (an array)
+* The sequence of definitions in the image (also an array)
+
+Each plane in the image has its own layout parameters. (The framework, of course, follows the same component/plane indexing scheme for this array.) A plane layout contains:
+
+* The component sampling factor 
+* The component quanta key ([*q<sub>i</sub>*])
+* The component quantization table binding point 
+
+The quanta key and the table binding point are always related. When a user initializes a layout, the binding points are assigned by the library. (In some cases, it is impossible to assign a large number of overlapping quanta keys to a limited number of binding points, in which case the library throws an error.) When a layout gets read from a JPEG file, the quanta keys get assigned by the library, as discussed in the [last section](#iv-ii-i-keys-indices-and-binding-points).
+
+The definition sequence is a list of alternating runs of quantization table definitions and scan definitions. The quantization table definitions say nothing about the actual contents of the tables, they only specify that the quantization table for a particular quanta key [*q<sub>i</sub>*] should appear in that position in the sequence.
+
+The following is a block diagram of a layout for an image with a custom color format with four components:
+```
+            c           0                1                2                3
+                        ┏━━━━━━━━━━━━━━━━┯━━━━━━━━━━━━━━━━┯━━━━━━━━━━━━━━━━┱────────────────┐
+format and components   ┃ ci       : [5] │ ci       : [6] │ ci       : [7] ┃ ci       : [4] │
+                        ┗━━━━━━━━━━━━━━━━┷━━━━━━━━━━━━━━━━┷━━━━━━━━━━━━━━━━┹────────────────┘
+                        ┏━━━━━━━━━━━━━━━━┯━━━━━━━━━━━━━━━━┯━━━━━━━━━━━━━━━━┱────────────────┐
+                        ┃ factor   : 2x2 │ factor   : 1x2 │ factor   : 1x2 ┃ factor   : 1x1 │
+        planes          ┃ quanta   : [2] │ quanta   : [3] │ quanta   : [3] ┃ quanta   : [0] │
+                        ┃ selector : \.0 │ selector : \.1 │ selector : \.1 ┃ selector : \.1 │
+                        ┗━━━━━━━━━━━━━━━━┷━━━━━━━━━━━━━━━━┷━━━━━━━━━━━━━━━━┹────────────────┘
+                        ╰────────────────────────┬─────────────────────────╯
+                                    recognized components/planes
+
+                      ╭ ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓ ╮
+  quantization table  │ ┃ qi        : [2]                        ┃ │
+      definitions    ─┤ ┠────────────────────────────────────────┨ │
+                      │ ┃ qi        : [0]                        ┃ │
+                      ╰ ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┨ │
+                      ╭ ┃             ┌────────────────────────┐ ┃ │
+                      │ ┃             │ c             :  0     │ ┃ │
+                      │ ┃ components: │ ci            : [5]    │ ┃ │
+                      │ ┃             │ selector (DC) : \.0    │ ┃ │
+                      │ ┃             │ selector (AC) : \.0    │ ┃ │
+                      │ ┃             └────────────────────────┘ ┃ │
+                      │ ┃ band      : [0, 64)                    ┃ │
+        scan          │ ┃ bits      : [0,  ∞)                    ┃ │
+     definitions     ─┤ ┠────────────────────────────────────────┨ │
+                      │ ┃             ┌────────────────────────┐ ┃ │
+                      │ ┃             │ c             :  3     │ ┃ │
+                      │ ┃ components: │ ci            : [4]    │ ┃ │
+                      │ ┃             │ selector (DC) : \.0    │ ┃ │
+                      │ ┃             │ selector (AC) : \.0    │ ┃ │
+                      │ ┃             └────────────────────────┘ ┃ │
+                      │ ┃ band      : [0, 64)                    ┃ ├─  definition sequence
+                      │ ┃ bits      : [0,  ∞)                    ┃ │
+                      ╰ ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛ │
+                        ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓ │
+                        ┃ qi        : [3]                        ┃ │
+                        ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┨ │
+                        ┃             ┌────────────────────────┐ ┃ │
+                        ┃             │ c             :  1     │ ┃ │
+                        ┃             │ ci            : [6]    │ ┃ │
+                        ┃             │ selector (DC) : \.0    │ ┃ │
+                        ┃             │ selector (AC) : \.0    │ ┃ │
+                        ┃ components: ├────────────────────────┤ ┃ │
+                        ┃             │ c             :  2     │ ┃ │
+                        ┃             │ ci            : [7]    │ ┃ │
+                        ┃             │ selector (DC) : \.1    │ ┃ │
+                        ┃             │ selector (AC) : \.1    │ ┃ │
+                        ┃             └────────────────────────┘ ┃ │
+                        ┃ band      : [0, 64)                    ┃ │
+                        ┃ bits      : [0,  ∞)                    ┃ │
+                        ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛ ╯
+```
+
 ## v. library architecture
 
 > **Summary:** The library is broadly divided into a decompressor and a compressor. The decompressor is further subdivided into a lexer, parser, and decoder, while the compressor is divided into an encoder, serializer, and formatter. Accordingly, the framework distinguishes between parseme types, returned by the parser and taken by the serializer, and model types, used by the decoder and encoder. For example, the parser returns a scan *header*, which is then “frozen” into a scan *structure*.
