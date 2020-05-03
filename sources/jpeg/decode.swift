@@ -2202,9 +2202,6 @@ extension JPEG.Data
         var quanta:Quanta
         private 
         var planes:[Plane]
-        
-        private 
-        let p:[JPEG.Component.Key: Int]
     }
     
     public 
@@ -2253,20 +2250,15 @@ extension JPEG.Data
         private 
         var planes:[Plane] 
         
-        private 
-        let p:[JPEG.Component.Key: Int]
-        
         init(size:(x:Int, y:Int), 
             layout:JPEG.Layout<Format>, 
             metadata:[JPEG.Metadata],
-            planes:[JPEG.Data.Planar<Format>.Plane], 
-            p:[JPEG.Component.Key: Int])
+            planes:[JPEG.Data.Planar<Format>.Plane])
         {
             self.size       = size
             self.layout     = layout
             self.metadata   = metadata
             self.planes     = planes 
-            self.p          = p
         } 
     }
     
@@ -2281,26 +2273,21 @@ extension JPEG.Data
         private 
         var values:[UInt16]
         
-        private 
-        let p:[JPEG.Component.Key: Int]
-        
         public 
         var stride:Int 
         {
-            self.p.count 
+            self.layout.recognized.count 
         }
         
         init(size:(x:Int, y:Int), 
             layout:JPEG.Layout<Format>, 
             metadata:[JPEG.Metadata], 
-            values:[UInt16], 
-            p:[JPEG.Component.Key: Int])
+            values:[UInt16])
         {
             self.size       = size
             self.layout     = layout
             self.metadata   = metadata
             self.values     = values
-            self.p          = p
         }
     }
 }
@@ -2403,7 +2390,7 @@ extension JPEG.Data.Spectral:RandomAccessCollection
     public 
     func index(forKey ci:JPEG.Component.Key) -> Int? 
     {
-        self.p[ci]
+        self.layout.index(ci: ci)
     }
 }
 extension JPEG.Data.Planar:RandomAccessCollection 
@@ -2435,7 +2422,7 @@ extension JPEG.Data.Planar:RandomAccessCollection
     public 
     func index(forKey ci:JPEG.Component.Key) -> Int? 
     {
-        self.p[ci]
+        self.layout.index(ci: ci)
     }
 }
 extension JPEG.Data.Rectangular 
@@ -2456,7 +2443,7 @@ extension JPEG.Data.Rectangular
     public 
     func offset(forKey ci:JPEG.Component.Key) -> Int? 
     {
-        self.p[ci]
+        self.layout.index(ci: ci)
     }
 }
 // `indices` property for plane types 
@@ -2747,10 +2734,6 @@ extension JPEG.Data.Spectral
     init(layout:JPEG.Layout<Format>)  
     {
         self.layout     = layout
-        self.p          = layout.residents.filter
-        { 
-            layout.recognized.indices ~= $0.value 
-        }
         
         self.metadata   = [] 
         self.planes     = layout.recognized.indices.map 
@@ -2856,10 +2839,6 @@ extension JPEG.Data.Planar
         metadata:[JPEG.Metadata])
     {
         self.layout     = layout
-        self.p          = layout.residents.filter
-        { 
-            layout.recognized.indices ~= $0.value 
-        }
 
         self.size       = size
         self.metadata   = metadata
@@ -4012,6 +3991,16 @@ extension JPEG.Layout
             self.definitions.append(([qi], []))
         }
     }
+    
+    func index(ci:JPEG.Component.Key) -> Int? 
+    {
+        guard let c:Int = self.residents[ci], self.recognized.indices ~= c
+        else 
+        {
+            return nil 
+        }
+        return c
+    }
 }
 // this is an extremely boilerplatey api but i consider it necessary to avoid 
 // having to provide huge amounts of (visually noisy) extraneous information 
@@ -4547,8 +4536,7 @@ extension JPEG.Data.Spectral
         return .init(size: self.size, 
             layout:     self.layout, 
             metadata:   self.metadata,
-            planes:     planes,
-            p:          self.p)
+            planes:     planes)
     }
 }
 extension JPEG.Data.Planar 
@@ -4601,8 +4589,7 @@ extension JPEG.Data.Planar
         return .init(size: self.size, 
             layout:     self.layout, 
             metadata:   self.metadata, 
-            values:     interleaved,
-            p:          self.p)
+            values:     interleaved)
     }
 }
 
