@@ -770,6 +770,103 @@ format and components   ┃ ci       : [5] │ ci       : [6] │ ci       : [7]
                         ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛ ╯
 ```
 
+Note that in interleaved scans, the scan components are always in ascending *key* order (not index order).
+
+#### iv.ii.iii. data representations 
+
+The products of the decoder (and the inputs of the encoder) are *data representations*, structures which represent an image as a whole. All data representations contain an image layout. In fact, all data representations contain a common descriptor “core” consisting of: 
+
+* Image pixel dimensions 
+* Image layout 
+* Metadata (array)
+
+There are three types of data representations, which can be thought of as images in different stages of processing.
+
+1. Spectral data 
+2. Planar data 
+3. Rectangular data 
+
+*Spectral data* is the most important type, as it is the native representation of a JPEG image. Spectral data can be decoded and reencoded without information loss (though the bitwise spelling may be slightly different). As the name suggests, it stores an image in its frequency-domain representation, grouped into 8x8-sample blocks. Spectral data is stored in a planar format, so the concept of the minimum-coded unit is not part of its organization. However, this data structure does store the image *scale*, which specifies the number of 8x8-pixel (not sample!) blocks that constitute a minimum-coded unit.
+
+A spectral data structure also stores the quantization table values separately from the quantized frequency coefficients. The dequantized coefficients are obtained by multiplying each stored coefficient with its corresponding quantum.
+
+The addressing scheme for spectral data is first by 2D block index (*x*,&nbsp;*y*), and then by zigzag coefficient index *z*. The *z* index is always between 0 and 63. 
+
+```
+   Y Plane  (p = 0)        Cb Plane  (p = 1)       Cr Plane  (p = 2)
+  ╷         ╷         ╷   ╷         ╷         ╷   ╷         ╷         ╷  
+─ ┏━━━━━━━━━┯━━━┱─────┐ ─ ┏━━━━━━━━━┯━━━┱─────┐ ─ ┏━━━━━━━━━┯━━━┱─────┐ ─
+  ┃ × × × × │ × ┃ × × │   ┃ × × × × │ × ┃ × × │   ┃ × × × × │ × ┃ × × │  
+  ┃ × × × × │ × ┃ × × │   ┃ × × × × │ × ┃ × × │   ┃ × × × × │ × ┃ × × │  
+  ┃ × × × × │ × ┃ × × │   ┃ × × × × │ × ┃ × × │   ┃ × × × × │ × ┃ × × │  
+─ ┠─────────┼───╂─────┤ ─ ┠─────────┼───╂─────┤ ─ ┠─────────┼───╂─────┤ ─
+  ┃ × × × × │ × ┃ × × │   ┃ × × × × │ × ┃ × × │   ┃ × × × × │ × ┃ × × │  
+  ┃ × × × × │ × ┃ × × │   ┃ × × × × │ × ┃ × × │   ┃ × × × × │ × ┃ × × │  
+  ┃ × × × × │ × ┃ × × │   ┃ × × × × │ × ┃ × × │   ┃ × × × × │ × ┃ × × │  
+─ ┠─────────┼───╂─────┤ ─ ┠─────────┼───╂─────┤ ─ ┠─────────┼───╂─────┤ ─
+  ┃ × × × × │ × ┃ × × │   ┃ × × × × │ × ┃ × × │   ┃ × × × × │ × ┃ × × │  
+  ┃ × × × × │ × ┃ × × │   ┃ × × × × │ × ┃ × × │   ┃ × × × × │ × ┃ × × │  
+  ┡━━━━━━━━━┿━━━┛ × × │   ┡━━━━━━━━━┿━━━┛ × × │   ┡━━━━━━━━━┿━━━┛ × × │  
+─ └─────────┴─────────┘ ─ └─────────┴─────────┘ ─ └─────────┴─────────┘ ─
+  ╵         ╵         ╵   ╵         ╵         ╵   ╵         ╵         ╵  
+  
+   Y Quanta                Cb Quanta               Cr Quanta 
+    (q = 2)                 (q = 1)                 (q = 1)
+  ┏━━━━━━━━━┓             ┏━━━━━━━━━┓             ┏━━━━━━━━━┓
+  ┃ × × × × ┃             ┃ × × × × ┃             ┃ × × × × ┃
+  ┃ × × × × ┃             ┃ × × × × ┃             ┃ × × × × ┃
+  ┃ × × × × ┃             ┃ × × × × ┃             ┃ × × × × ┃
+  ┗━━━━━━━━━┛             ┗━━━━━━━━━┛             ┗━━━━━━━━━┛
+```
+
+Note how the same quantization table (*q*&nbsp;=&nbsp;1) is shared by the Cb and Cr components.
+
+Spectral data is converted into *planar data* through the *inverse discrete cosine transform* (IDCT). This transform converts each spectral block into its spatial-domain representation. Planes in planar data have the same size as their spectral counterparts, but they are indexed by sample (not pixel!) rather than by block and then coefficient index. For example, the coordinate region (*x*,&nbsp;*y*,&nbsp;*z*)&nbsp;=&nbsp;(1,&nbsp;2,&nbsp;*z*), 0&nbsp;≤&nbsp;*z*&nbsp;<&nbsp;64 in the spectral representation is equivalent to the coordinate region (8&nbsp;+&nbsp;Δ*x*,&nbsp;16&nbsp;+&nbsp;Δ*y*), 0&nbsp;≤&nbsp;(Δ*x*,&nbsp;Δ*y*)&nbsp;<&nbsp;8 in the planar representation. (The offsets Δ*x* and Δ*y* are *not* related to *z*, since the inverse discrete cosine transform is applied to entire blocks at a time.)
+
+Even though planar data is indexed by sample, and not by block, each plane still contains whole blocks of data. It follows that the sample dimensions are always a multiple of 8.
+
+```
+   Y Plane  (p = 0)        Cb Plane  (p = 1)       Cr Plane  (p = 2)
+  ╷         ╷         ╷   ╷         ╷         ╷   ╷         ╷         ╷  
+─ ┏━┯━┯━┯━┯━┯━┯━┱─┬─┬─┐ ─ ┏━┯━┯━┯━┯━┯━┯━┱─┬─┬─┐ ─ ┏━┯━┯━┯━┯━┯━┯━┱─┬─┬─┐ ─
+  ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤   ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤   ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤  
+  ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤   ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤   ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤  
+  ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤   ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤   ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤  
+─ ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤ ─ ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤ ─ ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤ ─
+  ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤   ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤   ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤  
+  ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤   ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤   ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤  
+  ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤   ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤   ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤  
+─ ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤ ─ ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤ ─ ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤ ─
+  ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤   ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤   ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤  
+  ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤   ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤   ┠─┼─┼─┼─┼─┼─┼─╂─┼─┼─┤  
+  ┡━┿━┿━┿━┿━┿━┿━╃─┼─┼─┤   ┡━┿━┿━┿━┿━┿━┿━╃─┼─┼─┤   ┡━┿━┿━┿━┿━┿━┿━╃─┼─┼─┤  
+─ └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘ ─ └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘ ─ └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘ ─
+  ╵         ╵         ╵   ╵         ╵         ╵   ╵         ╵         ╵  
+```
+
+Finally, planar data can be *interleaved* for obtain *rectangular data*. If the components of the image use different sampling factors, then the subsampled planed are interpolated to fill in missing samples. When going from planar to rectangular representation, plane indices turn into intra-pixel offsets. (However, users should rarely have to access color channels by offset directly; this is a job for the pixel accessor API.)
+
+Because rectangular data is fully interleaved, padding samples are discarded when converting to this representation.
+
+```
+                              Y:Cb:Cr Image   
+                     ╷              ╷              ╷  
+                   ─ ┏┯┯┳┯┯┳┯┯┳┯┯┳┯┯┳┯┯┳┯┯┓          ─
+                     ┣┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿┫         
+                     ┣┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿┫         
+                     ┣┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿┫         
+                   ─ ┣┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿┫          ─
+                     ┣┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿┫         
+                     ┣┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿┫         
+                     ┣┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿┫         
+                   ─ ┣┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿┫          ─
+                     ┣┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿┫         
+                     ┣┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿╋┿┿┫         
+                     ┗┷┷┻┷┷┻┷┷┻┷┷┻┷┷┻┷┷┻┷┷┛           
+                   ─                                 ─
+                     ╵              ╵              ╵  
+```
+
 ## v. library architecture
 
 > **Summary:** The library is broadly divided into a decompressor and a compressor. The decompressor is further subdivided into a lexer, parser, and decoder, while the compressor is divided into an encoder, serializer, and formatter. Accordingly, the framework distinguishes between parseme types, returned by the parser and taken by the serializer, and model types, used by the decoder and encoder. For example, the parser returns a scan *header*, which is then “frozen” into a scan *structure*.
