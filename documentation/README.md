@@ -867,11 +867,95 @@ Because rectangular data is fully interleaved, padding samples are discarded whe
                      ╵              ╵              ╵  
 ```
 
+#### iv.ii.iv. pixel accessors 
+
+Rectangular data provide their pixel contents through the *pixel accessor* API. The output of this API is an array of pixels in the familiar YCbCr or RGBA (or another color type) form.
+
+Why does the framework not simply store pixel values in the rectangular data itself? This is because JPEG is natively a YCbCr-based image format, therefore, converting to a form such as RGB would cause additional data loss, and make the YCbCr image inaccessible without having to redecode the image. In addition, because the conversion to the rectangular representation often involves additional processing (such as the upsampling operation), it is highly motivating to be able to do this step once, and be able to read that image as multiple color targets without having to recompute the rectangular representation.
+
 ## v. library architecture
 
 > **Summary:** The library is broadly divided into a decompressor and a compressor. The decompressor is further subdivided into a lexer, parser, and decoder, while the compressor is divided into an encoder, serializer, and formatter. Accordingly, the framework distinguishes between parseme types, returned by the parser and taken by the serializer, and model types, used by the decoder and encoder. For example, the parser returns a scan *header*, which is then “frozen” into a scan *structure*.
 
 > The framework is architected for extensibility. For example, although the decoder and encoder do not support JPEG processes beyond the baseline, extended, and progressive processes, all JPEG processes, including hierarchical and arithmetic processes are recognized by the parser. Similarly, the lexer recognizes JPEG marker types that the parser does not necessarily know how to parse.
+
+This section is meant to be an introductory guide to the organization of the code base, and an overview of the various type relationships the framework establishes. It also overviews the generic customization points the library offers users.
+
+Broadly, the framework is divided into a decompressor and a compressor. As an arbitrary design decision, the decompressor is positioned as somewhat more fundamental than the compression, so many type definitions are associated with the decompressor, with the compressor in some ways written atop of the decompressor. The decompressor can be further divided into a lexer, parser, and decoder; the corresponding components of the compressor are the formatter, serializer, and encoder. The lexer, parser, formatter, and serializer generally work with *parseme types*, which get narrowed and further validated into *model types* used by the encoder and decoder.
+
+At the time of writing, contributors will find five files containing most of the core library code:
+
+* [`jpeg/common.swift`](sources/jpeg/common.swift)
+* [`jpeg/decode.swift`](sources/jpeg/decode.swift)
+* [`jpeg/encode.swift`](sources/jpeg/encode.swift)
+* [`jpeg/debug.swift`](sources/jpeg/debug.swift)
+* [`jpeg/os.swift`](sources/jpeg/os.swift)
+
+### v.i. `common.swift`
+
+This file contains data structures and language extensions which are used by the framework, but not conceptually related to JPEG. It defines the top-level namespace `Common`, with the following type members:
+
+* `Common`
+    * `Common.MutableStorage<I>`
+    * `Common.Storage<I>`
+    * `Common.Storage2<I>`
+    * `Common.Heap<Key, Value>`
+    * `Common.Range2<Bound>`
+    * `Common.Range2Iterator<Bound>`
+
+It also extends the standard library `Array<UInt8>` and `ArraySlice<UInt8>` types to support the following methods:
+
+* `Swift.ArraySlice<UInt8>`
+    * `Swift.ArraySlice<UInt8>.load<T, U>(_:)(bigEndian:as:)`
+
+
+* `Swift.Array<UInt8>`
+    * `Swift.Array<UInt8>.load<T, U>(_:)(bigEndian:as:at:)`
+    * `Swift.Array<UInt8>.store<T, U>(_:asBigEndian:)`
+
+#### v.i.i. storage types 
+
+* `Common.MutableStorage<I>`
+* `Common.Storage<I>`
+* `Common.Storage2<I>`
+
+These types are Swift property wrappers used to store `Int` values with fewer bits than a normal 64-bit integer. (This is useful because unlike in C/C++, `Int` is the *only* canonical integer type, so a wrapper which provides a way of accessing shorter integer types as a plain `Int` is highly valuable.) The only reason it is currently necessary to have these property wrappers is that current bugs in the compiler (as of version 5.2) place a hard 32 byte size limit on element types that are used with `read`/`modify` subscripts.
+
+The `Storage<I>` type implements a read-only version of `MutableStorage<I>`, while the `Storage2<I>` type implements the same concept for a `(x:Int, y:Int)` tuple, since property wrappers cannot be directly applied to tuple elements.
+
+#### v.i.ii. heap type 
+
+* `Common.Heap<Key, Value>`
+
+This type implements a standard heap (priority queue). This heap is a min-heap (which sorts by `Key` type). It is used to assign codewords to symbols when constructing huffman trees.
+
+#### v.i.iii. 2D range types 
+
+* `Common.Range2<Bound>`
+* `Common.Range2Iterator<Bound>`
+
+These types provide support for 2-dimensional index loops. Within the library, they look like this:
+
+```swift 
+for (x, y):(Int, Int) in (0, 0) ..< (a, b) 
+{
+    ...
+}
+```
+
+Which is equivalent to this:
+
+```swift 
+for y:Int in 0 ..< b 
+{
+    for x:Int in 0 ..< a 
+    {
+        ...
+    }
+}
+```
+
+To avoid cluttering user scopes, the `..<` operator is non-public, however, 2-dimensional range iterators can still be used through the various `.indices` properties on many framework types.
 
 ## vi. test architecture
 
