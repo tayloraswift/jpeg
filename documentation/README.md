@@ -1292,17 +1292,19 @@ So far, we’ve looked at the huffman tree as a tree. However it actually makes 
             ┃   n + 1 | '11------'  ┃  
   n + 512 ─ ┗━━━━━━━━━━━━━━━━━━━━━━━┛ ─ 256 * (n + 2)
             ╏          ...          ╏
-  z - 256 ─ ┏━━━━━━━━━━━━━━━━━━━━━━━┓ ─ 65280
+  z - 192 ─ ┏━━━━━━━━━━━━━━━━━━━━━━━┓ ─ 65280
             ┃                       ┃  
           ─ ┃  '11111111 0-------'  ┃  
             ┃                       ┃  
           ─ ┠───────────────────────┨  
             ┃  '11111111 10------'  ┃  
-          ─ ┠───────────────────────┨  
-            ┠───────────────────────┨  
-        z ─ ┗━━━━━━━━━━━━━━━━━━━━━━━┛ ─ 65536 (UInt16.max)
+        z ─ ┗━━━━━━━━━━━━━━━━━━━━━━━┛ ─ 65472 (ζ)
+            ╹    truncated zone     ╹  
+          ─ ┗ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━ ┛ ─ 65536 (UInt16.max)
 
 ```
+
+Where *n* is the number of level-0 table entries, *z* is the size of the table in memory, and *ζ* is the logical size of the table (which can be less than or equal to 65,536).
 
 This is convenient because we don’t need to store anything in the table entries themselves to know if they are direct entries or indirect entries. If the index of the entry is greater than or equal to *n* (the number of direct entries), it is an indirect entry, and its indirect index is given by the first byte of the codeword with *n* subtracted from it. Level-1 subtables are always 256 entries long since they are leaf tables. This means their positions can be computed formulaically, given *n* (a constant), which is also the position of the first level-1 table.
 
@@ -1315,9 +1317,57 @@ In fact, we can reduce this even further to *k*&nbsp;≤&nbsp;128 because if the
 
 Because we don’t need to store pointers, each table entry can be just 2 bytes long; 1 byte for the encoded value, and 1 byte to store the length of the codeword.
 
-A buffer like this will never have size greater than 2&nbsp;×&nbsp;256&nbsp;×&nbsp;(128&nbsp;+&nbsp;1)&nbsp;=&nbsp;65,792&nbsp;bytes, compared with 2&nbsp;×&nbsp;2<sup>16</sup>&nbsp;=&nbsp;131,072&nbsp;bytes for the 16-bit table. In reality the two-layer table is usually on the order of 2–4 kilobytes in size.
+A buffer like this will never have size greater than 2&nbsp;×&nbsp;256&nbsp;×&nbsp;(128&nbsp;+&nbsp;1)&nbsp;=&nbsp;65,792&nbsp;bytes, compared with 2&nbsp;×&nbsp;2<sup>16</sup>&nbsp;=&nbsp;131,072&nbsp;bytes for the 16-bit table. In reality the two-layer table is usually on the order of 1–4 kilobytes in size.
 
 Why not compact the child trees further, since not all of them actually have height 8? We could do that, and get some serious worst-case memory savings, but then we couldn’t access the child tables at constant offsets from the buffer base. We would need to store whole ≥16-bit pointers to the specific byte offset where the variable-length child table lives, and perform a conditional bit shift to transform the input bits into an appropriate index into the table. This would also require two table lookups, as opposed to one.
+
+#### v.ii.viii. data representations
+
+* `struct` `JPEG.Data.Spectral<Format>`
+    * `struct` `JPEG.Data.Spectral<Format>.Plane`
+    * `struct` `JPEG.Data.Spectral<Format>.Quanta`
+* `struct` `JPEG.Data.Planar<Format>`
+    * `struct` `JPEG.Data.Planar<Format>.Plane`
+* `struct` `JPEG.Data.Rectangular<Format>`
+
+These are the data representations discussed in the [user model](#iv-user-model) section. The `Spectral` and `Planar` types are `RandomAccessCollection`s of planes. Each collection type (as well as the `Quanta` member of a `Spectral` instance) provides an `index(forKey:)` method used to translate a *c<sub>i</sub>* or *q<sub>i</sub>* key into a *p* or *q* integer index. Note that for plane index lookups, this is *not* exactly the same as finding the component index in the image layout, because this method will return `nil` if *p* is greater than or equal to the number of planes in the data representation (i.e., if the component is a resident component, but not a recognized one). This distinction is, however, irrelevant for the built-in common color format, as it accepts no unrecognized components.
+
+#### v.ii.ix. decoder types and decoder implementation
+
+* `extension` `JPEG.Bitstream`
+* `extension` `JPEG.Data.Spectral`
+* `extension` `JPEG.Data.Spectral.Plane`
+* `struct` `JPEG.Context<Format>`
+
+The extension methods on `Bitstream` extract composite values from an entropy-coded bitstream. Extension methods on the `Spectral` type then implement the scan-level decoding loops for interleaved scans. For non-interleaved scans, these methods are instead defined on the `Spectral.Plane`. These scan-level decoder functions call the composite-level methods.
+
+In turn, frame-level decoder functions, implemented on the `Context<Format>` type, call the scan-level functions. The `Context` type maintains the state of both a `Spectral` instance, and the state of bound table resources.
+
+#### v.ii.x. staged conversion APIs
+
+* `extension` `JPEG.Data.Spectral`
+    * `extension` `JPEG.Data.Spectral.Plane`
+        * `typealias` `JPEG.Data.Spectral<Format>.Plane.Block8x8<T>`
+* `extension` `JPEG.Data.Planar`
+    * `extension` `JPEG.Data.Planar.Plane`
+* `extension` `JPEG.Data.Rectangular`
+
+These extensions implement the transformations required to convert a spectral image into a spatial-domain planar image, and a planar image to a rectangular image. The inverse discrete cosine transform algorithm is semantically equivalent to the floating-point algorithm used by *libjpeg*, so the framework will replicate the rounding behavior of *libjpeg*.
+
+#### v.ii.xi. built-in color formats and color target conformances
+
+* `enum` `JPEG.Common`
+
+The `JPEG.Common` enumeration defines the built-in color format for JFIF/EXIF standards.
+
+```swift 
+enum JPEG.Common
+{
+    case y8, ycc8
+}
+```
+
+This section of the code also conforms the built-in `RGB` and `YCbCr` color targets to the `JPEG.Color` protocol, using `JPEG.Common` as their format types.
 
 ## vi. test architecture
 
