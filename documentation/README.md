@@ -896,28 +896,28 @@ At the time of writing, contributors will find five files containing most of the
 This file contains data structures and language extensions which are used by the framework, but not conceptually related to JPEG. It defines the top-level namespace `Common`, with the following type members:
 
 * `Common`
-    * `Common.MutableStorage<I>`
-    * `Common.Storage<I>`
-    * `Common.Storage2<I>`
-    * `Common.Heap<Key, Value>`
-    * `Common.Range2<Bound>`
-    * `Common.Range2Iterator<Bound>`
+    * `struct Common.MutableStorage<I>`
+    * `struct Common.Storage<I>`
+    * `struct Common.Storage2<I>`
+    * `struct Common.Heap<Key, Value>`
+    * `struct Common.Range2<Bound>`
+    * `struct Common.Range2Iterator<Bound>`
 
 It also extends the standard library `Array<UInt8>` and `ArraySlice<UInt8>` types to support the following methods:
 
-* `Swift.ArraySlice<UInt8>`
+* `extension Swift.ArraySlice<UInt8>`
     * `Swift.ArraySlice<UInt8>.load<T, U>(_:)(bigEndian:as:)`
 
 
-* `Swift.Array<UInt8>`
+* `extension Swift.Array<UInt8>`
     * `Swift.Array<UInt8>.load<T, U>(_:)(bigEndian:as:at:)`
     * `Swift.Array<UInt8>.store<T, U>(_:asBigEndian:)`
 
 #### v.i.i. storage types 
 
-* `Common.MutableStorage<I>`
-* `Common.Storage<I>`
-* `Common.Storage2<I>`
+* `struct Common.MutableStorage<I>`
+* `struct Common.Storage<I>`
+* `struct Common.Storage2<I>`
 
 These types are Swift property wrappers used to store `Int` values with fewer bits than a normal 64-bit integer. (This is useful because unlike in C/C++, `Int` is the *only* canonical integer type, so a wrapper which provides a way of accessing shorter integer types as a plain `Int` is highly valuable.) The only reason it is currently necessary to have these property wrappers is that current bugs in the compiler (as of version 5.2) place a hard 32 byte size limit on element types that are used with `read`/`modify` subscripts.
 
@@ -925,14 +925,14 @@ The `Storage<I>` type implements a read-only version of `MutableStorage<I>`, whi
 
 #### v.i.ii. heap type 
 
-* `Common.Heap<Key, Value>`
+* `struct Common.Heap<Key, Value>`
 
 This type implements a standard heap (priority queue). This heap is a min-heap (which sorts by `Key` type). It is used to assign codewords to symbols when constructing huffman trees.
 
 #### v.i.iii. 2D range types 
 
-* `Common.Range2<Bound>`
-* `Common.Range2Iterator<Bound>`
+* `struct Common.Range2<Bound>`
+* `struct Common.Range2Iterator<Bound>`
 
 These types provide support for 2-dimensional index loops. Within the library, they look like this:
 
@@ -956,6 +956,368 @@ for y:Int in 0 ..< b
 ```
 
 To avoid cluttering user scopes, the `..<` operator is non-public, however, 2-dimensional range iterators can still be used through the various `.indices` properties on many framework types.
+
+### v.ii. `decode.swift`
+
+The majority of the library code lives in this file. It includes both implementations for the decompressor, and data types common to both the decoder and the encoder. It defines the top-level namespace `JPEG`, with the following type members:
+
+* `JPEG` (color format protocols and color targets)
+    * `protocol` `JPEG.Format`
+    * `protocol` `JPEG.Color`
+        * `associatedtype` `Format`
+    * `struct` `JPEG.YCbCr`
+    * `struct` `JPEG.RGB`
+
+
+* `JPEG` (model types)
+    * `enum` `JPEG.Metadata`
+    * `struct` `JPEG.Component`
+        * `struct` `JPEG.Component.Key`
+    * `struct` `JPEG.Scan`
+        * `struct` `JPEG.Scan.Component` 
+    * `struct` `JPEG.Layout<Format>`
+
+
+* `JPEG` (compound types)
+    * `enum` `JPEG.Process`
+        * `enum` `JPEG.Process.Coding`
+    * `enum` `JPEG.Marker`
+
+
+* `JPEG` (error types)
+    * `protocol` `JPEG.Error`
+    * `enum` `JPEG.LexingError`
+    * `enum` `JPEG.ParsingError`
+    * `enum` `JPEG.DecodingError`
+
+
+* `JPEG` (stream types, and lexer)
+    * `protocol` `JPEG.Bytestream.Source`
+    * `struct` `JPEG.Bitstream`
+
+
+* `JPEG` (parseme types, and parser)
+    * `protocol` `JPEG.Bitstream.AnySymbol`
+    * `enum` `JPEG.Bitstream.Symbol.DC`
+    * `enum` `JPEG.Bitstream.Symbol.AC`
+    * `struct` `JPEG.JFIF`
+        * `enum` `JPEG.JFIF.Version`
+        * `enum` `JPEG.JFIF.Unit`
+    * `protocol` `JPEG.AnyTable`
+        * `associatedtype` `Delegate`
+    * `struct` `JPEG.Table.Huffman<Symbol>`
+    * `struct` `JPEG.Table.Quantization`
+        * `struct` `JPEG.Table.Quantization.Key`
+        * `struct` `JPEG.Table.Quantization.Precision`
+    * `struct` `JPEG.Header.HeightRedefinition`
+    * `struct` `JPEG.Header.Frame`
+    * `struct` `JPEG.Header.Scan`
+
+
+* `JPEG` (huffman decoder)
+    * `struct` `JPEG.Table.Huffman<Symbol>.Decoder`
+
+
+* `JPEG.Data` (data representations)
+    * `struct` `JPEG.Data.Spectral<Format>`
+        * `struct` `JPEG.Data.Spectral<Format>.Plane`
+        * `struct` `JPEG.Data.Spectral<Format>.Quanta`
+    * `struct` `JPEG.Data.Planar<Format>`
+        * `struct` `JPEG.Data.Planar<Format>.Plane`
+    * `struct` `JPEG.Data.Rectangular<Format>`
+
+
+* `JPEG` (decoder types and decoder)
+    * `extension` `JPEG.Bitstream`
+    * `extension` `JPEG.Data.Spectral`
+    * `extension` `JPEG.Data.Spectral.Plane`
+    * `struct` `JPEG.Context<Format>`
+
+
+* `JPEG.Data` (staged APIs)
+    * `extension` `JPEG.Data.Spectral`
+        * `extension` `JPEG.Data.Spectral.Plane`
+            * `typealias` `JPEG.Data.Spectral<Format>.Plane.Block8x8<T>`
+    * `extension` `JPEG.Data.Planar`
+        * `extension` `JPEG.Data.Planar.Plane`
+    * `extension` `JPEG.Data.Rectangular`
+
+
+* `JPEG` (built-in color formats and color target conformances)
+    * `enum` `JPEG.Common`
+
+#### v.ii.i. color format protocols and color targets
+
+* `protocol` `JPEG.Format`
+* `protocol` `JPEG.Color`
+    * `associatedtype` `Format`
+* `struct` `JPEG.YCbCr`
+* `struct` `JPEG.RGB`
+
+As the names suggest, the protocols `JPEG.Format` and `JPEG.Color` define the requirements for a user-defined color format and color target, respectively:
+
+```swift 
+protocol JPEG.Format 
+{
+    static 
+    func recognize(_ components:Set<JPEG.Component.Key>, precision:Int) -> Self?
+    
+    var components:[JPEG.Component.Key]
+    {
+        get 
+    }
+    var precision:Int 
+    {
+        get 
+    }
+}
+
+protocol JPEG.Color
+{
+    associatedtype Format:JPEG.Format 
+    
+    static 
+    func pixels(_ interleaved:[UInt16], format:Format) -> [Self]
+}
+```
+
+All color targets must have a specific associated format type. At first glance, this seems restrictive, since there can only be one color format that can produce each color target, but in practice, any meaningfully distinct color format would have to define its own set of target color types anyway.
+
+This section of the code also declares two built-in 8-bit color targets, `JPEG.YCbCr` and `JPEG.RGB`, but implements no conformances.
+
+#### v.ii.ii. model types 
+
+* `enum` `JPEG.Metadata`
+* `struct` `JPEG.Component`
+    * `struct` `JPEG.Component.Key`
+* `struct` `JPEG.Scan`
+    * `struct` `JPEG.Scan.Component` 
+* `struct` `JPEG.Layout<Format>`
+
+These types are the model types produced by cross-validating the framework’s parseme types. In general, they store pre-resolved resource indices. Most of them have already been discussed in the [user model](#iv-user-model) section.
+
+The `JPEG.Metadata` enumeration stores typed and untyped metadata records. At present, JFIF segments are the only kind of metadata stored as parsed metadata. All other application segments are stored as untyped, raw byte buffers
+
+#### v.ii.iii. compound types 
+
+* `enum` `JPEG.Process`
+    * `enum` `JPEG.Process.Coding`
+* `enum` `JPEG.Marker`
+
+These types are effectively lexeme types, though they also have relevance in deeper levels of the library. As the names suggest, `JPEG.Process` cases represent coding processes, while `JPEG.Marker` cases represent marker segment types.
+
+#### v.ii.iv. error types 
+
+* `protocol` `JPEG.Error`
+* `enum` `JPEG.LexingError`
+* `enum` `JPEG.ParsingError`
+* `enum` `JPEG.DecodingError`
+
+These types form the basis of the framework’s error handling system. The `JPEG.Error` protocol refines Swift’s normal `Swift.Error` errors, to add namespace, message, and detailed-message properties. This allows errors to be printed to the terminal with a common formatting.
+
+```swift 
+protocol JPEG.Error:Swift.Error 
+{
+    static 
+    var namespace:String 
+    {
+        get 
+    }
+    var message:String 
+    {
+        get 
+    }
+    var details:String? 
+    {
+        get 
+    }
+}
+```
+
+#### v.ii.v. stream types and lexer implementation 
+
+* `protocol` `JPEG.Bytestream.Source`
+* `struct` `JPEG.Bitstream`
+
+These types define the data inputs to the decoder. The `JPEG.Bytestream.Source` protocol abstracts a data source, which could be a file handle, in-memory data blob, or anything else. The `JPEG.Bitstream` type provides bit-level access to binary-coded data. Note that the bitstreams, unlike the bytestreams, are random-access.
+
+```swift 
+protocol JPEG.Bytestream.Source 
+{
+    mutating 
+    func read(count:Int) -> [UInt8]?
+}
+```
+
+The lexer is implemented atop of the `JPEG.Bytestream.Source` protocol as an extension. 
+
+#### v.ii.vi. parseme types and parser implementation
+
+* `protocol` `JPEG.Bitstream.AnySymbol`
+* `enum` `JPEG.Bitstream.Symbol.DC`
+* `enum` `JPEG.Bitstream.Symbol.AC`
+* `struct` `JPEG.JFIF`
+    * `enum` `JPEG.JFIF.Version`
+    * `enum` `JPEG.JFIF.Unit`
+* `protocol` `JPEG.AnyTable`
+    * `associatedtype` `Delegate`
+* `struct` `JPEG.Table.Huffman<Symbol>`
+* `struct` `JPEG.Table.Quantization`
+    * `struct` `JPEG.Table.Quantization.Key`
+    * `struct` `JPEG.Table.Quantization.Precision`
+* `struct` `JPEG.Header.HeightRedefinition`
+* `struct` `JPEG.Header.Frame`
+* `struct` `JPEG.Header.Scan`
+
+These types are produced by parsing raw segment data produced by the lexer. Some of them are generically grouped under protocols such as `JPEG.AnyTable` and `JPEG.Bitstream.AnySymbol`. The strong typing that distinguishes DC and AC huffman tables provides an additional guard against table mismatch bugs.
+
+Most parseme types follow a common API pattern — they are constructed from raw data through static `.create(...)` methods, and then converted into cross-validated model types through `.validate(...)` instance methods, to which relevant context is passed.
+
+#### v.ii.vii. huffman decoder implementation 
+
+* `struct` `JPEG.Table.Huffman<Symbol>.Decoder`
+
+This type implements an efficient huffman decoder. 
+
+This implementation takes advantage of the fact that JPEG huffman tables are defined gzip style, as sequences of leaf counts and leaf values. The leaf counts indicate the number of leaf nodes at each level of the tree. Combined with a rule that says that leaf nodes always occur on the “leftmost” side of the tree, this uniquely determines a huffman tree.
+
+```
+level  leaves                      tree
+    0 ┏━━━━━┓           ┌──────── 0 ┴ 1 ────────┐
+      ┃  0  ┃           │                       │
+    1 ┠─────┨   ┌──── 0 ┴ 1 ────┐       ┌──── 0 ┴ 1 ────┐
+      ┃  3  ┃  'a'             'b'     'c'              │
+    2 ┠─────┨                                   ┌──── 0 ┴ 1 ────┐
+      ┃  1  ┃                                  'd'              │
+    3 ┠─────┨                                           ┌──── 0 ┴ 1 ────┐
+      ┃  1  ┃                                          'e'          <reserved>
+    4 ┗━━━━━┛
+```
+
+Note that in a huffman tree, level 0 always contains 0 leaf nodes (why?) so the huffman table omits level 0 in the leaf counts list.
+
+The library *could* build a tree data structure, and traverse it as it reads in the coded bits, but that would be slow and require a shift for every bit. Instead it extends the huffman tree into a perfect tree, and assigns the new leaf nodes the values of their parents.
+
+```
+                    ┌──────────── 0 ┴ 1 ────────────┐
+                    │                               │
+            ┌──── 0 ┴ 1 ────┐               ┌──── 0 ┴ 1 ────┐
+           (a)             (b)             (c)              │
+        ┌ 0 ┴ 1 ┐       ┌ 0 ┴ 1 ┐       ┌ 0 ┴ 1 ┐       ┌ 0 ┴ 1 ┐ 
+        │       │       │       │       │       │      (d)      │   
+      ┌─┴─┐   ┌─┴─┐   ┌─┴─┐   ┌─┴─┐   ┌─┴─┐   ┌─┴─┐   ┌─┴─┐   ┌─┴─┐ 
+     'a' 'a' 'a' 'a' 'b' 'b' 'b' 'b' 'c' 'c' 'c' 'c' 'd' 'd' 'e' ...
+```
+
+This creates a table of huffman codes where all the codes are “padded” to the same length. Note that codewords that occur higher up the tree occur multiple times because they have multiple children. Of course, since the extra bits aren’t actually part of the code, the table stores separately the length of the original code so that the consumer knows how many bits to advance the current bit position by once a match has been looked up.
+
+| prefix | value | length |
+| ------ | ----- | ------ |
+| `0000` | `'a'` | `2`    |
+| `0001` | `'a'` | `2`    |
+| `0010` | `'a'` | `2`    |
+| `0011` | `'a'` | `2`    |
+| `0100` | `'b'` | `2`    |
+| `0101` | `'b'` | `2`    |
+| `0110` | `'b'` | `2`    |
+| `0111` | `'b'` | `2`    |
+| `1000` | `'c'` | `2`    |
+| `1001` | `'c'` | `2`    |
+| `1010` | `'c'` | `2`    |
+| `1011` | `'c'` | `2`    |
+| `1100` | `'d'` | `3`    |
+| `1101` | `'d'` | `3`    |
+| `1110` | `'e'` | `4`    |
+
+Decoding entropy-coded data then becomes a matter of matching a fixed-length bitstream against the table (the code works as an integer index!) since all possible combinations of trailing “padding” bits are represented in the table.
+
+In JPEG, codewords can be a maximum of 16 bits long. This means in theory a lookup table would have to be 2<sup>16</sup> entries long. That is a huge table considering there are only 256 actual symbols, and since this is the kind of thing that really needs to be optimized for speed, this needs to be as cache friendly as possible.
+
+We can reduce the table size by splitting the 16-bit table into two 8-bit levels. This means having one 8-bit “root” tree, and *k* 8-bit child trees rooted on the internal nodes at level 8 of the original tree.
+
+So far, we’ve looked at the huffman tree as a tree. However it actually makes more sense here to look at it as a table, just like its implementation. The tree is right-heavy, so its compacted table will look something like this:
+
+```
+        memory                  padded
+        offset                  codeword
+        0 ─ ┏━━━━━━━━━━━━━━━━━━━━━━━┓ ─ 0
+            ┃                       ┃ ─
+            ┃                       ┃ ─
+            ┃                       ┃ ─
+            ┃       '00------'      ┃ ─
+            ┃                       ┃ ─
+            ┃                       ┃ ─
+            ┃                       ┃ ─
+          ─ ┠───────────────────────┨ ─ 16384
+            ┃                       ┃ ─
+            ┃       '010-----'      ┃ ─
+            ┃                       ┃ ─
+            ┠───────────────────────┨ ─
+            ┃                       ┃ ─
+            ┃       '011-----'      ┃ ─
+            ┃                       ┃ ─
+          ─ ┠───────────────────────┨ ─ 32768
+            ┃       '1000----'      ┃ ─
+            ┠───────────────────────┨ ─
+            ┃       '1001----'      ┃ ─
+            ┠───────────────────────┨ ─
+            ┃       '1010----'      ┃ ─
+            ┠───────────────────────┨ ─
+            ┃       '1011----'      ┃ ─
+          ─ ┠───────────────────────┨ ─ 49152
+            ┃       '1100----'      ┃ ─
+            ┠───────────────────────┨ ─
+            ┠───────────────────────┨ ─
+        n ─ ┗━━━━━━━━━━ ↓ ━━━━━━━━━━┛ ─ 256 * n ─  
+          ↑ ╹                       ╹ ─         ↑  
+          s ╹     overlap zone      ╹ ─     256 * s
+          ↓ ╹                       ╹ ─         ↓  
+      256 ─ ┗ ━ ━ ━ ━ ━   ━ ━ ━ ━ ━ ┛ ─ 65536   ─  
+        n ─ ┏━━━━━━━━━━ ↑ ━━━━━━━━━━┓ ─ 256 * n
+            ┃                       ┃  
+          ─ ┃       n | '0-------'  ┃  
+            ┃                       ┃  
+          ─ ┠───────────────────────┨  
+            ┃       n | '10------'  ┃  
+          ─ ┠───────────────────────┨  
+            ┠───────────────────────┨  
+  n + 256 ─ ┗━━━━━━━━━━━━━━━━━━━━━━━┛ ─ 256 * (n + 1) 
+  n + 256 ─ ┏━━━━━━━━━━━━━━━━━━━━━━━┓ ─ 256 * (n + 1)
+            ┃                       ┃  
+          ─ ┃   n + 1 | '0-------'  ┃  
+            ┃                       ┃  
+          ─ ┠───────────────────────┨  
+            ┃   n + 1 | '10------'  ┃  
+          ─ ┠───────────────────────┨  
+            ┃   n + 1 | '11------'  ┃  
+  n + 512 ─ ┗━━━━━━━━━━━━━━━━━━━━━━━┛ ─ 256 * (n + 2)
+            ╏          ...          ╏
+  z - 256 ─ ┏━━━━━━━━━━━━━━━━━━━━━━━┓ ─ 65280
+            ┃                       ┃  
+          ─ ┃  '11111111 0-------'  ┃  
+            ┃                       ┃  
+          ─ ┠───────────────────────┨  
+            ┃  '11111111 10------'  ┃  
+          ─ ┠───────────────────────┨  
+            ┠───────────────────────┨  
+        z ─ ┗━━━━━━━━━━━━━━━━━━━━━━━┛ ─ 65536 (UInt16.max)
+
+```
+
+This is convenient because we don’t need to store anything in the table entries themselves to know if they are direct entries or indirect entries. If the index of the entry is greater than or equal to *n* (the number of direct entries), it is an indirect entry, and its indirect index is given by the first byte of the codeword with *n* subtracted from it. Level-1 subtables are always 256 entries long since they are leaf tables. This means their positions can be computed formulaically, given *n* (a constant), which is also the position of the first level-1 table.
+
+(For computational ease, we store *s*&nbsp;=&nbsp;256&nbsp;–&nbsp;*n* instead. 
+The value *s* can be interpreted as the number of level-1 subtables that trail the level-0 table in the storage buffer.)
+
+How big can *s* be? Remember that there are only 256 different encoded values which means the original tree can only have 256 leaves. Any full binary tree with height at least 1 *must* contain at least 2 leaf nodes. Since the child trees must have a height greater than 0 (otherwise they would be 0-bit trees), every child tree except possibly the rightmost one must have at least 2 leaf nodes. The rightmost child tree is an exception because in JPEG, the all-ones codeword does not represent any value, so the rightmost tree can possibly only contain one “real” leaf node. We can apply the pigeonhole principle to show that we can only have up to *k*&nbsp;≤&nbsp;129 child trees.
+
+In fact, we can reduce this even further to *k*&nbsp;≤&nbsp;128 because if the rightmost tree only contains 1 leaf, there has to be at least one other tree with an odd number of leaves to make the total add up to 256, and that number has to be at least 3. In reality, *k* is rarely bigger than 7 or 8, yielding a significant size savings.
+
+Because we don’t need to store pointers, each table entry can be just 2 bytes long; 1 byte for the encoded value, and 1 byte to store the length of the codeword.
+
+A buffer like this will never have size greater than 2&nbsp;×&nbsp;256&nbsp;×&nbsp;(128&nbsp;+&nbsp;1)&nbsp;=&nbsp;65,792&nbsp;bytes, compared with 2&nbsp;×&nbsp;2<sup>16</sup>&nbsp;=&nbsp;131,072&nbsp;bytes for the 16-bit table. In reality the two-layer table is usually on the order of 2–4 kilobytes in size.
+
+Why not compact the child trees further, since not all of them actually have height 8? We could do that, and get some serious worst-case memory savings, but then we couldn’t access the child tables at constant offsets from the buffer base. We would need to store whole ≥16-bit pointers to the specific byte offset where the variable-length child table lives, and perform a conditional bit shift to transform the input bits into an appropriate index into the table. This would also require two table lookups, as opposed to one.
 
 ## vi. test architecture
 
