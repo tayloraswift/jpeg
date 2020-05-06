@@ -1,4 +1,12 @@
-# Swift *JPEG*
+**University of Illinois Electrical and Computer Engineering**
+
+ECE 496/499 Senior Project 
+
+> Author: Kelvin Ma
+
+> Advisor: Dr. Zbigniew T Kalbarczyk
+
+# Swift *JPEG*: Contributor’s Guide 
 
 Swift *JPEG* is a cross-platform pure Swift framework which provides a full-featured JPEG encoding and decoding API. The core framework has no external dependencies, including *Foundation*, and should compile and provide consistent behavior on *all* Swift platforms. The framework supports additional features, such as file system support, on Linux and MacOS. Swift *JPEG* is available under the [GPL3 open source license](https://choosealicense.com/licenses/gpl-3.0/).
 
@@ -49,7 +57,7 @@ JPEG images as commonly encountered today are actually governed by three overlap
 
 The JPEG standard is color format agnostic, meaning it supports any combination of user-defined color components (YCbCr, RGB, RGBA, and anything else). The standard defines no fewer than thirteen different *coding processes*, which are essentially distinct image formats grouped under the umbrella of “JPEG formats”. Coding processes can be classified by their *entropy coding*:
 
-```swift
+```
 enum Coding 
 {
     case huffman 
@@ -632,7 +640,8 @@ As mentioned already, the segmentation API takes a file input (or byte stream), 
 ```
 
 Its operations can be best summarized by the pseudoswift below:
-```swift 
+
+``` 
 var input:Source
 while true 
 {
@@ -715,6 +724,7 @@ The quanta key and the table binding point are always related. When a user initi
 The definition sequence is a list of alternating runs of quantization table definitions and scan definitions. The quantization table definitions say nothing about the actual contents of the tables, they only specify that the quantization table for a particular quanta key [*q<sub>i</sub>*] should appear in that position in the sequence.
 
 The following is a block diagram of a layout for an image with a custom color format with four components:
+
 ```
             c           0                1                2                3
                         ┏━━━━━━━━━━━━━━━━┯━━━━━━━━━━━━━━━━┯━━━━━━━━━━━━━━━━┱────────────────┐
@@ -936,7 +946,7 @@ This type implements a standard heap (priority queue). This heap is a min-heap (
 
 These types provide support for 2-dimensional index loops. Within the library, they look like this:
 
-```swift 
+``` 
 for (x, y):(Int, Int) in (0, 0) ..< (a, b) 
 {
     ...
@@ -945,7 +955,7 @@ for (x, y):(Int, Int) in (0, 0) ..< (a, b)
 
 Which is equivalent to this:
 
-```swift 
+``` 
 for y:Int in 0 ..< b 
 {
     for x:Int in 0 ..< a 
@@ -1056,7 +1066,7 @@ The majority of the library code lives in this file. It includes both implementa
 
 As the names suggest, the protocols `JPEG.Format` and `JPEG.Color` define the requirements for a user-defined color format and color target, respectively:
 
-```swift 
+``` 
 protocol JPEG.Format 
 {
     static 
@@ -1115,7 +1125,7 @@ These types are effectively lexeme types, though they also have relevance in dee
 
 These types form the basis of the framework’s error handling system. The `JPEG.Error` protocol refines Swift’s normal `Swift.Error` errors, to add namespace, message, and detailed-message properties. This allows errors to be printed to the terminal with a common formatting.
 
-```swift 
+``` 
 protocol JPEG.Error:Swift.Error 
 {
     static 
@@ -1141,7 +1151,7 @@ protocol JPEG.Error:Swift.Error
 
 These types define the data inputs to the decoder. The `JPEG.Bytestream.Source` protocol abstracts a data source, which could be a file handle, in-memory data blob, or anything else. The `JPEG.Bitstream` type provides bit-level access to binary-coded data. Note that the bitstreams, unlike the bytestreams, are random-access.
 
-```swift 
+``` 
 protocol JPEG.Bytestream.Source 
 {
     mutating 
@@ -1360,7 +1370,7 @@ These extensions implement the transformations required to convert a spectral im
 
 The `JPEG.Common` enumeration defines the built-in color format for JFIF/EXIF images.
 
-```swift 
+``` 
 enum JPEG.Common
 {
     case y8, ycc8
@@ -1482,7 +1492,7 @@ These extensions implement the serializers for the parseme types defined in `dec
 
 These types define the data outputs for the encoder. The `JPEG.Bytestream.Destination` protocol abstracts a data destination, which, like the data destinations, could be a file handle, in-memory data blob, or anything else. 
 
-```swift 
+``` 
 protocol JPEG.Bytestream.Destination
 {
     mutating 
@@ -1514,7 +1524,7 @@ It extends the `Common` namespace with the following types, which conform to the
 
 Both system file interfaces are exposed through the static `open` method, which has the following signature:
 
-```swift 
+``` 
 static
 func open<Result>(path:String, _ body:(inout Self) throws -> Result)
     rethrows -> Result?
@@ -1603,3 +1613,7 @@ The core of the fuzz tests is, of course, the fuzzer, which generates randomized
 The number of test images the `utils/fuzz-test` script will generate is set by the `-n <count>` option, by default it is set to 16. The script will use the system Imagemagick `convert` tool to run the reference codec; Imagemagick is powered by *libjpeg*, so this effectively establishes *libjpeg* as the reference implementation. (The Travis CI will install Imagemagick with Homebrew when testing on MacOS platforms.) The script then uses a separate execuable product called `compare` (built by the package manager) to compare the `convert` tool output with the Swift library output, compute statistics, and generate histograms of the output discrepancy.
 
 The framework’s discrete cosine transform implementation is written to exactly emulate the floating-point behavior of *libjpeg*, and will match its output exactly so long as no out-of-range pixel values occur. However, since *libjpeg* is not internally consistent with respect to its other arithmetic modes, this means that significant discrepancies (though generally less than 10 gray levels) exist when using *libjpeg*’s “fast” mode or its fixed-point mode.
+
+## vii. acknowledgements 
+
+The author would like to acknowledge the valuable support and advice of Dr. Zbigniew Kalbarczyk, who oversaw this project from start to completion over the course of approximately one year.
