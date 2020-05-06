@@ -333,7 +333,7 @@ A quantization table definition consists of 64 multiplier values, which correspo
 
 The table precision is not necessarily the same as the image bit depth (though it is subject to some constraints based on the image bit depth). This field is solely used to specify the (big-endian) integer type the table values are stored as. 
 
-Note that, as a technical detail, quantization tables do not actually identify themselves with a *q<sub>i</sub>* identifier, nor do component definitions in a frame header use those identifiers to reference them. However, table identifiers are a useful conceptual model for understanding resource relationships within a JPEG file. This issue will be discussed further in the [contextual state](#iii-v-contextual-state) section.
+Note that, as a technical detail, quantization tables do not actually identify themselves with a *q<sub>i</sub>* identifier, nor do component definitions in a frame header use those identifiers to reference them. However, table identifiers are a useful conceptual model for understanding resource relationships within a JPEG file. This issue will be discussed further in the [contextual state](#iiiv-contextual-state) section.
 
 #### iii.iii.ii. huffman tables 
 
@@ -344,7 +344,7 @@ Like a quantization table definition, a huffman table definition includes some b
 * Huffman table identifier 
 * Resource type (DC table or AC table)
 
-A huffman table definition does not contain the table values verbatim. (That would be far too space-inefficient.) Rather, it specifies the shape of huffman *tree* used to generate the table, and the symbol values of the (up to 256) leaves in the tree. The algorithm for generating the huffman table from the huffman tree is discussed in more detail in the [library architecture](#v-library-architecture) section.
+A huffman table definition does not contain the table values verbatim. (That would be far too space-inefficient.) Rather, it specifies the shape of huffman *tree* used to generate the table, and the symbol values of the (up to 256) leaves in the tree. The algorithm for generating the huffman table from the huffman tree is discussed in more detail in the [library architecture](#viivii-huffman-decoder-implementation) section.
 
 Unlike quantization tables, huffman tables have no direct relation to frequency coefficient values themselves. They are only used to decompress entropy-coded data within a single entropy-coded segment. (It is allowed, but uncommon, for multiple entropy-coded segments to use the same huffman table.) It is for this reason that huffman tables are “locally” associated with scans while quantization tables are “globally” associated with components at the frame level.
 
@@ -673,7 +673,7 @@ The framework uses the notation *c* and *q* for indices, corresponding to the [*
 
 By library convention, the quanta key –1 is assigned to the “default” (all zeroes) quantization table when decoding a JPEG file. This key has index 0, so all file-defined quantization tables have indices counting up from 1. Quanta keys are assigned by the user when encoding a JPEG file. 
 
-Component keys are completely data-defined. Component indices start from 0, and are determined by the order that the component identifiers appear in the [color format](#ii-ii-color-formats). For the JFIF/EXIF common format, the key-to-index mapping is: 
+Component keys are completely data-defined. Component indices start from 0, and are determined by the order that the component identifiers appear in the [color format](#iiii-color-formats). For the JFIF/EXIF common format, the key-to-index mapping is: 
 
 ```
 {
@@ -710,7 +710,7 @@ Each plane in the image has its own layout parameters. (The framework, of course
 * The component quanta key ([*q<sub>i</sub>*])
 * The component quantization table binding point 
 
-The quanta key and the table binding point are always related. When a user initializes a layout, the binding points are assigned by the library. (In some cases, it is impossible to assign a large number of overlapping quanta keys to a limited number of binding points, in which case the library throws an error.) When a layout gets read from a JPEG file, the quanta keys get assigned by the library, as discussed in the [last section](#iv-ii-i-keys-indices-and-binding-points).
+The quanta key and the table binding point are always related. When a user initializes a layout, the binding points are assigned by the library. (In some cases, it is impossible to assign a large number of overlapping quanta keys to a limited number of binding points, in which case the library throws an error.) When a layout gets read from a JPEG file, the quanta keys get assigned by the library, as discussed in the [last section](#iviii-keys-indices-and-binding-points).
 
 The definition sequence is a list of alternating runs of quantization table definitions and scan definitions. The quantization table definitions say nothing about the actual contents of the tables, they only specify that the quantization table for a particular quanta key [*q<sub>i</sub>*] should appear in that position in the sequence.
 
@@ -984,7 +984,7 @@ The majority of the library code lives in this file. It includes both implementa
     * `enum` `JPEG.Marker`
 
 
-* `JPEG` (error types)
+* `JPEG` (decompression error types)
     * `protocol` `JPEG.Error`
     * `enum` `JPEG.LexingError`
     * `enum` `JPEG.ParsingError`
@@ -1106,7 +1106,7 @@ The `JPEG.Metadata` enumeration stores typed and untyped metadata records. At pr
 
 These types are effectively lexeme types, though they also have relevance in deeper levels of the library. As the names suggest, `JPEG.Process` cases represent coding processes, while `JPEG.Marker` cases represent marker segment types.
 
-#### v.ii.iv. error types 
+#### v.ii.iv. decompression error types 
 
 * `protocol` `JPEG.Error`
 * `enum` `JPEG.LexingError`
@@ -1343,7 +1343,7 @@ The extension methods on `Bitstream` extract composite values from an entropy-co
 
 In turn, frame-level decoder functions, implemented on the `Context<Format>` type, call the scan-level functions. The `Context` type maintains the state of both a `Spectral` instance, and the state of bound table resources.
 
-#### v.ii.x. staged conversion APIs
+#### v.ii.x. staged conversion APIs (forward)
 
 * `extension` `JPEG.Data.Spectral`
     * `extension` `JPEG.Data.Spectral.Plane`
@@ -1358,7 +1358,7 @@ These extensions implement the transformations required to convert a spectral im
 
 * `enum` `JPEG.Common`
 
-The `JPEG.Common` enumeration defines the built-in color format for JFIF/EXIF standards.
+The `JPEG.Common` enumeration defines the built-in color format for JFIF/EXIF images.
 
 ```swift 
 enum JPEG.Common
@@ -1367,7 +1367,165 @@ enum JPEG.Common
 }
 ```
 
+Note that `y8` only occurs in JFIF images.
+
 This section of the code also conforms the built-in `RGB` and `YCbCr` color targets to the `JPEG.Color` protocol, using `JPEG.Common` as their format types.
+
+### v.iii. `encode.swift`
+
+Code and definitions related to to the compressor lives in this file. It extends the top-level namespace `JPEG`, with the following type members:
+
+* `JPEG` (compression error types)
+    * `enum` `JPEG.FormattingError`
+    * `enum` `JPEG.SerializingError`
+    * `enum` `JPEG.EncodingError`
+
+* `JPEG.Data` (staged conversion APIs)
+    * `extension` `JPEG.Data.Planar.Plane`
+    * `extension` `JPEG.Data.Spectral.Plane`
+    * `extension` `JPEG.Data.Planar`
+
+* `JPEG` (parseme encoders)
+    * `extension` `JPEG.Data.Spectral`
+    * `extension` `JPEG.Layout`
+
+* `JPEG.Table.Huffman` (huffman tree builder)
+    * `class` `JPEG.Table.Huffman.Subtree<Element>`
+    * `struct` `JPEG.Table.Huffman.Encoder`
+        * `struct` `JPEG.Table.Huffman.Encoder.Codeword`
+        *
+* `JPEG` (encoder implementation)
+    * `extension` `JPEG.Bitstream`
+        * `extension` `JPEG.Bitstream.Composite.DC`
+        * `extension` `JPEG.Bitstream.Composite.AC`
+    * `extension` `JPEG.Data.Spectral`
+        * `extension` `JPEG.Data.Spectral.Plane`
+
+* `JPEG` (serializer implementation)
+    * `extension` `JPEG.JFIF`
+        * `extension` `JPEG.JFIF.Version`
+        * `extension` `JPEG.JFIF.Unit`
+    * `extension` `JPEG.AnyTable`
+    * `extension` `JPEG.Table`
+        * `extension` `JPEG.Table.Huffman`
+        * `extension` `JPEG.Table.Quantization`
+    * `extension` `JPEG.Header.Frame`
+    * `extension` `JPEG.Header.Scan`
+
+* `JPEG` (stream types, and formatter)
+    * `protocol` `JPEG.Bytestream.Destination`
+    * `extension` `JPEG.Bytestream.Destination`
+
+#### v.iii.i. compression error types
+
+* `enum` `JPEG.FormattingError`
+* `enum` `JPEG.SerializingError`
+* `enum` `JPEG.EncodingError`
+
+These error types are analogous to their counterparts in `decode.swift`. However, because most compressor APIs are designed to fatal-error on failure rather than throw (because the caller is usually responsible for the data inputs), there are far fewer error cases. In fact, of the three error types, only `FormattingError` has any cases at all; the others are defined as placeholders for future framework expansion.
+
+#### v.iii.ii. staged conversion APIs
+
+* `extension` `JPEG.Data.Planar.Plane`
+* `extension` `JPEG.Data.Spectral.Plane`
+* `extension` `JPEG.Data.Planar`
+
+These extensions implement the forward discrete cosine transform, which converts a planar image into a spectral one. (At present, the conversion from rectangular to planar representation is unimplemented.)
+
+#### v.iii.iii. parseme encoders 
+
+* `extension` `JPEG.Data.Spectral`
+* `extension` `JPEG.Layout`
+
+These extensions implement methods that encode model types as their parseme forms. Because model types support many more assumptions than parseme types, these APIs do not return optionals nor do they throw errors. In fact, failure can generally only occur due to serious programmer error, for example, a broken custom color `Format` implementation.
+
+#### v.iii.iv. huffman tree builder
+
+* `class` `JPEG.Table.Huffman.Subtree<Element>`
+* `struct` `JPEG.Table.Huffman.Encoder`
+    * `struct` `JPEG.Table.Huffman.Encoder.Codeword`
+
+The `Subtree` type is used to construct a (near-) optimal huffman tree given a list of symbols and symbol frequencies. (This functionality is what the `Common.Heap` type is for.)
+
+The huffman `Encoder` table is the inverse of the huffman `Decoder` table; it takes symbols as input (through a subscript interface), and returns `Codeword`s as output. The efficient implementation of this functionality is far more straightforward than for its decoder counterpart — there are only 256 possible symbols, so the symbol-to-codeword mapping can be accomplished with a simple 256-entry lookup table.
+
+#### v.iii.v. encoder implementation
+
+* `extension` `JPEG.Bitstream`
+    * `extension` `JPEG.Bitstream.Composite.DC`
+    * `extension` `JPEG.Bitstream.Composite.AC`
+* `extension` `JPEG.Data.Spectral`
+    * `extension` `JPEG.Data.Spectral.Plane`
+
+These extensions implement the inverse operations to the decoder methods in `decode.swift`. The extensions on `JPEG.Bitstream` handle the encoding of composite values into entropy-coded bitstreams, while the extensions on `Spectral` and `Spectral.Plane` handle encoding at the scan-level, for interleaved and non-interleaved scans, respectively.
+
+(There is no need for a counterpart to the `Context` handler, since all state-related parameters have already been computed when initializing the image `Layout`.)
+
+#### v.iii.vi. serializer implementation
+
+* `extension` `JPEG.JFIF`
+    * `extension` `JPEG.JFIF.Version`
+    * `extension` `JPEG.JFIF.Unit`
+* `extension` `JPEG.AnyTable`
+* `extension` `JPEG.Table`
+    * `extension` `JPEG.Table.Huffman`
+    * `extension` `JPEG.Table.Quantization`
+* `extension` `JPEG.Header.Frame`
+* `extension` `JPEG.Header.Scan`
+
+These extensions implement the serializers for the parseme types defined in `decode.swift`. In most cases, they are defined as instance methods on parseme types, which return untyped marker segment bodies as `[UInt8]` buffers.
+
+#### v.iii.vii. stream types, and formatter
+
+* `protocol` `JPEG.Bytestream.Destination`
+* `extension` `JPEG.Bytestream.Destination`
+
+These types define the data outputs for the encoder. The `JPEG.Bytestream.Destination` protocol abstracts a data destination, which, like the data destinations, could be a file handle, in-memory data blob, or anything else. 
+
+```swift 
+protocol JPEG.Bytestream.Destination
+{
+    mutating 
+    func write(_ bytes:[UInt8]) -> Void?
+}
+```
+
+The `write(_:)` method should return `Void` on success, and `nil` on failure.
+
+Like the lexer, the formatter is implemented atop of the `JPEG.Bytestream.Destination` protocol as an extension. 
+
+### v.iv. `debug.swift`
+
+This file is relatively simple; it only implements the various `CustomStringConvertible` conformances that pretty-print JPEG entities. Importantly, it also provides `ExpressibleByIntegerLiteral` conformances for component and quanta key types, making it easier for users to initialize `Layout` and `Spectral` data structures.
+
+* `extension` `JPEG.Component.Key:ExpressibleByIntegerLiteral`
+* `extension` `JPEG.Table.Quantization.Key:ExpressibleByIntegerLiteral`
+
+### v.v. `os.swift`
+
+This file provides system-dependent features such as file system support. It is only compiled is the operating system is MacOS or Linux, and omitted otherwise, so that other Swift platforms such as Android or iOS can still use the core library features.
+
+It extends the `Common` namespace with the following types, which conform to the respective `JPEG.Bytestream.Source` and `JPEG.Bytestream.Destination` protocols.
+
+* `Common`
+    * `enum` `Common.File`
+        * `struct` `Common.File.Source`
+        * `struct` `Common.File.Destination`
+
+Both system file interfaces are exposed through the static `open` method, which has the following signature:
+
+```swift 
+static
+func open<Result>(path:String, _ body:(inout Self) throws -> Result)
+    rethrows -> Result?
+```
+
+This file also extends `JPEG.Data.Spectral`, `JPEG.Data.Planar`, and `JPEG.Data.Rectangular` with staged APIs that take file path names, rather than generic streams as arguments.
+
+* `JPEG.Data`
+    * `extension` `JPEG.Data.Spectral`
+    * `extension` `JPEG.Data.Planar`
+    * `extension` `JPEG.Data.Rectangular`
 
 ## vi. test architecture
 

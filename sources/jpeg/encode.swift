@@ -378,6 +378,21 @@ extension JPEG.Data.Spectral
         }
     }
 }
+extension JPEG.Layout 
+{
+    public 
+    var scans:[JPEG.Header.Scan] 
+    {
+        self.definitions.flatMap
+        {
+            $0.scans.map 
+            {
+                .init(band: $0.band, bits: $0.bits, 
+                    components: $0.components.map(\.component))
+            }
+        }
+    }
+}
 
 extension JPEG.Table.Huffman 
 {

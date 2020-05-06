@@ -2550,19 +2550,6 @@ extension JPEG.Layout
             (self.planes[$0].component.factor, self.planes[$0].qi)
         }
     }
-    
-    public 
-    var scans:[JPEG.Header.Scan] 
-    {
-        self.definitions.flatMap
-        {
-            $0.scans.map 
-            {
-                .init(band: $0.band, bits: $0.bits, 
-                    components: $0.components.map(\.component))
-            }
-        }
-    }
 }
 // spectral type APIs
 extension JPEG.Data.Spectral.Plane 
