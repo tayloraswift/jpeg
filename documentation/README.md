@@ -885,11 +885,11 @@ Broadly, the framework is divided into a decompressor and a compressor. As an ar
 
 At the time of writing, contributors will find five files containing most of the core library code:
 
-* [`jpeg/common.swift`](sources/jpeg/common.swift)
-* [`jpeg/decode.swift`](sources/jpeg/decode.swift)
-* [`jpeg/encode.swift`](sources/jpeg/encode.swift)
-* [`jpeg/debug.swift`](sources/jpeg/debug.swift)
-* [`jpeg/os.swift`](sources/jpeg/os.swift)
+* [`jpeg/common.swift`](../sources/jpeg/common.swift)
+* [`jpeg/decode.swift`](../sources/jpeg/decode.swift)
+* [`jpeg/encode.swift`](../sources/jpeg/encode.swift)
+* [`jpeg/debug.swift`](../sources/jpeg/debug.swift)
+* [`jpeg/os.swift`](../sources/jpeg/os.swift)
 
 ### v.i. `common.swift`
 
