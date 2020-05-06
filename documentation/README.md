@@ -1530,3 +1530,76 @@ This file also extends `JPEG.Data.Spectral`, `JPEG.Data.Planar`, and `JPEG.Data.
 ## vi. test architecture
 
 > **Summary:** The Travis Continuous Integration set up for the project repository supports four sets of tests. *Unit tests* verify basic algorithmic components of the library, such as the huffman coders and zigzag index translators. *Integration tests* verify that a sample set of images with different supported coding processes and layouts can be decoded and encoded without errors. *Regression tests* run the integration tests and compare them with known outputs. Finally, *fuzz tests* generate randomized test images and compare the output to that output from third-party implementations such as the *libjpeg*-based `imagemagick convert` tool, ensuring inter-library compatibility.
+
+The framework uses [Travis](https://travis-ci.com/github/kelvin13/jpeg) to run four sets of automated tests:
+
+* Unit tests 
+* Integration tests 
+* Regression tests 
+* Fuzz tests 
+
+All tests are compiled as executable products by the package manager, and are invoked by bash scripts in the `utils/` directory:
+
+* `utils/unit-test`
+* `utils/integration-test`
+* `utils/regression-test`
+* `utils/fuzz-test`
+
+These scripts return `0` on passing.
+
+### vi.i. unit tests 
+
+These tests validate several important subcomponents of the library, including some `internal` subcomponents, which is why these tests are always compiled in `debug` mode (with `@testable` imports) rather than `release` mode. (Attempting to compile all products at once with the package manager set to `release` mode will fail for this reason.)
+
+Most unit tests consist of a few explicitly written test cases (which serve as the root of trust), coupled with more exhaustive tests that pair certain sets of APIs with their inverses, and attempt to feed the output of one API as the input of the other, and vice-versa. Currently, the unit tests validate the following library components:
+
+* zig-zag coefficient indices 
+* amplitude coding (translating composite values into numerical values)
+* huffman table coding 
+* huffman table construction
+
+### vi.ii. integration tests 
+
+These tests attempt to decode and encode various test images without errors. Because the library features extensive internal validation, these tests are highly valuable for enforcing internal logical consistency. They do not attempt to match data outputs, and will succeed as long as no errors occur in the encoding or decoding process.
+
+Integration tests support both `debug` and `release` compilation modes, using the `-c <compilation mode>` command-line option. Currently, the decoding tests run on the following test images:
+
+| test image                    | coding process | components | subsampling |
+| ----------------------------- | -------------- | ---------- | ----------- |
+| `color-sequential-1.jpg`      | baseline       | 3          | 4:2:0       |
+| `color-sequential-2.jpg`      | baseline       | 3          | 4:2:0       |
+| `color-sequential-3.jpg`      | baseline       | 3          | 4:4:4       |
+| `color-sequential-4.jpg`      | baseline       | 3          | 4:4:4       |
+| `grayscale-sequential-1.jpg`  | baseline       | 1          | —           |
+| `grayscale-sequential-2.jpg`  | baseline       | 1          | —           |
+| `color-progressive-1.jpg`     | progressive    | 3          | 4:2:0       |
+| `color-progressive-2.jpg`     | progressive    | 3          | 4:2:0       |
+| `color-progressive-3.jpg`     | progressive    | 3          | 4:4:4       |
+| `color-progressive-4.jpg`     | progressive    | 3          | 4:4:4       |
+| `grayscale-progressive-1.jpg` | progressive    | 1          | —           |
+| `grayscale-progressive-2.jpg` | progressive    | 1          | —           |
+
+The encoding tests take a predefined RGB input image, and encode it as the following test outputs:
+
+| output image                               | coding process | components | subsampling |
+| ------------------------------------------ | -------------- | ---------- | ----------- |
+| `karlie-kloss-1-color-sequential.jpg`      | baseline       | 3          | 4:4:4       |
+| `karlie-kloss-1-grayscale-sequential.jpg`  | baseline       | 1          | —           |
+| `karlie-kloss-1-color-progressive.jpg`     | progressive    | 3          | 4:4:4       |
+| `karlie-kloss-1-grayscale-progressive.jpg` | progressive    | 1          | —           |
+
+### vi.iii. regression tests 
+
+As the name suggests, the regression tests attempt to decode test images, and compare the output to a set of “golden outputs”. The regression tests run on the same JPEG test images as the integration tests, and compare the output of both the RGB and YCbCr built-in color targets.
+
+Like the integration tests, the regression tests support both `debug` and `release` compilation modes, with the same command-line syntax. The `utils/regression-test` tool can be run with the option `-u` (long form `--update`) to regenerate the golden outputs. (The tests will return a failure code for that run.)
+
+### vi.iv. fuzz tests 
+
+The fuzz tests are the most sophisticated automated tests, because they don’t return a pass or fail result, but rather, are used to quantify the difference between the framework output, and the output of a different library, such as *libjpeg*. Unlike other formats, such as PNG, which has a well-defined binary specification, the JPEG standard only specifies the symbolic *mathematical* definition of its discrete cosine transform. This means that different JPEG codecs, different versions of the same JPEG codec (such as *libjpeg*), and even the same version of the same JPEG codec (*libjpeg* as well) on different platforms can produce different output due to discrepancies in floating-point and integer arithmetic spellings.
+
+The core of the fuzz tests is, of course, the fuzzer, which generates randomized 8x8 pixel test images. (This size is chosen because it contains a single JPEG coefficient block.) The fuzzer uses Swift’s randomization APIs to generate pixel values, though the ranges are limited to avoid creating YCbCr colors that do not have equivalents in the RGB color space. Out-of-range colors can be problematic for comparing JPEG codecs because while the JPEG standard technically specified that clamping should be used (and the framework conforms to this), in practice, out-of-range color values result in implementation-defined behavior. For example, for performance reasons, *libjpeg* will wrap-around out-of-range color values if they exceed a constant “safety margin”.
+
+The number of test images the `utils/fuzz-test` script will generate is set by the `-n <count>` option, by default it is set to 16. The script will use the system Imagemagick `convert` tool to run the reference codec; Imagemagick is powered by *libjpeg*, so this effectively establishes *libjpeg* as the reference implementation. (The Travis CI will install Imagemagick with Homebrew when testing on MacOS platforms.) The script then uses a separate execuable product called `compare` (built by the package manager) to compare the `convert` tool output with the Swift library output, compute statistics, and generate histograms of the output discrepancy.
+
+The framework’s discrete cosine transform implementation is written to exactly emulate the floating-point behavior of *libjpeg*, and will match its output exactly so long as no out-of-range pixel values occur. However, since *libjpeg* is not internally consistent with respect to its other arithmetic modes, this means that significant discrepancies (though generally less than 10 gray levels) exist when using *libjpeg*’s “fast” mode or its fixed-point mode.
