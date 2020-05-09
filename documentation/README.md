@@ -1,20 +1,77 @@
-**University of Illinois Electrical and Computer Engineering**
+&nbsp;
 
-ECE 496/499 Senior Project 
+# CREATING A NATIVE SWIFT JPEG CODEC
 
-> Author: Kelvin Ma
+By Kelvin Ma
 
-> Advisor: Dr. Zbigniew T Kalbarczyk
+**Senior Thesis in Computer Engineering**
+
+University of Illinois at Urbana-Champaign
+
+Advisor: Dr. Zbigniew T Kalbarczyk
+
+May 2020
+
+<div style="page-break-after: always;"></div>
+
+# Abstract
+
+Swift is one of the world’s most popular systems programming languages, however for many applications, such as image decoding and encoding, Apple’s proprietary frameworks are the only options available to users. This project, an open-source, pure-swift implementation of the ITU-T81 JPEG standard, is motivated by that gap in the language ecosystem. Written as an open source project contributor’s guide, we begin by detailing the problems and considerations inherent to codec design, and how the Swift language allows for highly expressive and safe APIs beyond what older C and C++ frameworks can provide. We continue with an overview of the components of our fully-featured JPEG library, including ways in which various performance and safety issues have been addressed. We overview the packaging and encapsulation required to vend a usable framework, as well as the unit, integration, and regression tests essential for its long-term maintenance. 
+
+> Keywords: JPEG, codecs, Swift, frameworks
+
+<div style="page-break-after: always;"></div>
+
+# Acknowledgements 
+
+The author would like to acknowledge the valuable support and advice of Dr. Zbigniew Kalbarczyk, who oversaw this project from start to completion over the course of approximately one year.
+
+<div style="page-break-after: always;"></div>
+
+# Table of contents
+
+1. [Project motivation](#1-Project-motivation)
+    1. [Problem](#11-Problem)
+    2. [Proposed solution](#12-Proposed-solution)
+    3. [Prior art (literature review)](#13-Prior-art-literature-review)
+2. [Project goals](#2-Project-goals)
+    1. [The JPEG standard](#21-The-JPEG-standard)
+    2. [Color formats](#22-Color-formats)
+    3. [Color targets](#23-Color-targets)
+    4. [Levels of abstraction](#24-Levels-of-abstraction)
+3. [Concepts](#3-Concepts)
+    1. [JPEG segmented structure](#31-JPEG-segmented-structure)
+    2. [Header segments](#32-Header-segments)
+    3. [Table segments](#33-Table-segments)
+    4. [Blocks, planes, and MCUs](#34-Blocks-planes-and-MCUs)
+    5. [Contextual state](#35-Contextual-state)
+4. [User model](#4-User-model)
+    1. [Segmentation API](#41-Segmentation-API)
+    2. [Decoding/encoding API](#42-Decoding-encoding-API)
+5. [Library architecture](#5-Library-architecture)
+    1. [`common.swift`](#51-common-swift)
+    2. [`decode.swift`](#52-decode-swift)
+    3. [`encode.swift`](#53-encode-swift)
+    4. [`debug.swift`](#54-debug-swift)
+    5. [`os.swift`](#55-os-swift)
+6. [Test architecture](#6-Test-architecture)
+    1. [Unit tests](#61-Unit-tests)
+    2. [Integration tests](#62-Integration-tests)
+    3. [Regression tests](#63-Regression-tests)
+    4. [Fuzz tests](#64-Fuzz-tests)
+7. [Conclusion](#7-Conclusion)
+
+<div style="page-break-after: always;"></div>
 
 # Swift *JPEG*: Contributor’s Guide 
 
 Swift *JPEG* is a cross-platform pure Swift framework which provides a full-featured JPEG encoding and decoding API. The core framework has no external dependencies, including *Foundation*, and should compile and provide consistent behavior on *all* Swift platforms. The framework supports additional features, such as file system support, on Linux and MacOS. Swift *JPEG* is available under the [GPL3 open source license](https://choosealicense.com/licenses/gpl-3.0/).
 
-## i. project motivation
+## 1. Project motivation
 
 > **Summary:** Unlike *UIImage*, Swift *JPEG* is cross-platform and open-source. It provides a rich, idiomatic set of APIs for the Swift language, beyond what wrappers around C frameworks such as *libjpeg* can emulate, and unlike *libjpeg*, guarantees safe and consistent behavior across different platforms and hardware. As a standalone SPM package, it is also significantly easier to install and use in a Swift project.
 
-### i.i. problem
+### 1.1. Problem
 
 Today, almost all Swift users rely on two popular system frameworks for encoding and decoding the JPEG file format. The first of these system frameworks is *UIKit*, which is available on Apple platforms and includes a multi-format image codec, [*UIImage*](https://developer.apple.com/documentation/uikit/uiimage). However, this codec is proprietary and unavailable on Linux platforms, making tools and applications that depend on *UIImage* non-portable.
 
@@ -26,14 +83,14 @@ Owing to vast differences in programming paradigms and preferred design patterns
 
 The *libjpeg* codec specifically also suffers from serious technical flaws which preclude its safe inclusion in Swift projects. Error handling in *libjpeg* relies heavily on the `setjmp` family of POSIX functions, which are [unsafe](https://forums.swift.org/t/on-the-road-to-swift-6/32862/149) to use in Swift (and many [other languages](https://internals.rust-lang.org/t/support-c-apis-designed-for-safe-unwinding/7212) as well). The output from *libjpeg* can also vary across different hardware due to differences in platform rounding and SIMD architecture. 
 
-### i.ii. proposed solution
+### 1.2. Proposed solution
 
 A major, and in our opinion, beneficial, trend in modern language design, has been to distribute language compilers with package managers that can pull code from the internet to be compiled locally by a developer’s compiler (or interpeter) toolchain. The most famous examples might be Node and Python’s `pip` tool. In Swift, the equivalent is the [Swift Package Manager](https://swift.org/package-manager/) (SPM). While the Swift Package Manager is capable of linking to system C libraries, this process is generally not automated and entails some complexity on the part of users. A native-Swift framework, on the other hand, can be automatically downloaded, versioned, installed, and imported by the package manager, greatly streamlining its use. 
 
 This, and the previously discussed issues with existing system frameworks, motivates the creation of a pure Swift implementation of JPEG. A pure Swift JPEG library can vend a natural, idiomatic API. By default, pure Swift code compiles on *all* Swift platforms, and the lack of undefined/implementation-defined behavior in the language ensures consistent behavior across those platforms. First-class language support for concepts such as SIMD also make native-Swift codecs considerably more portable than their C counterparts, which are often compiled as a patchwork of macro-defined cores and extensions. 
 
 
-### i.iii. prior art
+### 1.3. Prior art (literature review)
 
 Currently, no production-ready JPEG codec exists for the Swift language today. 
 
@@ -47,11 +104,11 @@ Without funding, interest and technical difficulty are the main determinants of 
 
 In the field of image codecs, this has meant that “easier” formats such as GIF and, to a much lesser extent, PNG, often have high quality native-language implementations, while more technically challenging formats such as JPEG often remain unsupported. However, we forsee that as libraries and frameworks become increasingly decoupled from operating systems, the monopoly of `libjpeg` and proprietary system frameworks will too be broken, in favor of portable, native implementations. As such, developing such a resource contributes to the [language community-level goal](https://forums.swift.org/t/on-the-road-to-swift-6/32862) of expanding the Swift library ecosystem.
 
-## ii. project goals
+## 2. Project goals
 
 > **Summary:** Swift *JPEG* supports all three popular JPEG coding processes (baseline, extended, and progressive), and comes with built-in support for the JFIF/EXIF subset of the JPEG standard. The framework supports decompressing images to RGB and YCbCr targets. Lower-level APIs allow users to perform lossless operations on the frequency-domain representation of an image, transcode images between different coding processes, edit header fields and tables, and insert or strip metadata. The framework also provides the flexibility for users to extend the JPEG standard to support custom color formats and additional coding processes.
 
-### ii.i. the jpeg standard
+### 2.1. The JPEG standard
 
 JPEG images as commonly encountered today are actually governed by three overlapping (and slightly contradictory) standards. The most important is the **ISO/IEC 10918-1** standard (also called the **ITU T.81** standard), which this document will refer to simply as the *JPEG standard*.
 
@@ -91,7 +148,7 @@ Until very recently, the arithmetic entropy coding method was patented, which re
 
 The framework is designed to still parse and recognize the unsupported coding processes, even if it is unable to encode or decode them. As such, it supports, for example, editing and resaving metadata for all conforming JPEG files regardless of the coding process used. In theory, users can use the lexing and parsing components of the framework to implement codec extensions implementing the unsupported processes. 
 
-### ii.ii. color formats
+### 2.2. Color formats
 
 A *color format* for a JPEG image is a set of *component identifiers* and a defined meaning for each of those components. A component identifier is an integer from 1 to 255, denoted [*c<sub>i</sub>*] in this document, and the identifiers need not be contiguous or in increasing order (or any order at all). An example of a (non-standard) color format for RGBA might be:
 
@@ -118,7 +175,7 @@ Both the JFIF and EXIF standards use the [YCbCr color model](https://en.wikipedi
 
 The framework includes built-in support for the JFIF/EXIF color formats, which we will refer to as the *common format*. However it also provides support through Swift generics for custom user-defined color formats, which may be useful for certain applications.
 
-### ii.iii. color targets 
+### 2.3. Color targets 
 
 *Color targets* are related to but distinct from color formats. A color format specifies how colors are represented and stored within a JPEG image, while a color target specifies how those colors are presented to users. This framework includes built-in support for both YCbCr and [RGB](https://en.wikipedia.org/wiki/RGB_color_model) as color targets. The conversion formula from JPEG-native YCbCr colors to RGB is defined by the JFIF/EXIF standards, and given (in matrix form) below:
 
@@ -141,7 +198,7 @@ The inverse formula is given below:
 
 The framework supports rendering to multiple color targets from the same decoded image, without having to redecode the image for each target. As with custom color formats, the framework also supports user-defined color targets, which much also define an associated color format type since the JFIF/EXIF conversion formulas assume a specific YCbCr input format.
 
-### ii.iv. levels of abstraction
+### 2.4. Levels of abstraction
 
 Rendering to (or saving from) an RGB/YCbCr pixel array is the most common JPEG codec use-case, but it is not the only one. As is well-known, the full JPEG encoding–decoding pipeline is lossy, which results in both image degradation and increased file size each time a JPEG is reencoded. However, most of the steps in that pipeline are actually reversible, which means many common image operations (ranging from editing metadata to performing crops and rotations, and even color grading) can be done losslessly. Doing so requires a codec which exposes each abstracted stage of the coding pipeline in its API:
 
@@ -153,13 +210,13 @@ Rendering to (or saving from) an RGB/YCbCr pixel array is the most common JPEG c
 
 For example, metadata editing is best performed on the structural representation, while lossless crops, reflections, and rotations can only be performed on the spectral representation. Changing the compression level is performed on the dequantized representation, while changing the subsampling level is best performed on the spatial representation. As such, the framework allows users to interact with JPEG images at all five major levels of abstraction.
 
-## iii. concepts 
+## 3. Concepts 
 
 > **Summary:** JPEG is a frequency transform-based compressed image format. Decompressing the file format can be roughly divided into lexing, parsing, and decoding stages. Decoding involves assembling multiple image *scans* into a single image *frame*. A scan may contain one or more color *components* (channels). In a progressive JPEG, a single scan may contain only a specific range of bits for a specific frequency band. JPEG images also use *huffman* and *quantization* tables. Huffman tables are associated with image components at the scan level. Quantization tables are associated with image components at the frame level. Multiple components can reference the same huffman or quantization table. The “compression level” of a JPEG image is almost fully determined by the quantization tables used by the image.
 
 This section is meant to give a concise overview of the JPEG format itself. For the actual format details, consult the [ISO 10918-1 standard](https://www.w3.org/Graphics/JPEG/itu-t81.pdf).
 
-### iii.i. jpeg segmented structure
+### 3.1. JPEG segmented structure
 
 Structurally, JPEG files are sequences of *marker segments* and *entropy-coded segments*. It is possible to segment JPEG files without having to parse the body of each segment. Marker segments have headers, while entropy-coded segments are “naked” byte sequences. Because entropy-coded segments can have zero length, a JPEG file can be conceptualized as a sequence of alternating marker and entropy-coded segments. The terminator for an entropy-coded segment is one or more `0xFF` bytes; an entropy-coded segment together with its terminator is a *prefix*.
 
@@ -187,11 +244,11 @@ Body                  ::= [0x00-0xFF]{ (Length[0] << 8 | Length[1]) - 2 }
 
 There are many different types of marker segments, but the most important are *header segments* and *table segments*.
 
-### iii.ii. header segments 
+### 3.2. Header segments 
 
 There are two types of JPEG header segments: *frame headers* and *scan headers*. 
 
-#### iii.ii.i. frame headers
+#### 3.2.1. Frame headers
 
 A frame header is a header segment which describes a rectangular image as a whole. Except when the JPEG file uses a hierarchical coding process, there is only one frame, and therefore, one frame header per image. A frame header contains the following fields:
 
@@ -211,7 +268,7 @@ The resident components array defines the color components in the image, and inc
 
 The sampling factors determine the chroma subsampling level of the image. All components having a sampling factor of (1,&nbsp;1) corresponds to a 4:4:4 subsampling scheme. A sampling factor of (2,&nbsp;2) for the Y channel, and (1,&nbsp;1) for the Cb and Cr channels corresponds to a 4:2:0 subsampling scheme.
 
-#### iii.ii.ii. scan headers
+#### 3.2.2. Scan headers
 
 A scan header is a header segment which describes data, a *scan*, which makes up a portion of a complete image. There can be one or more scans, and therefore, scan headers, for a single frame. The decomposition of image data into multiple scans is always done spectrally, by bit-index, and by component, never spatially, so each scan contains data for the entire spatial extent of the image. A scan header is always immediately followed by an entropy-coded segment containing the scan data the header describes.
 
@@ -328,11 +385,11 @@ The ordering of component references within the array (if there are more than on
 
 Note that quantization tables (described in the next section) are associated with components at the frame level, while huffman tables (also described in the next section) are associated with components at the scan level. It is allowed (and standard practice) for the same component to use a different huffman table in each scan.
 
-### iii.iii. table segments 
+### 3.3. Table segments 
 
 Table segments define resources which are referenced by the header segments. There are two types of table segments — *quantization table definitions*, and *huffman table definitions* — which define three types of resources.
 
-#### iii.iii.i. quantization tables 
+#### 3.3.1. Quantization tables 
 
 A quantization table definition consists of 64 multiplier values, which correspond to the 64 discrete frequencies, and some basic information about the table:
 
@@ -341,9 +398,9 @@ A quantization table definition consists of 64 multiplier values, which correspo
 
 The table precision is not necessarily the same as the image bit depth (though it is subject to some constraints based on the image bit depth). This field is solely used to specify the (big-endian) integer type the table values are stored as. 
 
-Note that, as a technical detail, quantization tables do not actually identify themselves with a *q<sub>i</sub>* identifier, nor do component definitions in a frame header use those identifiers to reference them. However, table identifiers are a useful conceptual model for understanding resource relationships within a JPEG file. This issue will be discussed further in the [contextual state](#iiiv-contextual-state) section.
+Note that, as a technical detail, quantization tables do not actually identify themselves with a *q<sub>i</sub>* identifier, nor do component definitions in a frame header use those identifiers to reference them. However, table identifiers are a useful conceptual model for understanding resource relationships within a JPEG file. This issue will be discussed further in the [contextual state](#34-Contextual-state) section.
 
-#### iii.iii.ii. huffman tables 
+#### 3.3.2. Huffman tables 
 
 Huffman table definitions are somewhat more sophisticated than quantization tables. There are two types of huffman tables — AC and DC — but they are defined by the same type of marker segment, and share the same field format.
 
@@ -352,15 +409,15 @@ Like a quantization table definition, a huffman table definition includes some b
 * Huffman table identifier 
 * Resource type (DC table or AC table)
 
-A huffman table definition does not contain the table values verbatim. (That would be far too space-inefficient.) Rather, it specifies the shape of huffman *tree* used to generate the table, and the symbol values of the (up to 256) leaves in the tree. The algorithm for generating the huffman table from the huffman tree is discussed in more detail in the [library architecture](#viivii-huffman-decoder-implementation) section.
+A huffman table definition does not contain the table values verbatim. (That would be far too space-inefficient.) Rather, it specifies the shape of huffman *tree* used to generate the table, and the symbol values of the (up to 256) leaves in the tree. The algorithm for generating the huffman table from the huffman tree is discussed in more detail in the [library architecture](#77-Huffman-decoder-implementation) section.
 
 Unlike quantization tables, huffman tables have no direct relation to frequency coefficient values themselves. They are only used to decompress entropy-coded data within a single entropy-coded segment. (It is allowed, but uncommon, for multiple entropy-coded segments to use the same huffman table.) It is for this reason that huffman tables are “locally” associated with scans while quantization tables are “globally” associated with components at the frame level.
 
-### iii.iv. blocks, planes, and MCUs
+### 3.4. Blocks, planes, and MCUs
 
 JPEG is a *planar format*, meaning each color channel is represented independently as a monochromatic sub-image. However, *interleaving* is still possible down to the granularity determined by the *minimum-coded unit* (MCU) of the image. (Within a single minimum-coded unit, the format is fully planar.) Minimum-coded units in turn are composed of constant-size *blocks*, sometimes called *data units*, which are the smallest spatial unit of a JPEG.
 
-#### iii.iv.i. blocks 
+#### 3.4.1. Blocks 
 
 Each JPEG block contains 64 frequency coefficients which correspond to a block of pixels in the visual image. It is often stated that these are 8x8 pixel blocks, but the size actually depends on the component sampling factor. (Subsampled blocks are linearly interpolated to fill in intermediate pixels; the frequency transform is not evaluated per-pixel.)
 
@@ -417,7 +474,7 @@ Image (3 components, 35x28 pixels)
 
 It is important to remember that, even though less densely-sampled blocks are spatially bigger, all blocks contain the same amount of information.
 
-#### iii.iv.ii. minimum-coded units
+#### 3.4.2. Minimum-coded units
 
 If (and only if) a JPEG scan encodes more than one component, then the blocks are organized into minimum-coded units. (Single-component scans do not use the concept of a minimum-coded unit, and simply store their blocks as a row-major rectangular array.) 
 
@@ -482,23 +539,23 @@ The spatial size of the minimum coded unit is the size of a block with a compone
 
 Note that blocks B2, D2, F2, B5, D5, and F5 have been added to complete the minimum-coded units they appear in. They would not appear in a non-interleaved scan.
 
-#### iii.iv.iii. planes 
+#### 3.4.3. Planes 
 
 Planes are a very simple concept — they are simply the collection of all the blocks for a particular component. Even though blocks may be stored in an interleaved arrangement, planes are conceptually independent. Even when interleaved, each plane uses its own huffman and quantization tables, which means that a single entropy-coded segment can actually contain codewords from multiple huffman coding schemes.
 
 Converting planes into a rectangular array of color pixels entails expanding subsampled planes, and then clipping them to the pixel dimensions of the image so that each plane has the same spatial width and height. The planes are then pixel-wise interleaved to form color tuples.
 
-### iii.v. contextual state 
+### 3.5. Contextual state 
 
 All of the aforementioned concepts are related by the *contextual state* of a JPEG file. The state is determined by the ordering of marker and entropy-coded segments in the file.
 
-#### iii.v.i. sections
+#### 3.5.1. Sections
 
 All JPEG files must start with a *preamble section*, which begins with an *start-of-image* marker segment, followed by JFIF/EXIF metadata segments, and then any number of table segments. While huffman table definitions can live in the preamble, usually it is only quantization table definitions that appear here, since quantization tables are the only JPEG resources that have a whole-frame scope.
 
 In a non-hierarchical JPEG file, the *body section* comes after the preamble. The body starts with a frame header segment, and then contains any number of scan header&nbsp;+&nbsp;entropy-coded segment pairs and table definitions. It is rare for quantization table definitions to appear in the middle of this section, so most of these table definitions are huffman table definitions. The body section, and the JPEG file as a whole, concludes with an *end-of-image* marker.
 
-#### iii.v.ii. table slots 
+#### 3.5.2. Table slots 
 
 The JPEG format establishes relationships between table resources and reference holders using the concept of *table slots*. Each type of table (there are three: quantization, DC huffman, and AC huffman) has a fixed number of binding points: 2 for the baseline coding process, and 4 for all other processes. In this document, we use the Swift keypath syntax `\.i` to denote a binding point *i*. 
 
@@ -609,7 +666,7 @@ End-of-Image
 
 Note how tables C and D were overwritten partway through the JPEG file.
 
-## iv. user model
+## 4. User model
 
 > **Summary:** The Swift *JPEG* encoder provides unique abstract *component key* and *quantization table key* identifiers. The component keys are equivalent in value to the component idenfiers (*c<sub>i</sub>*) in the JPEG standard, while the quantization table identifiers (*q<sub>i</sub>*) are a library concept, which obviate the need for users to assign and refer to quantization tables by their slot index, as slots may be overwritten and reused within the same JPEG file. Users also specify the *scan progression* by band range, bit range, and component key set. These relationships are combined into a *layout*, a library concept encapsulating relationships between table indices, component indices, scan component references, etc. When initializing a layout, the framework is responsible for mapping the abstract, user-specified relationships into a sequence of JPEG scan headers and table definitions.
 
@@ -623,7 +680,7 @@ This framework provides two sets of top-level APIs: a *segmentation API* and an 
 
 While the segmentation and decoding/encoding APIs roughly correspond to the lexing/formatting and decoding/encoding stages of JPEG interpretation, there is no such top-level API for the parsing/serializing stage. This is because each lexed or formatted JPEG segment requires a different parser or serializer implementation, and which implementation it requires depends on the type of the segment. As such, a “top-level” parsing/serializing API would not be a useful abstraction, and so this framework does not seek to provide one.
 
-### iv.i. segmentation API
+### 4.1. Segmentation API
 
 As mentioned already, the segmentation API takes a file input (or byte stream), and divides it into its constituent segments. Its inverse API takes raw segment buffers and concatenates them with appropriate segment headers into an output bytestream.
 
@@ -664,13 +721,13 @@ for (prefix, type, body):([UInt8], JPEG.Marker, [UInt8]) in pairs
 
 Note that this is *not* how the segmentation API is actually spelled, as the real API expects the user to know whether to expect an entropy-coded segment to be present, as well as to be aware of error handling.
 
-### iv.ii. decoding/encoding API 
+### 4.2. Decoding/encoding API 
 
 While the segmentation API only goes so far as to lex or format a JPEG file, the decoding/encoding API does the heavy lifting of actually converting a JPEG to and from its bitmap data. This this is the most common use-case for JPEG, this set of APIs is likely to be the one most commonly used by users.
 
 Internally, this set of APIs handles JPEG state management, abstracting away the confusing system of table slots, plane indices, and binding points, and replacing it with resource identifiers (*c<sub>i</sub>*’s and *q<sub>i</sub>*’s) which are unique over the lifetime of the JPEG. The purpose of this abstraction is not only to present a simpler mental model for users, but also to make it harder for users to accidentally create an invalid JPEG file (for example, switching out a quantization table while its corresponding component is still being encoded.)
 
-#### iv.ii.i. keys, indices, and binding points 
+#### 4.2.1. Keys, indices, and binding points 
 
 To users, this framework replaces the concept of resource binding points with *keys* and *indices*. (These terms are used in accordance to Swift convention.) The framework also uses the system of keys and indices to identify components, and by extension, image planes.
 
@@ -682,7 +739,7 @@ The framework uses the notation *c* and *q* for indices, corresponding to the [*
 
 By library convention, the quanta key –1 is assigned to the “default” (all zeroes) quantization table when decoding a JPEG file. This key has index 0, so all file-defined quantization tables have indices counting up from 1. Quanta keys are assigned by the user when encoding a JPEG file. 
 
-Component keys are completely data-defined. Component indices start from 0, and are determined by the order that the component identifiers appear in the [color format](#iiii-color-formats). For the JFIF/EXIF common format, the key-to-index mapping is: 
+Component keys are completely data-defined. Component indices start from 0, and are determined by the order that the component identifiers appear in the [color format](#31-Color-formats). For the JFIF/EXIF common format, the key-to-index mapping is: 
 
 ```
 {
@@ -700,7 +757,7 @@ When a color format defines optional resident components, the recognized compone
 
 The encoder does not allow optional resident components, since it would not make sense to encode an image component for which no plane data has been provided.
 
-#### iv.ii.ii. layouts and definitions
+#### 4.2.2. Layouts and definitions
 
 An image *layout* specifies all the parametric characteristics of the image save for the actual pixel values. It contains:
 
@@ -719,7 +776,7 @@ Each plane in the image has its own layout parameters. (The framework, of course
 * The component quanta key ([*q<sub>i</sub>*])
 * The component quantization table binding point 
 
-The quanta key and the table binding point are always related. When a user initializes a layout, the binding points are assigned by the library. (In some cases, it is impossible to assign a large number of overlapping quanta keys to a limited number of binding points, in which case the library throws an error.) When a layout gets read from a JPEG file, the quanta keys get assigned by the library, as discussed in the [last section](#iviii-keys-indices-and-binding-points).
+The quanta key and the table binding point are always related. When a user initializes a layout, the binding points are assigned by the library. (In some cases, it is impossible to assign a large number of overlapping quanta keys to a limited number of binding points, in which case the library throws an error.) When a layout gets read from a JPEG file, the quanta keys get assigned by the library, as discussed in the [last section](#43-Keys-indices-and-binding-points).
 
 The definition sequence is a list of alternating runs of quantization table definitions and scan definitions. The quantization table definitions say nothing about the actual contents of the tables, they only specify that the quantization table for a particular quanta key [*q<sub>i</sub>*] should appear in that position in the sequence.
 
@@ -782,7 +839,7 @@ format and components   ┃ ci       : [5] │ ci       : [6] │ ci       : [7]
 
 Note that in interleaved scans, the scan components are always in ascending *key* order (not index order).
 
-#### iv.ii.iii. data representations 
+#### 4.2.3. Data representations 
 
 The products of the decoder (and the inputs of the encoder) are *data representations*, structures which represent an image as a whole. All data representations contain an image layout. In fact, all data representations contain a common descriptor “core” consisting of: 
 
@@ -877,13 +934,13 @@ Because rectangular data is fully interleaved, padding samples are discarded whe
                      ╵              ╵              ╵  
 ```
 
-#### iv.ii.iv. pixel accessors 
+#### 4.2.4. Pixel accessors 
 
 Rectangular data provide their pixel contents through the *pixel accessor* API. The output of this API is an array of pixels in the familiar YCbCr or RGBA (or another color type) form.
 
 Why does the framework not simply store pixel values in the rectangular data itself? This is because JPEG is natively a YCbCr-based image format, therefore, converting to a form such as RGB would cause additional data loss, and make the YCbCr image inaccessible without having to redecode the image. In addition, because the conversion to the rectangular representation often involves additional processing (such as the upsampling operation), it is highly motivating to be able to do this step once, and be able to read that image as multiple color targets without having to recompute the rectangular representation.
 
-## v. library architecture
+## 5. Library architecture
 
 > **Summary:** The library is broadly divided into a decompressor and a compressor. The decompressor is further subdivided into a lexer, parser, and decoder, while the compressor is divided into an encoder, serializer, and formatter. Accordingly, the framework distinguishes between parseme types, returned by the parser and taken by the serializer, and model types, used by the decoder and encoder. For example, the parser returns a scan *header*, which is then “frozen” into a scan *structure*.
 
@@ -901,7 +958,7 @@ At the time of writing, contributors will find five files containing most of the
 * [`jpeg/debug.swift`](../sources/jpeg/debug.swift)
 * [`jpeg/os.swift`](../sources/jpeg/os.swift)
 
-### v.i. `common.swift`
+### 5.1. `common.swift`
 
 This file contains data structures and language extensions which are used by the framework, but not conceptually related to JPEG. It defines the top-level namespace `Common`, with the following type members:
 
@@ -923,7 +980,7 @@ It also extends the standard library `Array<UInt8>` and `ArraySlice<UInt8>` type
     * `Swift.Array<UInt8>.load<T, U>(_:)(bigEndian:as:at:)`
     * `Swift.Array<UInt8>.store<T, U>(_:asBigEndian:)`
 
-#### v.i.i. storage types 
+#### 5.1.1. Storage types 
 
 * `struct Common.MutableStorage<I>`
 * `struct Common.Storage<I>`
@@ -933,13 +990,13 @@ These types are Swift property wrappers used to store `Int` values with fewer bi
 
 The `Storage<I>` type implements a read-only version of `MutableStorage<I>`, while the `Storage2<I>` type implements the same concept for a `(x:Int, y:Int)` tuple, since property wrappers cannot be directly applied to tuple elements.
 
-#### v.i.ii. heap type 
+#### 5.1.2. Heap type 
 
 * `struct Common.Heap<Key, Value>`
 
 This type implements a standard heap (priority queue). This heap is a min-heap (which sorts by `Key` type). It is used to assign codewords to symbols when constructing huffman trees.
 
-#### v.i.iii. 2D range types 
+#### 5.1.3. 2D range types 
 
 * `struct Common.Range2<Bound>`
 * `struct Common.Range2Iterator<Bound>`
@@ -967,7 +1024,7 @@ for y:Int in 0 ..< b
 
 To avoid cluttering user scopes, the `..<` operator is non-public, however, 2-dimensional range iterators can still be used through the various `.indices` properties on many framework types.
 
-### v.ii. `decode.swift`
+### 5.2. `decode.swift`
 
 The majority of the library code lives in this file. It includes both implementations for the decompressor, and data types common to both the decoder and the encoder. It defines the top-level namespace `JPEG`, with the following type members:
 
@@ -1056,7 +1113,7 @@ The majority of the library code lives in this file. It includes both implementa
 * `JPEG` (built-in color formats and color target conformances)
     * `enum` `JPEG.Common`
 
-#### v.ii.i. color format protocols and color targets
+#### 5.2.1. Color format protocols and color targets
 
 * `protocol` `JPEG.Format`
 * `protocol` `JPEG.Color`
@@ -1095,7 +1152,7 @@ All color targets must have a specific associated format type. At first glance, 
 
 This section of the code also declares two built-in 8-bit color targets, `JPEG.YCbCr` and `JPEG.RGB`, but implements no conformances.
 
-#### v.ii.ii. model types 
+#### 5.2.2. Model types 
 
 * `enum` `JPEG.Metadata`
 * `struct` `JPEG.Component`
@@ -1104,11 +1161,11 @@ This section of the code also declares two built-in 8-bit color targets, `JPEG.Y
     * `struct` `JPEG.Scan.Component` 
 * `struct` `JPEG.Layout<Format>`
 
-These types are the model types produced by cross-validating the framework’s parseme types. In general, they store pre-resolved resource indices. Most of them have already been discussed in the [user model](#iv-user-model) section.
+These types are the model types produced by cross-validating the framework’s parseme types. In general, they store pre-resolved resource indices. Most of them have already been discussed in the [user model](#4-User-model) section.
 
 The `JPEG.Metadata` enumeration stores typed and untyped metadata records. At present, JFIF segments are the only kind of metadata stored as parsed metadata. All other application segments are stored as untyped, raw byte buffers
 
-#### v.ii.iii. compound types 
+#### 5.2.3. Compound types 
 
 * `enum` `JPEG.Process`
     * `enum` `JPEG.Process.Coding`
@@ -1116,7 +1173,7 @@ The `JPEG.Metadata` enumeration stores typed and untyped metadata records. At pr
 
 These types are effectively lexeme types, though they also have relevance in deeper levels of the library. As the names suggest, `JPEG.Process` cases represent coding processes, while `JPEG.Marker` cases represent marker segment types.
 
-#### v.ii.iv. decompression error types 
+#### 5.2.4. Decompression error types 
 
 * `protocol` `JPEG.Error`
 * `enum` `JPEG.LexingError`
@@ -1144,7 +1201,7 @@ protocol JPEG.Error:Swift.Error
 }
 ```
 
-#### v.ii.v. stream types and lexer implementation 
+#### 5.2.5. Stream types and lexer implementation 
 
 * `protocol` `JPEG.Bytestream.Source`
 * `struct` `JPEG.Bitstream`
@@ -1161,7 +1218,7 @@ protocol JPEG.Bytestream.Source
 
 The lexer is implemented atop of the `JPEG.Bytestream.Source` protocol as an extension. 
 
-#### v.ii.vi. parseme types and parser implementation
+#### 5.2.6. Parseme types and parser implementation
 
 * `protocol` `JPEG.Bitstream.AnySymbol`
 * `enum` `JPEG.Bitstream.Symbol.DC`
@@ -1183,7 +1240,7 @@ These types are produced by parsing raw segment data produced by the lexer. Some
 
 Most parseme types follow a common API pattern — they are constructed from raw data through static `.create(...)` methods, and then converted into cross-validated model types through `.validate(...)` instance methods, to which relevant context is passed.
 
-#### v.ii.vii. huffman decoder implementation 
+#### 5.2.7. Huffman decoder implementation 
 
 * `struct` `JPEG.Table.Huffman<Symbol>.Decoder`
 
@@ -1331,7 +1388,7 @@ A buffer like this will never have size greater than 2&nbsp;×&nbsp;256&nbsp;×&
 
 Why not compact the child trees further, since not all of them actually have height 8? We could do that, and get some serious worst-case memory savings, but then we couldn’t access the child tables at constant offsets from the buffer base. We would need to store whole ≥16-bit pointers to the specific byte offset where the variable-length child table lives, and perform a conditional bit shift to transform the input bits into an appropriate index into the table. This would also require two table lookups, as opposed to one.
 
-#### v.ii.viii. data representations
+#### 5.2.8. Data representations
 
 * `struct` `JPEG.Data.Spectral<Format>`
     * `struct` `JPEG.Data.Spectral<Format>.Plane`
@@ -1340,9 +1397,9 @@ Why not compact the child trees further, since not all of them actually have hei
     * `struct` `JPEG.Data.Planar<Format>.Plane`
 * `struct` `JPEG.Data.Rectangular<Format>`
 
-These are the data representations discussed in the [user model](#iv-user-model) section. The `Spectral` and `Planar` types are `RandomAccessCollection`s of planes. Each collection type (as well as the `Quanta` member of a `Spectral` instance) provides an `index(forKey:)` method used to translate a *c<sub>i</sub>* or *q<sub>i</sub>* key into a *p* or *q* integer index. Note that for plane index lookups, this is *not* exactly the same as finding the component index in the image layout, because this method will return `nil` if *p* is greater than or equal to the number of planes in the data representation (i.e., if the component is a resident component, but not a recognized one). This distinction is, however, irrelevant for the built-in common color format, as it accepts no unrecognized components.
+These are the data representations discussed in the [user model](#4-User-model) section. The `Spectral` and `Planar` types are `RandomAccessCollection`s of planes. Each collection type (as well as the `Quanta` member of a `Spectral` instance) provides an `index(forKey:)` method used to translate a *c<sub>i</sub>* or *q<sub>i</sub>* key into a *p* or *q* integer index. Note that for plane index lookups, this is *not* exactly the same as finding the component index in the image layout, because this method will return `nil` if *p* is greater than or equal to the number of planes in the data representation (i.e., if the component is a resident component, but not a recognized one). This distinction is, however, irrelevant for the built-in common color format, as it accepts no unrecognized components.
 
-#### v.ii.ix. decoder types and decoder implementation
+#### 5.2.9 Decoder types and decoder implementation
 
 * `extension` `JPEG.Bitstream`
 * `extension` `JPEG.Data.Spectral`
@@ -1353,7 +1410,7 @@ The extension methods on `Bitstream` extract composite values from an entropy-co
 
 In turn, frame-level decoder functions, implemented on the `Context<Format>` type, call the scan-level functions. The `Context` type maintains the state of both a `Spectral` instance, and the state of bound table resources.
 
-#### v.ii.x. staged conversion APIs (forward)
+#### 5.2.10. Staged conversion APIs (forward)
 
 * `extension` `JPEG.Data.Spectral`
     * `extension` `JPEG.Data.Spectral.Plane`
@@ -1364,7 +1421,7 @@ In turn, frame-level decoder functions, implemented on the `Context<Format>` typ
 
 These extensions implement the transformations required to convert a spectral image into a spatial-domain planar image, and a planar image to a rectangular image. The inverse discrete cosine transform algorithm is semantically equivalent to the floating-point algorithm used by *libjpeg*, so the framework will replicate the rounding behavior of *libjpeg*.
 
-#### v.ii.xi. built-in color formats and color target conformances
+#### 5.2.11. Built-in color formats and color target conformances
 
 * `enum` `JPEG.Common`
 
@@ -1381,7 +1438,7 @@ Note that `y8` only occurs in JFIF images.
 
 This section of the code also conforms the built-in `RGB` and `YCbCr` color targets to the `JPEG.Color` protocol, using `JPEG.Common` as their format types.
 
-### v.iii. `encode.swift`
+### 5.3. `encode.swift`
 
 Code and definitions related to to the compressor lives in this file. It extends the top-level namespace `JPEG`, with the following type members:
 
@@ -1426,7 +1483,7 @@ Code and definitions related to to the compressor lives in this file. It extends
     * `protocol` `JPEG.Bytestream.Destination`
     * `extension` `JPEG.Bytestream.Destination`
 
-#### v.iii.i. compression error types
+#### 5.3.1. Compression error types
 
 * `enum` `JPEG.FormattingError`
 * `enum` `JPEG.SerializingError`
@@ -1434,7 +1491,7 @@ Code and definitions related to to the compressor lives in this file. It extends
 
 These error types are analogous to their counterparts in `decode.swift`. However, because most compressor APIs are designed to fatal-error on failure rather than throw (because the caller is usually responsible for the data inputs), there are far fewer error cases. In fact, of the three error types, only `FormattingError` has any cases at all; the others are defined as placeholders for future framework expansion.
 
-#### v.iii.ii. staged conversion APIs
+#### 5.3.2. Staged conversion APIs
 
 * `extension` `JPEG.Data.Planar.Plane`
 * `extension` `JPEG.Data.Spectral.Plane`
@@ -1442,14 +1499,14 @@ These error types are analogous to their counterparts in `decode.swift`. However
 
 These extensions implement the forward discrete cosine transform, which converts a planar image into a spectral one. (At present, the conversion from rectangular to planar representation is unimplemented.)
 
-#### v.iii.iii. parseme encoders 
+#### 5.3.3. Parseme encoders 
 
 * `extension` `JPEG.Data.Spectral`
 * `extension` `JPEG.Layout`
 
 These extensions implement methods that encode model types as their parseme forms. Because model types support many more assumptions than parseme types, these APIs do not return optionals nor do they throw errors. In fact, failure can generally only occur due to serious programmer error, for example, a broken custom color `Format` implementation.
 
-#### v.iii.iv. huffman tree builder
+#### 5.2.4. Huffman tree builder
 
 * `class` `JPEG.Table.Huffman.Subtree<Element>`
 * `struct` `JPEG.Table.Huffman.Encoder`
@@ -1459,7 +1516,7 @@ The `Subtree` type is used to construct a (near-) optimal huffman tree given a l
 
 The huffman `Encoder` table is the inverse of the huffman `Decoder` table; it takes symbols as input (through a subscript interface), and returns `Codeword`s as output. The efficient implementation of this functionality is far more straightforward than for its decoder counterpart — there are only 256 possible symbols, so the symbol-to-codeword mapping can be accomplished with a simple 256-entry lookup table.
 
-#### v.iii.v. encoder implementation
+#### 5.3.5. Encoder implementation
 
 * `extension` `JPEG.Bitstream`
     * `extension` `JPEG.Bitstream.Composite.DC`
@@ -1471,7 +1528,7 @@ These extensions implement the inverse operations to the decoder methods in `dec
 
 (There is no need for a counterpart to the `Context` handler, since all state-related parameters have already been computed when initializing the image `Layout`.)
 
-#### v.iii.vi. serializer implementation
+#### 5.3.6. Serializer implementation
 
 * `extension` `JPEG.JFIF`
     * `extension` `JPEG.JFIF.Version`
@@ -1485,7 +1542,7 @@ These extensions implement the inverse operations to the decoder methods in `dec
 
 These extensions implement the serializers for the parseme types defined in `decode.swift`. In most cases, they are defined as instance methods on parseme types, which return untyped marker segment bodies as `[UInt8]` buffers.
 
-#### v.iii.vii. stream types, and formatter
+#### 5.3.7. Stream types, and formatter
 
 * `protocol` `JPEG.Bytestream.Destination`
 * `extension` `JPEG.Bytestream.Destination`
@@ -1504,14 +1561,14 @@ The `write(_:)` method should return `Void` on success, and `nil` on failure.
 
 Like the lexer, the formatter is implemented atop of the `JPEG.Bytestream.Destination` protocol as an extension. 
 
-### v.iv. `debug.swift`
+### 5.4. `debug.swift`
 
 This file is relatively simple; it only implements the various `CustomStringConvertible` conformances that pretty-print JPEG entities. Importantly, it also provides `ExpressibleByIntegerLiteral` conformances for component and quanta key types, making it easier for users to initialize `Layout` and `Spectral` data structures.
 
 * `extension` `JPEG.Component.Key:ExpressibleByIntegerLiteral`
 * `extension` `JPEG.Table.Quantization.Key:ExpressibleByIntegerLiteral`
 
-### v.v. `os.swift`
+### 5.5. `os.swift`
 
 This file provides system-dependent features such as file system support. It is only compiled is the operating system is MacOS or Linux, and omitted otherwise, so that other Swift platforms such as Android or iOS can still use the core library features.
 
@@ -1537,7 +1594,7 @@ This file also extends `JPEG.Data.Spectral`, `JPEG.Data.Planar`, and `JPEG.Data.
     * `extension` `JPEG.Data.Planar`
     * `extension` `JPEG.Data.Rectangular`
 
-## vi. test architecture
+## 6. Test architecture
 
 > **Summary:** The Travis Continuous Integration set up for the project repository supports four sets of tests. *Unit tests* verify basic algorithmic components of the library, such as the huffman coders and zigzag index translators. *Integration tests* verify that a sample set of images with different supported coding processes and layouts can be decoded and encoded without errors. *Regression tests* run the integration tests and compare them with known outputs. Finally, *fuzz tests* generate randomized test images and compare the output to that output from third-party implementations such as the *libjpeg*-based `imagemagick convert` tool, ensuring inter-library compatibility.
 
@@ -1557,7 +1614,7 @@ All tests are compiled as executable products by the package manager, and are in
 
 These scripts return `0` on passing.
 
-### vi.i. unit tests 
+### 6.1. Unit tests 
 
 These tests validate several important subcomponents of the library, including some `internal` subcomponents, which is why these tests are always compiled in `debug` mode (with `@testable` imports) rather than `release` mode. (Attempting to compile all products at once with the package manager set to `release` mode will fail for this reason.)
 
@@ -1568,7 +1625,7 @@ Most unit tests consist of a few explicitly written test cases (which serve as t
 * huffman table coding 
 * huffman table construction
 
-### vi.ii. integration tests 
+### 6.2. Integration tests 
 
 These tests attempt to decode and encode various test images without errors. Because the library features extensive internal validation, these tests are highly valuable for enforcing internal logical consistency. They do not attempt to match data outputs, and will succeed as long as no errors occur in the encoding or decoding process.
 
@@ -1598,13 +1655,13 @@ The encoding tests take a predefined RGB input image, and encode it as the follo
 | `karlie-kloss-1-color-progressive.jpg`     | progressive    | 3          | 4:4:4       |
 | `karlie-kloss-1-grayscale-progressive.jpg` | progressive    | 1          | —           |
 
-### vi.iii. regression tests 
+### 6.3. Regression tests 
 
 As the name suggests, the regression tests attempt to decode test images, and compare the output to a set of “golden outputs”. The regression tests run on the same JPEG test images as the integration tests, and compare the output of both the RGB and YCbCr built-in color targets.
 
 Like the integration tests, the regression tests support both `debug` and `release` compilation modes, with the same command-line syntax. The `utils/regression-test` tool can be run with the option `-u` (long form `--update`) to regenerate the golden outputs. (The tests will return a failure code for that run.)
 
-### vi.iv. fuzz tests 
+### 6.4. Fuzz tests 
 
 The fuzz tests are the most sophisticated automated tests, because they don’t return a pass or fail result, but rather, are used to quantify the difference between the framework output, and the output of a different library, such as *libjpeg*. Unlike other formats, such as PNG, which has a well-defined binary specification, the JPEG standard only specifies the symbolic *mathematical* definition of its discrete cosine transform. This means that different JPEG codecs, different versions of the same JPEG codec (such as *libjpeg*), and even the same version of the same JPEG codec (*libjpeg* as well) on different platforms can produce different output due to discrepancies in floating-point and integer arithmetic spellings.
 
@@ -1614,6 +1671,10 @@ The number of test images the `utils/fuzz-test` script will generate is set by t
 
 The framework’s discrete cosine transform implementation is written to exactly emulate the floating-point behavior of *libjpeg*, and will match its output exactly so long as no out-of-range pixel values occur. However, since *libjpeg* is not internally consistent with respect to its other arithmetic modes, this means that significant discrepancies (though generally less than 10 gray levels) exist when using *libjpeg*’s “fast” mode or its fixed-point mode.
 
-## vii. acknowledgements 
+## 7. Conclusion 
 
-The author would like to acknowledge the valuable support and advice of Dr. Zbigniew Kalbarczyk, who oversaw this project from start to completion over the course of approximately one year.
+As previously discussed, the ambiguous binary specification of the JPEG standard precludes a universal “ground truth” for decoder output. As such, the accuracy of the framework implementation was measured against the output of existing implementations such as *libjpeg*. Because *libjpeg* (and other 3rd-party implementations) are not themselves internally-consistent, it is impossible for one set of library settings to conform exactly to all *libjpeg* outputs. However, we were able to replicate exactly the output of one *libjpeg* mode, the high-fidelity floating-point mode. Using the same underlying optimized discrete cosine transform algorithm also provides the framework with a significant performance boost over the naïve frequency transform algorithm.
+
+As the library is essentially in a production-ready state, the immediate next steps for this project would be to complete its API documentation, and prepare tutorials for public release to the Swift community. 
+
+Future releases of this framework may aim to support features including, but not limited to, more (unofficial) JPEG color format extensions, greater support for uncommon coding processes such as the hierarchical process, and improved compression heuristics for the encoder portion of the library.
