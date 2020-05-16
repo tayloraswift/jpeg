@@ -138,7 +138,7 @@ extension Test
                 }
             }
             
-            let rgb:[JPEG.RGB] = image.pixels(as: JPEG.RGB.self)
+            let rgb:[JPEG.RGB] = image.unpack(as: JPEG.RGB.self)
             // write to rgb file 
             guard let _:Void = try (Common.File.Destination.open(path: "\(path).rgb")
             {
@@ -349,7 +349,7 @@ extension Test
             // terminal output 
             let rectangular:JPEG.Data.Rectangular<JPEG.Common> = 
                 spectral.idct().interleaved()
-            Self.print(image: rectangular.pixels(as: JPEG.RGB.self), size: size)
+            Self.print(image: rectangular.unpack(as: JPEG.RGB.self), size: size)
         }
         catch 
         {

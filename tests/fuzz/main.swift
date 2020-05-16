@@ -125,7 +125,7 @@ func generate(count:Int, prefix:String) throws
         }
         
         // merge into histogram 
-        let ycc:[JPEG.YCbCr] = rectangular.pixels(as: JPEG.YCbCr.self)
+        let ycc:[JPEG.YCbCr] = rectangular.unpack(as: JPEG.YCbCr.self)
         for pixel:JPEG.YCbCr in ycc 
         {
             histogram[.init(pixel.y)] += 1
@@ -133,7 +133,7 @@ func generate(count:Int, prefix:String) throws
         
         // terminal output 
         print(path)
-        let image:[JPEG.RGB] = rectangular.pixels(as: JPEG.RGB.self)
+        let image:[JPEG.RGB] = rectangular.unpack(as: JPEG.RGB.self)
         for i:Int in 0 ..< rectangular.size.y 
         {
             let line:String = (0 ..< rectangular.size.x).map 

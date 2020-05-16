@@ -20,7 +20,9 @@ protocol _JPEGColor
     associatedtype Format:JPEG.Format 
     
     static 
-    func pixels(_ interleaved:[UInt16], format:Format) -> [Self]
+    func unpack(_ interleaved:[UInt16], of format:Format) -> [Self]
+    static 
+    func pack(_ pixels:[Self], as format:Format) -> [UInt16]
 }
 
 public 
@@ -2270,7 +2272,6 @@ extension JPEG.Data
             layout:JPEG.Layout<Format>, 
             metadata:[JPEG.Metadata]
         
-        private 
         var values:[UInt16]
         
         public 
@@ -2279,11 +2280,14 @@ extension JPEG.Data
             self.layout.recognized.count 
         }
         
+        public 
         init(size:(x:Int, y:Int), 
             layout:JPEG.Layout<Format>, 
             metadata:[JPEG.Metadata], 
             values:[UInt16])
         {
+            precondition(values.count == layout.recognized.count * size.x * size.y, 
+                "array count does not match size and layout")
             self.size       = size
             self.layout     = layout
             self.metadata   = metadata
@@ -2822,8 +2826,10 @@ extension JPEG.Data.Spectral
 extension JPEG.Data.Planar 
 {
     public 
-    init(size:(x:Int, y:Int), layout:JPEG.Layout<Format>, 
-        metadata:[JPEG.Metadata])
+    init(size:(x:Int, y:Int), layout:JPEG.Layout<Format>, metadata:[JPEG.Metadata], 
+        initializingWith initializer:
+        (Int, (x:Int, y:Int), (x:Int, y:Int), UnsafeMutableBufferPointer<UInt16>) throws -> ())
+        rethrows 
     {
         self.layout     = layout
 
@@ -2831,20 +2837,44 @@ extension JPEG.Data.Planar
         self.metadata   = metadata
         
         let scale:(x:Int, y:Int)    = layout.scale
-        let midpoint:UInt16         = 1 << (layout.format.precision - 1 as Int)
-        self.planes                 = layout.recognized.indices.map 
+        self.planes                 = try layout.recognized.indices.map 
         {
-            let factor:(x:Int, y:Int) = layout.planes[$0].component.factor
+            (p:Int) -> Plane in
+             
+            let factor:(x:Int, y:Int) = layout.planes[p].component.factor
             let units:(x:Int, y:Int)  = 
             (
                 JPEG.Data.units(size.x * factor.x, stride: 8 * scale.x),
                 JPEG.Data.units(size.y * factor.y, stride: 8 * scale.y)
             )
             
-            let blank:[UInt16] = .init(repeating: midpoint, 
-                count: 64 * units.x * units.y)
-            return .init(blank, units: units, factor: factor)
+            let count:Int       = 64 * units.x * units.y
+            let plane:[UInt16]  = try .init(unsafeUninitializedCapacity: count)
+            {
+                try initializer(p, units, factor, $0)
+                $1 = count 
+            }
+            return .init(plane, units: units, factor: factor)
         }
+    }
+    public 
+    init(size:(x:Int, y:Int), layout:JPEG.Layout<Format>, metadata:[JPEG.Metadata])
+    {
+        let midpoint:UInt16 = 1 << (layout.format.precision - 1 as Int)
+        self.init(size: size, layout: layout, metadata: metadata) 
+        {
+            $3.initialize(repeating: midpoint)
+        }
+    }
+}
+extension JPEG.Data.Rectangular 
+{
+    public 
+    init(size:(x:Int, y:Int), layout:JPEG.Layout<Format>, metadata:[JPEG.Metadata])
+    {
+        let midpoint:UInt16 = 1 << (layout.format.precision - 1 as Int)
+        self.init(size: size, layout: layout, metadata: metadata, 
+            values: .init(repeating: midpoint, count: layout.recognized.count * size.x * size.y))
     }
 }
 
@@ -4625,6 +4655,17 @@ extension JPEG.Data.Planar
             values:     interleaved)
     }
 }
+extension JPEG.Data.Rectangular 
+{
+    @_specialize(exported: true, where Color == JPEG.YCbCr, Format == JPEG.Common)
+    @_specialize(exported: true, where Color == JPEG.RGB, Format == JPEG.Common)
+    public 
+    func unpack<Color>(as _:Color.Type) -> [Color] 
+        where Color:JPEG.Color, Color.Format == Format 
+    {
+        Color.unpack(self.values, of: self.layout.format)
+    }
+}
 
 // staged APIs 
 extension JPEG.Data.Spectral 
@@ -4714,17 +4755,6 @@ extension JPEG.Common:JPEG.Format
     }
 }
 
-extension JPEG.Data.Rectangular 
-{
-    // @_specialize(exported: true, where Color == JPEG.YCbCr, Format == JPEG.Common)
-    // @_specialize(exported: true, where Color == JPEG.RGB, Format == JPEG.Common)
-    public 
-    func pixels<Color>(as _:Color.Type) -> [Color] 
-        where Color:JPEG.Color, Color.Format == Format 
-    {
-        Color.pixels(self.values, format: self.layout.format)
-    }
-}
 extension JPEG.YCbCr
 {
     public 
@@ -4766,7 +4796,7 @@ extension JPEG.RGB
 extension JPEG.YCbCr:JPEG.Color 
 {
     public static 
-    func pixels(_ interleaved:[UInt16], format:JPEG.Common) -> [Self]
+    func unpack(_ interleaved:[UInt16], of format:JPEG.Common) -> [Self]
     {
         // no need to clamp uint16 to uint8,, the idct should have already done 
         // this alongside the level shift 
@@ -4788,12 +4818,24 @@ extension JPEG.YCbCr:JPEG.Color
             }
         }
     }
+    public static 
+    func pack(_ pixels:[Self], as format:JPEG.Common) -> [UInt16]
+    {
+        switch format 
+        {
+        case .y8:
+            return pixels.map{ .init($0.y) }
+        
+        case .ycc8:
+            return pixels.flatMap{ [ .init($0.y), .init($0.cb), .init($0.cr) ] }
+        }
+    }
 }
 
 extension JPEG.RGB:JPEG.Color 
 {
     public static 
-    func pixels(_ interleaved:[UInt16], format:JPEG.Common) -> [Self]
+    func unpack(_ interleaved:[UInt16], of format:JPEG.Common) -> [Self]
     {
         switch format 
         {
@@ -4813,6 +4855,23 @@ extension JPEG.RGB:JPEG.Color
                     cr: .init(interleaved[$0 + 2]))
                 return ycc.rgb 
             }
+        }
+    }
+    public static 
+    func pack(_ pixels:[Self], as format:JPEG.Common) -> [UInt16]
+    {
+        switch format 
+        {
+        case .y8:
+            return pixels.map{ .init($0.ycc.y) }
+        
+        case .ycc8:
+            return pixels.flatMap
+            {
+                (rgb:JPEG.RGB) -> [UInt16] in 
+                let ycc:JPEG.YCbCr = rgb.ycc  
+                return [ .init(ycc.y), .init(ycc.cb), .init(ycc.cr) ] 
+            } as [UInt16]
         }
     }
 }

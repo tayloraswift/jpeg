@@ -10,7 +10,7 @@ func discrepancy(jpeg:String, reference:String)
         fatalError("failed to open file '\(jpeg)'")
     }
     
-    let output:[JPEG.YCbCr]         =  rectangular.pixels(as: JPEG.YCbCr.self)
+    let output:[JPEG.YCbCr]         =  rectangular.unpack(as: JPEG.YCbCr.self)
     guard let expected:[JPEG.YCbCr] = (Common.File.Source.open(path: reference)
     {
         guard let data:[UInt8] = $0.read(count: 3 * output.count)

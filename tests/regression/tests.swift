@@ -48,8 +48,8 @@ extension Test
             
             let output:(ycc:[JPEG.YCbCr], rgb:[JPEG.RGB]) = 
             (
-                image.pixels(as: JPEG.YCbCr.self), 
-                image.pixels(as: JPEG.RGB.self)
+                image.unpack(as: JPEG.YCbCr.self), 
+                image.unpack(as: JPEG.RGB.self)
             )
             guard   let ycc:[JPEG.YCbCr] = try (Common.File.Source.open(path: "\(path).ycc")
             {

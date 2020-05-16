@@ -325,6 +325,68 @@ extension JPEG.Data.Spectral.Plane
         self.set(values: values, units: plane.units)
     }
 }
+extension JPEG
+{
+    public 
+    enum CompressionLevel 
+    {
+        case luminance(Double)
+        case chrominance(Double)
+    }
+}
+extension JPEG.CompressionLevel 
+{
+    // taken from the T-81 recommendations 
+    public 
+    var quanta:[UInt16]
+    {
+        let t:Double 
+        let keyframe:[UInt16]
+        switch self 
+        {
+        case .luminance(let level):
+            t = level 
+            keyframe = 
+            [
+                16, 11, 10, 16, 124, 140, 151, 161,
+                12, 12, 14, 19, 126, 158, 160, 155,
+                14, 13, 16, 24, 140, 157, 169, 156,
+                14, 17, 22, 29, 151, 187, 180, 162,
+                18, 22, 37, 56, 168, 109, 103, 177,
+                24, 35, 55, 64, 181, 104, 113, 192,
+                49, 64, 78, 87, 103, 121, 120, 101,
+                72, 92, 95, 98, 112, 100, 103, 199,
+            ]
+        case .chrominance(let level):
+            t = level 
+            keyframe = 
+            [
+                17, 18, 24, 47, 99, 99, 99, 99,
+                18, 21, 26, 66, 99, 99, 99, 99,
+                24, 26, 56, 99, 99, 99, 99, 99,
+                47, 66, 99, 99, 99, 99, 99, 99,
+                99, 99, 99, 99, 99, 99, 99, 99,
+                99, 99, 99, 99, 99, 99, 99, 99,
+                99, 99, 99, 99, 99, 99, 99, 99,
+                99, 99, 99, 99, 99, 99, 99, 99,
+            ]
+        }
+        
+        let interpolated:[UInt16] = keyframe.map 
+        {
+            .init(max(1.0, (1.0 * (1 - t) + .init($0) * t).rounded()))
+        }
+        return .init(unsafeUninitializedCapacity: 64)
+        {
+            for (k, h):(Int, Int) in (0, 0) ..< (8, 8) 
+            {
+                $0[JPEG.Table.Quantization.z(k: k, h: h)] = interpolated[8 * h + k]
+            }
+            
+            $1 = 64
+        }
+    }
+}
 extension JPEG.Data.Planar 
 {
     public 
@@ -345,6 +407,62 @@ extension JPEG.Data.Planar
         spectral.metadata.append(contentsOf: self.metadata)
         
         return spectral
+    }
+}
+extension JPEG.Data.Rectangular 
+{
+    public 
+    func decomposed() -> JPEG.Data.Planar<Format>
+    {
+        .init(size: self.size, layout: self.layout, metadata: self.metadata)
+        {
+            (
+                p:Int, 
+                units:(x:Int, y:Int), 
+                factor:(x:Int, y:Int), 
+                buffer:UnsafeMutableBufferPointer<UInt16>
+            ) in 
+            
+            // this is a terrible low-pass filter, but it’s the best we can come 
+            // up with without making this v complicated
+            let scale:(x:Int, y:Int)    = self.layout.scale
+            let response:(x:Int, y:Int) = (scale.x / factor.x, scale.y / factor.y)
+            let magnitude:Float         = .init(response.x * response.y)
+            for (x, y):(Int, Int) in (0, 0) ..< (8 * units.x, 8 * units.y)
+            {
+                let base:(x:Int, y:Int) = 
+                (
+                    x * scale.x / factor.x,
+                    y * scale.y / factor.y
+                )
+                let sum:Int = (base ..< (base.x + response.x, base.y + response.y)).reduce(0)
+                {
+                    let i:(x:Int, y:Int) = 
+                    (
+                        Swift.min($1.x, self.size.x - 1), 
+                        Swift.min($1.y, self.size.y - 1)
+                    )
+                    return $0 + .init(self.values[(self.size.x * i.y * i.x) * self.stride + p])
+                }
+                
+                buffer[8 * units.x * y + x] = .init(.init(sum) / magnitude)
+            }
+        }
+    }
+}
+extension JPEG.Data.Rectangular 
+{
+    @_specialize(exported: true, where Color == JPEG.YCbCr, Format == JPEG.Common)
+    @_specialize(exported: true, where Color == JPEG.RGB, Format == JPEG.Common)
+    public static 
+    func pack<Color>(size:(x:Int, y:Int), 
+        layout:JPEG.Layout<Format>, 
+        metadata:[JPEG.Metadata], 
+        pixels:[Color]) -> Self 
+        where Color:JPEG.Color, Color.Format == Format 
+    {
+        .init(size: size, layout: layout, metadata: metadata, 
+            values: Color.pack(pixels, as: layout.format))
     }
 }
 
@@ -1730,5 +1848,25 @@ extension JPEG.Data.Spectral
         }
         
         try stream.format(marker: .end)
+    }
+}
+extension JPEG.Data.Planar  
+{
+    public 
+    func compress<Destination>(stream:inout Destination, 
+        quanta:[JPEG.Table.Quantization.Key: [UInt16]]) throws 
+        where Destination:JPEG.Bytestream.Destination
+    {
+        try self.fdct(quanta: quanta).compress(stream: &stream)
+    }
+}
+extension JPEG.Data.Rectangular  
+{
+    public 
+    func compress<Destination>(stream:inout Destination, 
+        quanta:[JPEG.Table.Quantization.Key: [UInt16]]) throws 
+        where Destination:JPEG.Bytestream.Destination
+    {
+        try self.decomposed().compress(stream: &stream, quanta: quanta)
     }
 }
