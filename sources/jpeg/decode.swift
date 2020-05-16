@@ -4529,7 +4529,7 @@ extension JPEG.Data.Spectral
 extension JPEG.Data.Planar 
 {
     public 
-    func interleaved() -> JPEG.Data.Rectangular<Format> 
+    func interleaved(cosite cosited:Bool = false) -> JPEG.Data.Rectangular<Format> 
     {
         var interleaved:[UInt16] 
         if self.count == 1 
@@ -4553,19 +4553,65 @@ extension JPEG.Data.Planar
             {
                 for (p, plane):(Int, Plane) in self.enumerated() 
                 {
-                    let d:(x:Int, y:Int) = 
-                    (
-                        scale.x / plane.factor.x,
-                        scale.y / plane.factor.y
-                    )
+                    guard plane.factor != scale
+                    else 
+                    {
+                        // fast path 
+                        for (x, y):(Int, Int) in (0, 0) ..< self.size 
+                        {
+                            $0[(y * self.size.x + x) * self.count + p] = plane[x: x, y: y]
+                        }
+                        continue 
+                    }
                     
-                    assert(scale.x % plane.factor.x == 0)
-                    assert(scale.y % plane.factor.y == 0)
-                    
+                    //  a + b * x
+                    // -----------
+                    //      c
+                    let a:(x:Int, y:Int),
+                        b:(x:Int, y:Int), 
+                        c:(x:Int, y:Int)
+                    if cosited 
+                    {
+                        a = (0, 0)
+                        b = plane.factor 
+                        c = scale 
+                    }
+                    else 
+                    {
+                        a = (plane.factor.x - scale.x, plane.factor.y - scale.y)
+                        b = (2 * plane.factor.x, 2 * plane.factor.y)
+                        c = (2 * scale.x,        2 * scale.y)
+                    }
+                    let d:(x:Int, y:Int) = (plane.size.x - 1,   plane.size.y - 1)
                     for (x, y):(Int, Int) in (0, 0) ..< self.size 
                     {
-                        let value:UInt16 = plane[x: x / d.x, y: y / d.y]
-                        $0[(y * self.size.x + x) * self.count + p] = value 
+                        let i:(x:Int, y:Int), 
+                            f:(x:Int, y:Int)
+                        (i.x, f.x) = (a.x + b.x * x).quotientAndRemainder(dividingBy: c.x)
+                        (i.y, f.y) = (a.y + b.y * y).quotientAndRemainder(dividingBy: c.y)
+                        
+                        let j:(x:Int, y:Int)     = 
+                        (
+                            Swift.min(i.x + 1, d.x), 
+                            Swift.min(i.y + 1, d.y)
+                        )
+                        let t:(x:Float, y:Float) = 
+                        (
+                            Swift.max(0, Swift.min(.init(f.x) / .init(c.x), 1)),
+                            Swift.max(0, Swift.min(.init(f.y) / .init(c.y), 1))
+                        )
+                        let u:((Float, Float), (Float, Float)) = 
+                        (
+                            (.init(plane[x: i.x, y: i.y]), .init(plane[x: j.x, y: i.y])),
+                            (.init(plane[x: i.x, y: j.y]), .init(plane[x: j.x, y: j.y]))
+                        )
+                        let v:(Float, Float) = 
+                        (
+                            u.0.0 * (1 - t.x) + u.0.1 * t.x,
+                            u.1.0 * (1 - t.x) + u.1.1 * t.x
+                        )
+                        $0[(y * self.size.x + x) * self.count + p] = 
+                            .init((v.0 * (1 - t.y) + v.1 * t.y).rounded())
                     }
                 }
                 

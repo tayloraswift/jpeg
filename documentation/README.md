@@ -30,36 +30,37 @@ The author would like to acknowledge the valuable support and advice of Dr. Zbig
 
 # Table of contents
 
-1. [Project motivation](#1-Project-motivation)
-    1. [Problem](#11-Problem)
-    2. [Proposed solution](#12-Proposed-solution)
-    3. [Prior art (literature review)](#13-Prior-art-literature-review)
-2. [Project goals](#2-Project-goals)
-    1. [The JPEG standard](#21-The-JPEG-standard)
-    2. [Color formats](#22-Color-formats)
-    3. [Color targets](#23-Color-targets)
-    4. [Levels of abstraction](#24-Levels-of-abstraction)
-3. [Concepts](#3-Concepts)
-    1. [JPEG segmented structure](#31-JPEG-segmented-structure)
-    2. [Header segments](#32-Header-segments)
-    3. [Table segments](#33-Table-segments)
-    4. [Blocks, planes, and MCUs](#34-Blocks-planes-and-MCUs)
-    5. [Contextual state](#35-Contextual-state)
-4. [User model](#4-User-model)
-    1. [Segmentation API](#41-Segmentation-API)
-    2. [Decoding/encoding API](#42-Decoding-encoding-API)
-5. [Library architecture](#5-Library-architecture)
-    1. [`common.swift`](#51-common-swift)
-    2. [`decode.swift`](#52-decode-swift)
-    3. [`encode.swift`](#53-encode-swift)
-    4. [`debug.swift`](#54-debug-swift)
-    5. [`os.swift`](#55-os-swift)
-6. [Test architecture](#6-Test-architecture)
-    1. [Unit tests](#61-Unit-tests)
-    2. [Integration tests](#62-Integration-tests)
-    3. [Regression tests](#63-Regression-tests)
-    4. [Fuzz tests](#64-Fuzz-tests)
-7. [Conclusion](#7-Conclusion)
+1. [Project motivation](#1-Project-motivation) … Page 1
+    1. [Problem](#11-Problem) … Page 1
+    2. [Proposed solution](#12-Proposed-solution) … Page 2
+    3. [Prior art (literature review)](#13-Prior-art-literature-review) … Page 2
+2. [Project goals](#2-Project-goals) … Page 4
+    1. [The JPEG standard](#21-The-JPEG-standard) … Page 4
+    2. [Color formats](#22-Color-formats) … Page 5
+    3. [Color targets](#23-Color-targets) … Page 6
+    4. [Levels of abstraction](#24-Levels-of-abstraction) … Page 7
+3. [Concepts](#3-Concepts) … Page 8
+    1. [JPEG segmented structure](#31-JPEG-segmented-structure) … Page 8
+    2. [Header segments](#32-Header-segments) … Page 9
+    3. [Table segments](#33-Table-segments) … Page 12
+    4. [Blocks, planes, and MCUs](#34-Blocks-planes-and-MCUs) … Page 13
+    5. [Contextual state](#35-Contextual-state) … Page 17
+4. [User model](#4-User-model) … Page 20
+    1. [Segmentation API](#41-Segmentation-API) … Page 21
+    2. [Decoding/encoding API](#42-Decoding-encoding-API) … Page 22
+5. [Library architecture](#5-Library-architecture) … Page 29
+    1. [`common.swift`](#51-common-swift) … Page 29
+    2. [`decode.swift`](#52-decode-swift) … Page 31
+    3. [`encode.swift`](#53-encode-swift) … Page 41
+    4. [`debug.swift`](#54-debug-swift) … Page 44
+    5. [`os.swift`](#55-os-swift) … Page 45
+6. [Test architecture](#6-Test-architecture) … Page 46
+    1. [Unit tests](#61-Unit-tests) … Page 46
+    2. [Integration tests](#62-Integration-tests) … Page 47
+    3. [Regression tests](#63-Regression-tests) … Page 47
+    4. [Fuzz tests](#64-Fuzz-tests) … Page 48
+7. [Conclusion](#7-Conclusion) … Page 50
+8. [References](#8-References) … Page 51
 
 <div style="page-break-after: always;"></div>
 
@@ -73,15 +74,15 @@ Swift *JPEG* is a cross-platform pure Swift framework which provides a full-feat
 
 ### 1.1. Problem
 
-Today, almost all Swift users rely on two popular system frameworks for encoding and decoding the JPEG file format. The first of these system frameworks is *UIKit*, which is available on Apple platforms and includes a multi-format image codec, [*UIImage*](https://developer.apple.com/documentation/uikit/uiimage). However, this codec is proprietary and unavailable on Linux platforms, making tools and applications that depend on *UIImage* non-portable.
+Today, almost all Swift users rely on two popular system frameworks for encoding and decoding the JPEG file format. The first of these system frameworks is *UIKit*, which is available on Apple platforms and includes a multi-format image codec, [*UIImage*](https://developer.apple.com/documentation/uikit/uiimage).<sup>1</sup> However, this codec is proprietary and unavailable on Linux platforms, making tools and applications that depend on *UIImage* non-portable.
 
-The second popular system framework is the C library [*libjpeg*](http://ijg.org/) which comes pre-installed with most Linux distributions. The *libjpeg* codec, which has existed since [1991](https://en.wikipedia.org/wiki/Libjpeg), has the advantage of having a large user base, and unlike *UIImage*, is free and open source software. 
+The second popular system framework is the C library [*libjpeg*](http://ijg.org/)<sup>2</sup> which comes pre-installed with most Linux distributions. The *libjpeg* codec, which has existed since [1991](https://en.wikipedia.org/wiki/Libjpeg), has the advantage of having a large user base, and unlike *UIImage*, is free and open source software. 
 
 The *libjpeg* codec however, has a number of drawbacks which make it unsuitable for use in Swift projects. Despite Swift’s excellent C-interop, installing and importing *libjpeg* into Swift projects can be challenging for all but advanced Swift users. 
 
 Owing to vast differences in programming paradigms and preferred design patterns between C and Swift, APIs designed for (and constrained by) the C language can also be extremely awkward, and needlessly verbose when called from Swift code. Swift wrappers around C APIs can mitigate some of these issues, but must still incur necessary overhead to bridge the gap between a framework designed for a language without dynamic arrays, automatic reference counting, or the concept of memory state, and a calling language which relies on modern data structures and guarantees for safe and efficient operation.
 
-The *libjpeg* codec specifically also suffers from serious technical flaws which preclude its safe inclusion in Swift projects. Error handling in *libjpeg* relies heavily on the `setjmp` family of POSIX functions, which are [unsafe](https://forums.swift.org/t/on-the-road-to-swift-6/32862/149) to use in Swift (and many [other languages](https://internals.rust-lang.org/t/support-c-apis-designed-for-safe-unwinding/7212) as well). The output from *libjpeg* can also vary across different hardware due to differences in platform rounding and SIMD architecture. 
+The *libjpeg* codec specifically also suffers from serious technical flaws which preclude its safe inclusion in Swift projects. Error handling in *libjpeg* relies heavily on the `setjmp` family of POSIX functions, which are [unsafe](https://forums.swift.org/t/on-the-road-to-swift-6/32862/149)<sup>3</sup> to use in Swift (and many [other languages](https://internals.rust-lang.org/t/support-c-apis-designed-for-safe-unwinding/7212) as well).<sup>4</sup> The output from *libjpeg* can also vary across different hardware due to differences in platform rounding and SIMD architecture. 
 
 ### 1.2. Proposed solution
 
@@ -96,13 +97,15 @@ Currently, no production-ready JPEG codec exists for the Swift language today.
 
 Many language communities have “experimental” implementations of JPEG and other image formats. Most experimental implementations begin as personal projects, and many are non-compliant, or even not fully functional. However, they sometimes mature into formidable local competitors to *libjpeg* and other system libraries. Experimental JPEG implementations rarely meet the threshold to qualify as a usable framework, but the few that do serve as a proof-of-concept for the idea of commodotizing image processing into something that can be handled by a native-language package, as opposed to relying on system dependencies. While this can imply additional code-size costs, the portability and usability gains inherent in “demoting” a system dependency into a regular package are significant. 
 
-Language communities with strong “hacker” traditions, such as the Rust community, often sport [advanced native codec libraries](https://docs.rs/jpeg-decoder/0.1.16/jpeg_decoder/) in their package indices. In the Swift world, however, we could only locate a [single](https://github.com/sergeysmagleev/JPEGEncoder), unfinished Github project which implements JPEG in native Swift, by Github user [`sergeysmagleev`](https://github.com/sergeysmagleev).
+Language communities with strong “hacker” traditions, such as the Rust community, often sport [advanced native codec libraries](https://docs.rs/jpeg-decoder/0.1.16/jpeg_decoder/)<sup>5</sup> in their package indices. In the Swift world, however, we could only locate a [single](https://github.com/sergeysmagleev/JPEGEncoder), unfinished Github project which implements JPEG in native Swift, by Github user [`sergeysmagleev`](https://github.com/sergeysmagleev).<sup>6</sup>
 
 Why does Swift have such poor support for JPEG (and other image formats) compared to languages such as Rust which has a comparatively tiny user base? There are in fact, no technical limitations — performance or otherwise — inherent to the Swift language that would preclude a native Swift implementation of JPEG, or make such an implementation inferior to existing C implementations. The only real constraint is the fact that all open source code (in fact, all code) has to be authored by someone, and in the FOSS ecosystem especially, the limiting factor in producing new libraries and frameworks has been the availability and willingness of someone “up to the task” to write that code.
 
 Without funding, interest and technical difficulty are the main determinants of whether a library will arise in a particular language community. This is true for any language community, including the Swift community. For example, because game development is a popular developer hobby, many algorithms and toolkits relevant to the field have been implemented natively in most languages. 
 
-In the field of image codecs, this has meant that “easier” formats such as GIF and, to a much lesser extent, PNG, often have high quality native-language implementations, while more technically challenging formats such as JPEG often remain unsupported. However, we forsee that as libraries and frameworks become increasingly decoupled from operating systems, the monopoly of `libjpeg` and proprietary system frameworks will too be broken, in favor of portable, native implementations. As such, developing such a resource contributes to the [language community-level goal](https://forums.swift.org/t/on-the-road-to-swift-6/32862) of expanding the Swift library ecosystem.
+In the field of image codecs, this has meant that “easier” formats such as GIF and, to a much lesser extent, PNG, often have high quality native-language implementations, while more technically challenging formats such as JPEG often remain unsupported. However, we forsee that as libraries and frameworks become increasingly decoupled from operating systems, the monopoly of `libjpeg` and proprietary system frameworks will too be broken, in favor of portable, native implementations. As such, developing such a resource contributes to the [language community-level goal](https://forums.swift.org/t/on-the-road-to-swift-6/32862)<sup>7</sup> of expanding the Swift library ecosystem.
+
+<div style="page-break-after: always;"></div>
 
 ## 2. Project goals
 
@@ -110,7 +113,7 @@ In the field of image codecs, this has meant that “easier” formats such as G
 
 ### 2.1. The JPEG standard
 
-JPEG images as commonly encountered today are actually governed by three overlapping (and slightly contradictory) standards. The most important is the **ISO/IEC 10918-1** standard (also called the **ITU T.81** standard), which this document will refer to simply as the *JPEG standard*.
+JPEG images as commonly encountered today are actually governed by three overlapping (and slightly contradictory) standards. The most important is the **ISO/IEC 10918-1** standard<sup>8</sup> (also called the **ITU T.81** standard), which this document will refer to simply as the *JPEG standard*.
 
 The JPEG standard is color format agnostic, meaning it supports any combination of user-defined color components (YCbCr, RGB, RGBA, and anything else). The standard defines no fewer than thirteen different *coding processes*, which are essentially distinct image formats grouped under the umbrella of “JPEG formats”. Coding processes can be classified by their *entropy coding*:
 
@@ -161,7 +164,7 @@ A *color format* for a JPEG image is a set of *component identifiers* and a defi
 }
 ```
 
-JPEG color formats are defined by the two other standards besides the ISO 10918-1, which we will refer to as the JFIF/EXIF standards. The JFIF/EXIF standards are subsets of the JPEG standard which define common color format meanings for JPEG images on the web (primarily JFIF) and from digital cameras (primarily EXIF). They “strongly recommend” use of the baseline coding process only, though they are compatible with the other coding processes as well. The JFIF and EXIF standards are mutually incompatible due to differences in file structure, but most codecs tolerate both.
+JPEG color formats are defined by the two other standards besides the ISO 10918-1, which we will refer to as the JFIF/EXIF standards.<sup>9</sup> The JFIF/EXIF standards are subsets of the JPEG standard which define common color format meanings for JPEG images on the web (primarily JFIF) and from digital cameras (primarily EXIF). They “strongly recommend” use of the baseline coding process only, though they are compatible with the other coding processes as well. The JFIF and EXIF standards are mutually incompatible due to differences in file structure, but most codecs tolerate both.
 
 Both the JFIF and EXIF standards use the [YCbCr color model](https://en.wikipedia.org/wiki/YCbCr). The JFIF standard allows both full YCbCr triplets, and a Y-only grayscale form. The EXIF standard only allows YCbCr triplets. Both standards share the same identifier–channel mapping, and in addition, the JFIF YCbCr format is compatible with the Y format.
 
@@ -188,6 +191,7 @@ The framework includes built-in support for the JFIF/EXIF color formats, which w
 ```
 
 The inverse formula is given below:
+<div style="page-break-after: always;"></div>
 ```
 ┌          ┐   ┌                           ┐   ┌   ┐
 │ Y        │   │  0.2990   0.5870   0.1140 │   │ R │
@@ -210,11 +214,13 @@ Rendering to (or saving from) an RGB/YCbCr pixel array is the most common JPEG c
 
 For example, metadata editing is best performed on the structural representation, while lossless crops, reflections, and rotations can only be performed on the spectral representation. Changing the compression level is performed on the dequantized representation, while changing the subsampling level is best performed on the spatial representation. As such, the framework allows users to interact with JPEG images at all five major levels of abstraction.
 
+<div style="page-break-after: always;"></div>
+
 ## 3. Concepts 
 
 > **Summary:** JPEG is a frequency transform-based compressed image format. Decompressing the file format can be roughly divided into lexing, parsing, and decoding stages. Decoding involves assembling multiple image *scans* into a single image *frame*. A scan may contain one or more color *components* (channels). In a progressive JPEG, a single scan may contain only a specific range of bits for a specific frequency band. JPEG images also use *huffman* and *quantization* tables. Huffman tables are associated with image components at the scan level. Quantization tables are associated with image components at the frame level. Multiple components can reference the same huffman or quantization table. The “compression level” of a JPEG image is almost fully determined by the quantization tables used by the image.
 
-This section is meant to give a concise overview of the JPEG format itself. For the actual format details, consult the [ISO 10918-1 standard](https://www.w3.org/Graphics/JPEG/itu-t81.pdf).
+This section is meant to give a concise overview of the JPEG format itself. For the actual format details, consult the [ISO 10918-1 standard](https://www.w3.org/Graphics/JPEG/itu-t81.pdf).<sup>8</sup>
 
 ### 3.1. JPEG segmented structure
 
@@ -290,6 +296,7 @@ Progressively-coded images can also optionally use a decomposition called *succe
 
 The sequence of scan-specified band ranges and bit ranges for a particular component is called a *scan progression*. The following is a visual example of a possible scan progression for one component of a progressively-coded image:
 
+<div style="page-break-after: always;"></div>
 ```
     a   Scan 0 (band: 0 ..< 1, bits: 1 ...)
 z       0  1  2  3  4  5  6  7  8 ··· 61 62 63
@@ -425,6 +432,7 @@ All blocks for a particular component are the same size, even if the image pixel
 
 The following diagram shows the block decomposition of a 35x28 pixel image using sampling factors (2,&nbsp;2), (2,&nbsp;1), and (1,&nbsp;1). Note that all three block grids cover pixels that are outside the 35x28 pixel bounds (bolded rectangle), and furthermore, the last block grid covers pixels that the other two grids do not:
 
+<div style="page-break-after: always;"></div>
 ```
 Image (3 components, 35x28 pixels)
 ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
@@ -666,6 +674,8 @@ End-of-Image
 
 Note how tables C and D were overwritten partway through the JPEG file.
 
+<div style="page-break-after: always;"></div>
+
 ## 4. User model
 
 > **Summary:** The Swift *JPEG* encoder provides unique abstract *component key* and *quantization table key* identifiers. The component keys are equivalent in value to the component idenfiers (*c<sub>i</sub>*) in the JPEG standard, while the quantization table identifiers (*q<sub>i</sub>*) are a library concept, which obviate the need for users to assign and refer to quantization tables by their slot index, as slots may be overwritten and reused within the same JPEG file. Users also specify the *scan progression* by band range, bit range, and component key set. These relationships are combined into a *layout*, a library concept encapsulating relationships between table indices, component indices, scan component references, etc. When initializing a layout, the framework is responsible for mapping the abstract, user-specified relationships into a sequence of JPEG scan headers and table definitions.
@@ -892,6 +902,7 @@ Spectral data is converted into *planar data* through the *inverse discrete cosi
 
 Even though planar data is indexed by sample, and not by block, each plane still contains whole blocks of data. It follows that the sample dimensions are always a multiple of 8.
 
+<div style="page-break-after: always;"></div>
 ```
    Y Plane  (p = 0)        Cb Plane  (p = 1)       Cr Plane  (p = 2)
   ╷         ╷         ╷   ╷         ╷         ╷   ╷         ╷         ╷  
@@ -939,6 +950,8 @@ Because rectangular data is fully interleaved, padding samples are discarded whe
 Rectangular data provide their pixel contents through the *pixel accessor* API. The output of this API is an array of pixels in the familiar YCbCr or RGBA (or another color type) form.
 
 Why does the framework not simply store pixel values in the rectangular data itself? This is because JPEG is natively a YCbCr-based image format, therefore, converting to a form such as RGB would cause additional data loss, and make the YCbCr image inaccessible without having to redecode the image. In addition, because the conversion to the rectangular representation often involves additional processing (such as the upsampling operation), it is highly motivating to be able to do this step once, and be able to read that image as multiple color targets without having to recompute the rectangular representation.
+
+<div style="page-break-after: always;"></div>
 
 ## 5. Library architecture
 
@@ -1594,6 +1607,8 @@ This file also extends `JPEG.Data.Spectral`, `JPEG.Data.Planar`, and `JPEG.Data.
     * `extension` `JPEG.Data.Planar`
     * `extension` `JPEG.Data.Rectangular`
 
+<div style="page-break-after: always;"></div>
+
 ## 6. Test architecture
 
 > **Summary:** The Travis Continuous Integration set up for the project repository supports four sets of tests. *Unit tests* verify basic algorithmic components of the library, such as the huffman coders and zigzag index translators. *Integration tests* verify that a sample set of images with different supported coding processes and layouts can be decoded and encoded without errors. *Regression tests* run the integration tests and compare them with known outputs. Finally, *fuzz tests* generate randomized test images and compare the output to that output from third-party implementations such as the *libjpeg*-based `imagemagick convert` tool, ensuring inter-library compatibility.
@@ -1671,6 +1686,8 @@ The number of test images the `utils/fuzz-test` script will generate is set by t
 
 The framework’s discrete cosine transform implementation is written to exactly emulate the floating-point behavior of *libjpeg*, and will match its output exactly so long as no out-of-range pixel values occur. However, since *libjpeg* is not internally consistent with respect to its other arithmetic modes, this means that significant discrepancies (though generally less than 10 gray levels) exist when using *libjpeg*’s “fast” mode or its fixed-point mode.
 
+<div style="page-break-after: always;"></div>
+
 ## 7. Conclusion 
 
 As previously discussed, the ambiguous binary specification of the JPEG standard precludes a universal “ground truth” for decoder output. As such, the accuracy of the framework implementation was measured against the output of existing implementations such as *libjpeg*. Because *libjpeg* (and other 3rd-party implementations) are not themselves internally-consistent, it is impossible for one set of library settings to conform exactly to all *libjpeg* outputs. However, we were able to replicate exactly the output of one *libjpeg* mode, the high-fidelity floating-point mode. Using the same underlying optimized discrete cosine transform algorithm also provides the framework with a significant performance boost over the naïve frequency transform algorithm.
@@ -1678,3 +1695,25 @@ As previously discussed, the ambiguous binary specification of the JPEG standard
 As the library is essentially in a production-ready state, the immediate next steps for this project would be to complete its API documentation, and prepare tutorials for public release to the Swift community. 
 
 Future releases of this framework may aim to support features including, but not limited to, more (unofficial) JPEG color format extensions, greater support for uncommon coding processes such as the hierarchical process, and improved compression heuristics for the encoder portion of the library.
+
+<div style="page-break-after: always;"></div>
+
+## 8. References 
+
+[1] ‘UIImage API Reference’, *Apple Developer Documentation*, Apple Inc., &lt;developer.apple.com/documentation/uikit/uiimage&gt;
+
+[2] ‘Independent JPEG Group’, *Libjpeg*, The Independent JPEG Group, &lt;ijg.org&gt;
+
+[3] Joe Groff, ‘On the Road to Swift 6’, *Swift Developer Forums*, April 2020, &lt;forums.swift.org/t/on-the-road-to-swift-6/32862/149&gt;
+
+[4] (User “kornel”), ‘Support C APIs designed for safe unwinding’, *Rust Developer Forums*, April 2018, &lt;internals.rust-lang.org/t/support-c-apis-designed-for-safe-unwinding/7212&gt;
+
+[5] ‘Crate jpeg_decoder’, *docs.rs*, &lt;docs.rs/jpeg-decoder/0.1.16/jpeg_decoder/index.html&gt;
+
+[6] Sergey Smagleev, ‘JPEGEncoder’, *sergeysmagleev’s Github*, &lt;github.com/sergeysmagleev/JPEGEncoder&gt;
+
+[7] Ted Kremenek, ‘On the Road to Swift 6’, *Swift Developer Forums*, January 2020 &lt;forums.swift.org/t/on-the-road-to-swift-6/32862&gt;
+
+[8] ‘Information Technology – Digital Compression and Coding of Continuous-tone Still Images – Requirements and Guidelines’, *Terminal Equipment and Protocols for Telemetric Services*, International Telecommunication Union, September 1992
+
+[9] Eric Hamilton, ‘JPEG File Interchange Format Version 1.02’, C-Cube Microsystems, September 1992
