@@ -4824,6 +4824,9 @@ extension JPEG
     {
         case y8
         case ycc8
+        
+        case nonconforming1x8(JPEG.Component.Key)
+        case nonconforming3x8(JPEG.Component.Key, JPEG.Component.Key, JPEG.Component.Key)
     }
 }
 extension JPEG.Common:JPEG.Format
@@ -4844,13 +4847,32 @@ extension JPEG.Common:JPEG.Format
     public static 
     func recognize(_ components:Set<JPEG.Component.Key>, precision:Int) -> Self? 
     {
-        switch (components.sorted(), precision) 
+        let sorted:[JPEG.Component.Key] = components.sorted()
+        switch (sorted, precision) 
         {
         case ([1],          8): 
             return .y8
         case ([1, 2, 3],    8): 
             return .ycc8
         default:
+            break 
+        }
+        
+        // some jpegs use a nonstandard indexing like 0,1,2 or 2,3,4, so we 
+        // categorize those as nonconforming, as long as they form a contiguously 
+        // increasing sequence
+        if sorted.count == 1 
+        {
+            return .nonconforming1x8(sorted[0])
+        }
+        else if let base:Int = sorted.first?.value, 
+            sorted.count == 3, 
+            sorted.map(\.value) == .init(base ..< base + 3)
+        {
+            return .nonconforming3x8(sorted[0], sorted[1], sorted[2])
+        }
+        else 
+        {
             return nil
         }
     }
@@ -4864,6 +4886,10 @@ extension JPEG.Common:JPEG.Format
             return [1]
         case .ycc8:
             return [1, 2, 3]
+        case .nonconforming1x8(let c0):
+            return [c0]
+        case .nonconforming3x8(let c0, let c1, let c2):
+            return [c0, c1, c2]
         }
     }
     public 
@@ -4920,13 +4946,13 @@ extension JPEG.YCbCr:JPEG.Color
         // this alongside the level shift 
         switch format 
         {
-        case .y8:
+        case .y8, .nonconforming1x8:
             return interleaved.map 
             {
                 .init(y: .init($0))
             }
         
-        case .ycc8:
+        case .ycc8, .nonconforming3x8:
             return stride(from: 0, to: interleaved.count, by: 3).map 
             {
                 .init(
@@ -4941,10 +4967,10 @@ extension JPEG.YCbCr:JPEG.Color
     {
         switch format 
         {
-        case .y8:
+        case .y8, .nonconforming1x8:
             return pixels.map{ .init($0.y) }
         
-        case .ycc8:
+        case .ycc8, .nonconforming3x8:
             return pixels.flatMap{ [ .init($0.y), .init($0.cb), .init($0.cr) ] }
         }
     }
@@ -4957,14 +4983,14 @@ extension JPEG.RGB:JPEG.Color
     {
         switch format 
         {
-        case .y8:
+        case .y8, .nonconforming1x8:
             return interleaved.map 
             {
                 let ycc:JPEG.YCbCr = .init(y: .init($0))
                 return ycc.rgb 
             }
         
-        case .ycc8:
+        case .ycc8, .nonconforming3x8:
             return stride(from: 0, to: interleaved.count, by: 3).map 
             {
                 let ycc:JPEG.YCbCr = .init(
@@ -4980,10 +5006,10 @@ extension JPEG.RGB:JPEG.Color
     {
         switch format 
         {
-        case .y8:
+        case .y8, .nonconforming1x8:
             return pixels.map{ .init($0.ycc.y) }
         
-        case .ycc8:
+        case .ycc8, .nonconforming3x8:
             return pixels.flatMap
             {
                 (rgb:JPEG.RGB) -> [UInt16] in 
