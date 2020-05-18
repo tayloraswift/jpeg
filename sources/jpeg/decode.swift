@@ -758,6 +758,9 @@ extension JPEG
     {
         case truncatedEntropyCodedSegment
         
+        case invalidRestartPhase(Int, expected:Int)
+        case missingRestartIntervalSegment
+        
         case invalidSpectralSelectionProgression(Range<Int>, Component.Key)
         case invalidSuccessiveApproximationProgression(Range<Int>, Int, z:Int, Component.Key)
         
@@ -773,10 +776,11 @@ extension JPEG
         
         case missingStartOfImage(Marker)
         case duplicateStartOfImage
-        case duplicateFrameHeader
-        case prematureScanHeader
+        case duplicateFrameHeaderSegment
+        case prematureScanHeaderSegment
         case prematureDefineHeightSegment
         case prematureEntropyCodedSegment
+        case unexpectedRestart
         case prematureEndOfImage
         
         case unsupportedFrameCodingProcess(Process)
@@ -800,6 +804,11 @@ extension JPEG
             case .invalidSuccessiveApproximationProgression:
                 return "invalid successive approximation progression"
                 
+            case .invalidRestartPhase:
+                return "invalid restart phase"
+            case .missingRestartIntervalSegment:
+                return "missing restart interval segment"
+                
             case .invalidCompositeValue:
                 return "invalid composite value"
             case .invalidCompositeBlockRun:
@@ -822,14 +831,16 @@ extension JPEG
                 return "missing start-of-image marker"
             case .duplicateStartOfImage:
                 return "duplicate start-of-image marker"
-            case .duplicateFrameHeader:
-                return "duplicate frame header"
-            case .prematureScanHeader:
-                return "premature scan header"
+            case .duplicateFrameHeaderSegment:
+                return "duplicate frame header segment"
+            case .prematureScanHeaderSegment:
+                return "premature scan header segment"
             case .prematureDefineHeightSegment:
                 return "premature define height segment"
             case .prematureEntropyCodedSegment:
                 return "premature entropy coded segment"
+            case .unexpectedRestart:
+                return "unexpected restart marker"
             case .prematureEndOfImage:
                 return "premature end-of-image marker"
                 
@@ -846,7 +857,12 @@ extension JPEG
             {
             case .truncatedEntropyCodedSegment:
                 return "not enough data in entropy coded segment bitstream"
-                
+            
+            case .invalidRestartPhase(let phase, expected: let expected):
+                return "decoded restart phase (\(phase)) is not the expected phase (\(expected))"
+            case .missingRestartIntervalSegment:
+                return "encountered restart segments, but no restart interval has been defined"
+            
             case .invalidSpectralSelectionProgression(let band, let ci):
                 return "frequency band \(band.lowerBound) ..< \(band.upperBound) for component \(ci) is not allowed"
             case .invalidSuccessiveApproximationProgression(let bits, let a, z: let z, let ci):
@@ -874,14 +890,16 @@ extension JPEG
                 return "start-of-image marker must be the first marker in image"
             case .duplicateStartOfImage:
                 return "start-of-image marker cannot occur more than once"
-            case .duplicateFrameHeader:
+            case .duplicateFrameHeaderSegment:
                 return "multiple frame headers only allowed for the hierarchical coding process"
-            case .prematureScanHeader:
+            case .prematureScanHeaderSegment:
                 return "scan header must occur after frame header"
             case .prematureDefineHeightSegment:
                 return "define height segment must occur immediately after first scan"
             case .prematureEntropyCodedSegment:
                 return "entropy coded segment must occur immediately after scan header"
+            case .unexpectedRestart:
+                return "restart marker can only follow an entropy-coded segment"
             case .prematureEndOfImage:
                 return "premature end-of-image marker"
             
@@ -995,9 +1013,17 @@ extension JPEG.Bytestream.Source
             {
                 throw JPEG.LexingError.invalidMarkerSegmentType(byte)
             }
+            
+            // some markers have no bodies 
+            switch marker 
+            {
+            case .start, .end, .restart:
+                return (ecs, (marker, []))
+            default:
+                let data:[UInt8] = try self.tail(type: marker)
+                return (ecs, (marker, data))
+            }
                 
-            let data:[UInt8] = try self.tail(type: marker)
-            return (ecs, (marker, data))
         }
         
         throw JPEG.LexingError.truncatedEntropyCodedSegment
@@ -1154,6 +1180,13 @@ extension JPEG
         {
             public 
             let height:Int 
+        }
+        
+        public 
+        struct RestartInterval 
+        {
+            public 
+            let interval:Int? 
         }
         
         public 
@@ -1558,6 +1591,21 @@ extension JPEG.Header.HeightRedefinition
         }
 
         return .init(height: data.load(bigEndian: UInt16.self, as: Int.self, at: 0))
+    } 
+}
+extension JPEG.Header.RestartInterval 
+{
+    public static
+    func parse(_ data:[UInt8]) throws -> Self
+    {
+        guard data.count == 2
+        else
+        {
+            throw JPEG.ParsingError.mismatched(marker: .height, count: data.count, expected: 2)
+        }
+        
+        let value:Int = data.load(bigEndian: UInt16.self, as: Int.self, at: 0)
+        return .init(interval: value == 0 ? nil : value)
     } 
 }
 extension JPEG.Header.Frame 
@@ -3081,7 +3129,7 @@ extension JPEG.Data.Spectral.Plane
 {
     // sequential mode 
     mutating 
-    func decode(_ data:[UInt8], component:JPEG.Scan.Component, 
+    func decode(_ data:[UInt8], blocks:Range<Int>, component:JPEG.Scan.Component, 
         tables slots:(dc:JPEG.Table.HuffmanDC.Slots, ac:JPEG.Table.HuffmanAC.Slots)) throws 
     {
         guard let dc:JPEG.Table.HuffmanDC.Decoder = 
@@ -3101,7 +3149,7 @@ extension JPEG.Data.Spectral.Plane
         var b:Int               = 0
         var predecessor:Int16   = 0
         row: 
-        for y:Int in 0... 
+        for y:Int in blocks.lowerBound / self.units.x ..< blocks.upperBound / self.units.x
         {
             guard b < bits.count, bits[b, count: 16] != 0xffff 
             else 
@@ -3154,8 +3202,8 @@ extension JPEG.Data.Spectral.Plane
     
     // progressive mode 
     mutating 
-    func decode(_ data:[UInt8], bits a:PartialRangeFrom<Int>, component:JPEG.Scan.Component, 
-        tables slots:JPEG.Table.HuffmanDC.Slots) throws 
+    func decode(_ data:[UInt8], blocks:Range<Int>, bits a:PartialRangeFrom<Int>, 
+        component:JPEG.Scan.Component, tables slots:JPEG.Table.HuffmanDC.Slots) throws 
     {
         guard let table:JPEG.Table.HuffmanDC.Decoder = 
             slots[keyPath: component.selector.dc]?.decoder()
@@ -3168,7 +3216,7 @@ extension JPEG.Data.Spectral.Plane
         var b:Int               = 0
         var predecessor:Int16   = 0
         row: 
-        for y:Int in 0... 
+        for y:Int in blocks.lowerBound / self.units.x ..< blocks.upperBound / self.units.x
         {
             guard b < bits.count, bits[b, count: 16] != 0xffff 
             else 
@@ -3194,11 +3242,13 @@ extension JPEG.Data.Spectral.Plane
     } 
     
     mutating 
-    func decode(_ data:[UInt8], bit a:Int) throws 
+    func decode(_ data:[UInt8], blocks:Range<Int>, bit a:Int) throws 
     {
+        let rows:Range<Int>     = blocks.lowerBound / self.units.x ..< 
+                        Swift.min(blocks.upperBound / self.units.x, self.units.y)
         let bits:JPEG.Bitstream = .init(data)
         var b:Int               = 0
-        for (x, y):(Int, Int) in (0, 0) ..< self.units 
+        for (x, y):(Int, Int) in (0, rows.lowerBound) ..< (self.units.x, rows.upperBound)
         {
             let refinement:Int16    = try bits.refinement(&b)
             self[x: x, y: y, z: 0] |= refinement << a
@@ -3206,7 +3256,7 @@ extension JPEG.Data.Spectral.Plane
     }
     
     mutating 
-    func decode(_ data:[UInt8], band:Range<Int>, bits a:PartialRangeFrom<Int>, 
+    func decode(_ data:[UInt8], blocks:Range<Int>, band:Range<Int>, bits a:PartialRangeFrom<Int>, 
         component:JPEG.Scan.Component, tables slots:JPEG.Table.HuffmanAC.Slots) throws
     {
         guard let table:JPEG.Table.HuffmanAC.Decoder = 
@@ -3216,10 +3266,12 @@ extension JPEG.Data.Spectral.Plane
             throw JPEG.DecodingError.undefinedScanHuffmanACReference(component.selector.ac)
         }
         
+        let rows:Range<Int>     = blocks.lowerBound / self.units.x ..< 
+                        Swift.min(blocks.upperBound / self.units.x, self.units.y)
         let bits:JPEG.Bitstream = .init(data)
         var b:Int               = 0, 
             skip:Int            = 0
-        for (x, y):(Int, Int) in (0, 0) ..< self.units
+        for (x, y):(Int, Int) in (0, rows.lowerBound) ..< (self.units.x, rows.upperBound)
         {
             var z:Int = band.lowerBound
             frequency: 
@@ -3255,7 +3307,7 @@ extension JPEG.Data.Spectral.Plane
     }
     
     mutating 
-    func decode(_ data:[UInt8], band:Range<Int>, bit a:Int, 
+    func decode(_ data:[UInt8], blocks:Range<Int>, band:Range<Int>, bit a:Int, 
         component:JPEG.Scan.Component, tables slots:JPEG.Table.HuffmanAC.Slots) throws
     {
         guard let table:JPEG.Table.HuffmanAC.Decoder = 
@@ -3265,10 +3317,12 @@ extension JPEG.Data.Spectral.Plane
             throw JPEG.DecodingError.undefinedScanHuffmanACReference(component.selector.ac)
         }
         
+        let rows:Range<Int>     = blocks.lowerBound / self.units.x ..< 
+                        Swift.min(blocks.upperBound / self.units.x, self.units.y)
         let bits:JPEG.Bitstream = .init(data)
         var b:Int               = 0, 
             skip:Int            = 0
-        for (x, y):(Int, Int) in (0, 0) ..< self.units
+        for (x, y):(Int, Int) in (0, rows.lowerBound) ..< (self.units.x, rows.upperBound)
         {
             var z:Int = band.lowerBound
             frequency:
@@ -3339,7 +3393,8 @@ extension JPEG.Data.Spectral
 {
     // sequential mode 
     private mutating 
-    func decode(_ data:[UInt8], components:[(c:Int, component:JPEG.Scan.Component)], 
+    func decode(_ data:[UInt8], blocks:Range<Int>, 
+        components:[(c:Int, component:JPEG.Scan.Component)], 
         tables slots:(dc:JPEG.Table.HuffmanDC.Slots, ac:JPEG.Table.HuffmanAC.Slots)) throws 
     {
         guard components.count > 1 
@@ -3354,7 +3409,7 @@ extension JPEG.Data.Spectral
                 return 
             }
             
-            try self[p].decode(data, component: component, tables: slots)
+            try self[p].decode(data, blocks: blocks, component: component, tables: slots)
             return 
         }
         
@@ -3387,7 +3442,7 @@ extension JPEG.Data.Spectral
         var b:Int               = 0
         var predecessor:[Int16] = .init(repeating: 0, count: descriptors.count)
         row:
-        for my:Int in 0... 
+        for my:Int in blocks.lowerBound / self.blocks.x ..< blocks.upperBound / self.blocks.x
         {
             guard b < bits.count, bits[b, count: 16] != 0xffff 
             else 
@@ -3467,7 +3522,7 @@ extension JPEG.Data.Spectral
     
     // progressive mode 
     private mutating 
-    func decode(_ data:[UInt8], bits a:PartialRangeFrom<Int>, 
+    func decode(_ data:[UInt8], blocks:Range<Int>, bits a:PartialRangeFrom<Int>, 
         components:[(c:Int, component:JPEG.Scan.Component)], 
         tables slots:JPEG.Table.HuffmanDC.Slots) throws
     {
@@ -3488,7 +3543,7 @@ extension JPEG.Data.Spectral
                 return 
             }
             
-            try self[p].decode(data, bits: a, component: component, tables: slots)
+            try self[p].decode(data, blocks: blocks, bits: a, component: component, tables: slots)
             return 
         }
         
@@ -3509,7 +3564,7 @@ extension JPEG.Data.Spectral
         var b:Int               = 0
         var predecessor:[Int16] = .init(repeating: 0, count: descriptors.count)
         row:
-        for my:Int in 0... 
+        for my:Int in blocks.lowerBound / self.blocks.x ..< blocks.upperBound / self.blocks.x
         {
             guard b < bits.count, bits[b, count: 16] != 0xffff 
             else 
@@ -3559,7 +3614,7 @@ extension JPEG.Data.Spectral
     }
     
     private mutating 
-    func decode(_ data:[UInt8], bit a:Int, 
+    func decode(_ data:[UInt8], blocks:Range<Int>, bit a:Int, 
         components:[(c:Int, component:JPEG.Scan.Component)]) throws
     {
         guard components.count > 1 
@@ -3574,7 +3629,7 @@ extension JPEG.Data.Spectral
                 return 
             }
             
-            try self[p].decode(data, bit: a)
+            try self[p].decode(data, blocks: blocks, bit: a)
             return 
         }
         
@@ -3585,9 +3640,11 @@ extension JPEG.Data.Spectral
             return (self.indices ~= $0.c ? $0.c : nil, factor)
         }
         
+        let rows:Range<Int>     = blocks.lowerBound / self.blocks.x ..< 
+                        Swift.min(blocks.upperBound / self.blocks.x, self.blocks.y)
         let bits:JPEG.Bitstream = .init(data)
         var b:Int               = 0
-        for (mx, my):(Int, Int) in (0, 0) ..< self.blocks 
+        for (mx, my):(Int, Int) in (0, rows.lowerBound) ..< (self.blocks.x, rows.upperBound)
         {
             for (p, factor):Descriptor in descriptors
             {
@@ -3638,65 +3695,79 @@ extension JPEG.Data.Spectral
     }
     
     public mutating 
-    func decode(_ data:[UInt8], scan:JPEG.Header.Scan, tables slots:
+    func decode(ecss:[[UInt8]], interval:Int, scan:JPEG.Header.Scan, tables slots:
         (
             dc:JPEG.Table.HuffmanDC.Slots, 
-            ac:JPEG.Table.HuffmanAC.Slots,
+            ac:JPEG.Table.HuffmanAC.Slots, 
             quanta:JPEG.Table.Quantization.Slots
         )) throws 
     {
         let scan:JPEG.Scan = try self.layout.push(scan: scan)
-        
         switch (initial: scan.bits.upperBound == .max, band: scan.band)
         {
         case (initial: true,  band: 0 ..< 64):
-            // sequential mode jpeg
-            try self.dequantize(  components: scan.components, tables: slots.quanta)
-            try self.decode(data, components: scan.components, tables: (slots.dc, slots.ac))
-        
-        case (initial: false, band: 0 ..< 64):
-            // successive approximation cannot happen without spectral selection. 
-            // the scan header parser should enforce this 
-            fatalError("unreachable")
+            try self.dequantize(components: scan.components, tables: slots.quanta)
         
         case (initial: true,  band: 0 ..<  1):
             // in a progressive image, the dc scan must be the first scan for a 
             // particular component, so this is when we select and push the 
             // quantization tables
             try self.dequantize(components: scan.components, tables: slots.quanta)
-            try self.decode(data, bits: scan.bits.lowerBound..., 
-                components: scan.components, tables: slots.dc) 
         
-        case (initial: false, band: 0 ..<  1):
-            try self.decode(data, bit: scan.bits.lowerBound, components: scan.components)
+        default:
+            break
+        }
         
-        case (initial: true,  band: let band):
-            // scan initializer should have validated this
-            assert(scan.components.count == 1)
-            
-            let (p, component):(Int, JPEG.Scan.Component) = scan.components[0]
-            guard self.indices ~= p
-            else 
+        for (start, data):(Int, [UInt8]) in zip(stride(from: 0, to: .max, by: interval), ecss) 
+        {
+            let blocks:Range<Int> = start ..< start + interval
+            switch (initial: scan.bits.upperBound == .max, band: scan.band)
             {
-                return 
+            case (initial: true,  band: 0 ..< 64):
+                try self.decode(data, blocks: blocks, components: scan.components, 
+                    tables: (slots.dc, slots.ac))
+            
+            case (initial: false, band: 0 ..< 64):
+                // successive approximation cannot happen without spectral selection. 
+                // the scan header parser should enforce this 
+                fatalError("unreachable")
+            
+            case (initial: true,  band: 0 ..<  1):
+                try self.decode(data, blocks: blocks, bits: scan.bits.lowerBound..., 
+                    components: scan.components, tables: slots.dc) 
+            
+            case (initial: false, band: 0 ..<  1):
+                try self.decode(data, blocks: blocks, bit: scan.bits.lowerBound, 
+                    components: scan.components)
+            
+            case (initial: true,  band: let band):
+                // scan initializer should have validated this
+                assert(scan.components.count == 1)
+                
+                let (p, component):(Int, JPEG.Scan.Component) = scan.components[0]
+                guard self.indices ~= p
+                else 
+                {
+                    return 
+                }
+                
+                try self[p].decode(data, blocks: blocks, band: band, bits: scan.bits.lowerBound..., 
+                    component: component, tables: slots.ac)
+            
+            case (initial: false, band: let band):
+                // scan initializer should have validated this
+                assert(scan.components.count == 1)
+                
+                let (p, component):(Int, JPEG.Scan.Component) = scan.components[0]
+                guard self.indices ~= p
+                else 
+                {
+                    return 
+                }
+                
+                try self[p].decode(data, blocks: blocks, band: band, bit: scan.bits.lowerBound, 
+                    component: component, tables: slots.ac)
             }
-            
-            try self[p].decode(data, band: band, bits: scan.bits.lowerBound..., 
-                component: component, tables: slots.ac)
-        
-        case (initial: false, band: let band):
-            // scan initializer should have validated this
-            assert(scan.components.count == 1)
-            
-            let (p, component):(Int, JPEG.Scan.Component) = scan.components[0]
-            guard self.indices ~= p
-            else 
-            {
-                return 
-            }
-            
-            try self[p].decode(data, band: band, bit: scan.bits.lowerBound, 
-                component: component, tables: slots.ac)
         }
     }
 }
@@ -4115,6 +4186,9 @@ extension JPEG
         ) 
         
         private 
+        var interval:Int?
+        
+        private 
         var spectral:Data.Spectral<Format>, 
             progression:Layout<Format>.Progression 
         
@@ -4140,12 +4214,18 @@ extension JPEG.Context
             (nil, nil, nil, nil),
             (nil, nil, nil, nil)
         )
+        self.interval       = nil
     }
     
     mutating 
     func push(height:JPEG.Header.HeightRedefinition) 
     {
         self.spectral.set(height: height.height)
+    }
+    mutating 
+    func push(interval:JPEG.Header.RestartInterval) 
+    {
+        self.interval = interval.interval 
     }
     mutating 
     func push(dc table:JPEG.Table.HuffmanDC) 
@@ -4174,10 +4254,25 @@ extension JPEG.Context
     }
     
     mutating 
-    func push(scan:JPEG.Header.Scan, ecs data:[UInt8]) throws 
+    func push(scan:JPEG.Header.Scan, ecss:[[UInt8]]) throws 
     {
+        let interval:Int
+        if let stride:Int = self.interval 
+        {
+            interval = stride 
+        }
+        else if ecss.count == 1
+        {
+            interval = .max 
+        }
+        else 
+        {
+            throw JPEG.DecodingError.missingRestartIntervalSegment
+        }
+        
         try self.progression.update(scan)
-        try self.spectral.decode(data, scan: scan, tables: self.tables)
+        try self.spectral.decode(ecss: ecss, interval: interval, scan: scan, 
+            tables: self.tables)
     }
     
     static 
@@ -4223,7 +4318,8 @@ extension JPEG.Context
         var dc:[JPEG.Table.HuffmanDC]           = [], 
             ac:[JPEG.Table.HuffmanAC]           = [], 
             quanta:[JPEG.Table.Quantization]    = []
-        var frame:JPEG.Header.Frame?
+        var interval:JPEG.Header.RestartInterval?, 
+            frame:JPEG.Header.Frame?
         definitions:
         while true 
         {
@@ -4246,24 +4342,25 @@ extension JPEG.Context
                 dc.append(contentsOf: parsed.dc)
                 ac.append(contentsOf: parsed.ac)
             
+            case .interval:
+                interval = try .parse(marker.data)
+                
             case .comment, .application:
                 break 
             
             case .scan:
-                throw JPEG.DecodingError.prematureScanHeader
+                throw JPEG.DecodingError.prematureScanHeaderSegment
             case .height:
                 throw JPEG.DecodingError.prematureDefineHeightSegment
-            case .interval:
-                break 
             
             case .end:
                 throw JPEG.DecodingError.prematureEndOfImage
             case .start:
                 throw JPEG.DecodingError.duplicateStartOfImage
+            case .restart(_):
+                throw JPEG.DecodingError.unexpectedRestart
             
             // unimplemented 
-            case .restart(_):
-                break
             case .arithmeticCodingCondition:
                 break 
             case .hierarchical:
@@ -4289,6 +4386,10 @@ extension JPEG.Context
         {
             try context.push(quanta: table)
         }
+        if let interval:JPEG.Header.RestartInterval = interval 
+        {
+            context.push(interval: interval)
+        }
         
         scans:
         while true 
@@ -4296,7 +4397,7 @@ extension JPEG.Context
             switch marker.type 
             {
             case .frame:
-                throw JPEG.DecodingError.duplicateFrameHeader
+                throw JPEG.DecodingError.duplicateFrameHeaderSegment
             
             case .quantization:
                 for table:JPEG.Table.Quantization in 
@@ -4324,17 +4425,33 @@ extension JPEG.Context
             case .scan:
                 let scan:JPEG.Header.Scan   = try .parse(marker.data, 
                     process: context.layout.process)
-                let ecs:[UInt8] 
-                (ecs, marker)               = try stream.segment(prefix: true)
                 
-                try context.push(scan: scan, ecs: ecs)
-                continue scans 
+                var ecss:[[UInt8]] = []
+                for index:Int in 0...
+                {
+                    let ecs:[UInt8]
+                    (ecs, marker) = try stream.segment(prefix: true)
+                    
+                    ecss.append(ecs)
+                    guard case .restart(let phase) = marker.type
+                    else 
+                    {
+                        try context.push(scan: scan, ecss: ecss)
+                        continue scans 
+                    }
+                    
+                    guard phase == index % 8 
+                    else 
+                    {
+                        throw JPEG.DecodingError.invalidRestartPhase(phase, expected: index % 8)
+                    }
+                }
             
             case .height:
                 context.push(height: try .parse(marker.data))
             
             case .interval:
-                break 
+                context.push(interval: try .parse(marker.data))
             
             case .end:
                 return context.spectral 
@@ -4342,9 +4459,10 @@ extension JPEG.Context
             case .start:
                 throw JPEG.DecodingError.duplicateStartOfImage
             
-            // unimplemented 
             case .restart(_):
-                break
+                throw JPEG.DecodingError.unexpectedRestart
+            
+            // unimplemented 
             case .arithmeticCodingCondition:
                 break 
             case .hierarchical:

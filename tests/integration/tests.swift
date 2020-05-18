@@ -30,6 +30,13 @@ extension Test
                 "tests/integration/decode/grayscale-progressive-1.jpg",
                 "tests/integration/decode/grayscale-progressive-2.jpg",
             ])),
+            ("restart-interval-robustness",    .string(Self.decode(_:), 
+            [
+                "tests/integration/decode/color-sequential-restart.jpg",
+                "tests/integration/decode/color-progressive-restart.jpg",
+                "tests/integration/decode/grayscale-sequential-restart.jpg",
+                "tests/integration/decode/grayscale-progressive-restart.jpg",
+            ])),
             
             ("color-sequential-encoding-robustness", .string_int2(Self.encodeColorSequential(_:_:), 
             [

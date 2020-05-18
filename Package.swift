@@ -12,6 +12,7 @@ let package = Package(
         .executable(name: "regression-test",    targets: ["JPEGRegressionTests"]),
         .executable(name: "integration-test",   targets: ["JPEGIntegrationTests"]),
         
+        .executable(name: "decode-basic",       targets: ["JPEGDecodeBasic"]),
         .executable(name: "rotate",             targets: ["JPEGRotate"]),
     ],
     targets: 
@@ -23,6 +24,7 @@ let package = Package(
         .target(name: "JPEGRegressionTests",    dependencies: ["JPEG"], path: "tests/regression"),
         .target(name: "JPEGIntegrationTests",   dependencies: ["JPEG"], path: "tests/integration"),
         
+        .target(name: "JPEGDecodeBasic",        dependencies: ["JPEG"], path: "examples/decode-basic"),
         .target(name: "JPEGRotate",             dependencies: ["JPEG"], path: "examples/rotate"),
     ], 
     swiftLanguageVersions: [.v4_2, .v5]
