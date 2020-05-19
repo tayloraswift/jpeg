@@ -203,6 +203,11 @@ extension JPEG.Data.Planar
         }
         return spectral.idct()
     }
+    public 
+    func compress(path:String, quanta:[JPEG.Table.Quantization.Key: [UInt16]]) throws 
+    {
+        try self.fdct(quanta: quanta).compress(path: path)
+    }
 }
 extension JPEG.Data.Rectangular 
 {
@@ -216,6 +221,11 @@ extension JPEG.Data.Rectangular
         }
         
         return planar.interleaved()
+    }
+    public 
+    func compress(path:String, quanta:[JPEG.Table.Quantization.Key: [UInt16]]) throws 
+    {
+        try self.decomposed().compress(path: path, quanta: quanta)
     }
 }
 

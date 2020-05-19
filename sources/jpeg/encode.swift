@@ -374,7 +374,7 @@ extension JPEG.CompressionLevel
         
         let interpolated:[UInt16] = keyframe.map 
         {
-            .init(max(1.0, (1.0 * (1 - t) + .init($0) * t).rounded()))
+            .init(max(1.0, min((1.0 * (1 - t) + .init($0) * t).rounded(), 255.0)))
         }
         return .init(unsafeUninitializedCapacity: 64)
         {
@@ -442,7 +442,7 @@ extension JPEG.Data.Rectangular
                         Swift.min($1.x, self.size.x - 1), 
                         Swift.min($1.y, self.size.y - 1)
                     )
-                    return $0 + .init(self.values[(self.size.x * i.y * i.x) * self.stride + p])
+                    return $0 + .init(self.values[(self.size.x * i.y + i.x) * self.stride + p])
                 }
                 
                 buffer[8 * units.x * y + x] = .init(.init(sum) / magnitude)
@@ -1015,40 +1015,38 @@ extension JPEG.Data.Spectral.Plane
     {
         assert(band.lowerBound >   0)
         assert(band.upperBound <= 64)
-         
+        
         var composites:[JPEG.Bitstream.Composite.AC] = []
-        for y:Int in 0 ..< self.units.y
+        for (x, y):(Int, Int) in (0, 0) ..< self.units
         {
-            for x:Int in 0 ..< self.units.x 
+            var zeroes:Int = 0
+            for z:Int in band
             {
-                var zeroes = 0
-                for z:Int in band
+                let coefficient:Int16 = self[x: x, y: y, z: z]
+                // TODO: overflow probably possible here
+                let sign:Int16      = coefficient < 0 ? -1 : 1, 
+                    magnitude:Int16 = abs(coefficient)
+                let high:Int16      = sign * magnitude >> a.lowerBound 
+                if high == 0 
                 {
-                    let coefficient:Int16 = self[x: x, y: y, z: z]
-                    // TODO: overflow probably possible here
-                    let sign:Int16 = coefficient < 0 ? -1 : 1
-                    let high:Int16 = sign * abs(coefficient) >> a.lowerBound 
-                    
-                    if high == 0 
-                    {
-                        if zeroes == 15 
-                        {
-                            composites.append(.run(zeroes, value: 0))
-                            zeroes  = 0 
-                        }
-                        else 
-                        {
-                            zeroes += 1 
-                        }
-                    }
-                    else 
-                    {
-                        composites.append(.run(zeroes, value: high))
-                        zeroes      = 0
-                    }
+                    zeroes += 1 
                 }
-                
-                if zeroes > 0 
+                else 
+                {
+                    composites.append(contentsOf: 
+                        repeatElement(.run(         15, value: 0), count: zeroes / 16))
+                    composites.append(.run(zeroes % 16, value: high))
+                    zeroes  = 0
+                }
+            }
+            
+            if zeroes > 0 
+            {
+                if case .eob(let count)? = composites.last, count < 4096
+                {
+                    composites[composites.endIndex - 1] = .eob(count + 1)
+                }
+                else 
                 {
                     composites.append(.eob(1))
                 }
@@ -1077,53 +1075,65 @@ extension JPEG.Data.Spectral.Plane
         assert(band.lowerBound >   0)
         assert(band.upperBound <= 64)
         
-        var pairs:[(JPEG.Bitstream.Composite.AC, [Bool])] = []
-        for y:Int in 0 ..< self.units.y
+        let mask:Int16 = .init(bitPattern: UInt16.max << (a + 1))
+        var pairs:[(JPEG.Bitstream.Composite.AC, [Bool])]   = []
+        for (x, y):(Int, Int) in (0, 0) ..< self.units
         {
-            for x:Int in 0 ..< self.units.x 
+            var zeroes                  = 0
+            var refinements:[[Bool]]    = [], 
+                staged:[Bool]           = []
+            for z:Int in band
             {
-                var zeroes              = 0
-                var refinements:[Bool]  = []
-                for z:Int in band
+                let coefficient:Int16 = self[x: x, y: y, z: z]
+                
+                // TODO: overflow probably possible here
+                let sign:Int16      = coefficient < 0 ? -1 : 1, 
+                    magnitude:Int16 = abs(coefficient)
+                let product:Int16   = magnitude &  mask, 
+                    remainder:Int16 = magnitude & ~mask
+                let low:Int16       = sign * remainder >> a
+                
+                if product == 0 
                 {
-                    let coefficient:Int16 = self[x: x, y: y, z: z]
-                    
-                    // TODO: overflow probably possible here
-                    let sign:Int16 = coefficient < 0 ? -1 : 1
-                    let high:Int16 = sign *         abs(coefficient) >> (a + 1) 
-                    let low:Int16  = (coefficient - high << (a + 1)) >>  a
-                    
-                    if high == 0 
+                    if low == 0 
                     {
-                        if low == 0 
+                        zeroes += 1
+                        if zeroes % 16 == 0 
                         {
-                            if zeroes == 15 
-                            {
-                                pairs.append((.run(zeroes, value: 0), refinements))
-                                refinements = []
-                                zeroes      = 0
-                            }
-                            else 
-                            {
-                                zeroes     += 1
-                            }
+                            refinements.append(staged)
+                            staged = []
                         }
-                        else 
-                        {
-                            pairs.append((.run(zeroes, value: low), refinements))
-                            refinements     = []
-                            zeroes          = 0
-                        } 
                     }
                     else 
                     {
-                        refinements.append(low != 0)
-                    }
+                        pairs.append(contentsOf: refinements.map 
+                            {
+                                (     .run(         15, value: 0), $0)
+                            })
+                        pairs.append((.run(zeroes % 16, value: low), staged))
+                        refinements = []
+                        staged      = []
+                        zeroes      = 0
+                    } 
                 }
-                
-                if zeroes > 0 || !refinements.isEmpty 
+                else 
                 {
-                    pairs.append((.eob(1), refinements))
+                    staged.append(low != 0)
+                }
+            }
+            
+            refinements.append(staged)
+            let aggregated:[Bool] = refinements.flatMap{ $0 }
+            if zeroes > 0 || !aggregated.isEmpty 
+            {
+                if case .eob(let count)? = pairs.last?.0, count < 4096
+                {
+                    pairs[pairs.endIndex - 1].0 = .eob(count + 1)
+                    pairs[pairs.endIndex - 1].1.append(contentsOf: aggregated)
+                }
+                else 
+                {
+                    pairs.append((.eob(1), aggregated))
                 }
             }
         }

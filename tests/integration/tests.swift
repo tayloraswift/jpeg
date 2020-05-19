@@ -243,7 +243,7 @@ extension Test
                 .progressive( Y,         Cb,        Cr      ,  bit:  1   ),
                 .progressive( Y,         Cb,        Cr      ,  bit:  0   ),
                 
-                .progressive((Y,  \.0),        band: 1 ..< 64, bits: 1...), 
+                .progressive((Y,  \.0),        band: 1 ..< 64, bits: 2...), 
                 
                 .progressive((Cb, \.0),        band: 1 ..<  6, bits: 1...), 
                 .progressive((Cr, \.0),        band: 1 ..<  6, bits: 1...), 
@@ -251,6 +251,7 @@ extension Test
                 .progressive((Cb, \.0),        band: 6 ..< 64, bits: 1...), 
                 .progressive((Cr, \.0),        band: 6 ..< 64, bits: 1...), 
                 
+                .progressive((Y,  \.0),        band: 1 ..< 64, bit:  1   ), 
                 .progressive((Y,  \.0),        band: 1 ..< 64, bit:  0   ), 
                 .progressive((Cb, \.0),        band: 1 ..< 64, bit:  0   ), 
                 .progressive((Cr, \.0),        band: 1 ..< 64, bit:  0   ), 
@@ -276,8 +277,9 @@ extension Test
                 .progressive( Y,                               bit:  1   ),
                 .progressive( Y,                               bit:  0   ),
                 
-                .progressive((Y,  \.0),        band: 1 ..<  6, bits: 1...), 
-                .progressive((Y,  \.0),        band: 6 ..< 64, bits: 1...), 
+                .progressive((Y,  \.0),        band: 1 ..<  6, bits: 2...), 
+                .progressive((Y,  \.0),        band: 6 ..< 64, bits: 2...), 
+                .progressive((Y,  \.0),        band: 1 ..< 64, bit:  1   ), 
                 .progressive((Y,  \.0),        band: 1 ..< 64, bit:  0   ), 
             ])
         return Self.encode(path, suffix: "-grayscale-progressive", size: size, layout: layout)

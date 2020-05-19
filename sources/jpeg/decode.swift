@@ -778,7 +778,9 @@ extension JPEG
         case duplicateStartOfImage
         case duplicateFrameHeaderSegment
         case prematureScanHeaderSegment
-        case prematureDefineHeightSegment
+        case missingHeightRedefinitionSegment
+        case prematureHeightRedefinitionSegment
+        case unexpectedHeightRedefinitionSegment
         case prematureEntropyCodedSegment
         case unexpectedRestart
         case prematureEndOfImage
@@ -835,8 +837,12 @@ extension JPEG
                 return "duplicate frame header segment"
             case .prematureScanHeaderSegment:
                 return "premature scan header segment"
-            case .prematureDefineHeightSegment:
-                return "premature define height segment"
+            case .missingHeightRedefinitionSegment:
+                return "missing height redefinition segment"
+            case .prematureHeightRedefinitionSegment:
+                return "premature height redefinition segment"
+            case .unexpectedHeightRedefinitionSegment:
+                return "unexpected height redefinition segment"
             case .prematureEntropyCodedSegment:
                 return "premature entropy coded segment"
             case .unexpectedRestart:
@@ -894,8 +900,10 @@ extension JPEG
                 return "multiple frame headers only allowed for the hierarchical coding process"
             case .prematureScanHeaderSegment:
                 return "scan header must occur after frame header"
-            case .prematureDefineHeightSegment:
+            case .missingHeightRedefinitionSegment:
                 return "define height segment must occur immediately after first scan"
+            case .prematureHeightRedefinitionSegment, .unexpectedHeightRedefinitionSegment:
+                return "define height segment can only occur immediately after first scan"
             case .prematureEntropyCodedSegment:
                 return "entropy coded segment must occur immediately after scan header"
             case .unexpectedRestart:
@@ -3130,7 +3138,8 @@ extension JPEG.Data.Spectral.Plane
     // sequential mode 
     mutating 
     func decode(_ data:[UInt8], blocks:Range<Int>, component:JPEG.Scan.Component, 
-        tables slots:(dc:JPEG.Table.HuffmanDC.Slots, ac:JPEG.Table.HuffmanAC.Slots)) throws 
+        tables slots:(dc:JPEG.Table.HuffmanDC.Slots, ac:JPEG.Table.HuffmanAC.Slots), 
+        extend:Bool) throws 
     {
         guard let dc:JPEG.Table.HuffmanDC.Decoder = 
             slots.dc[keyPath: component.selector.dc]?.decoder()
@@ -3145,21 +3154,27 @@ extension JPEG.Data.Spectral.Plane
             throw JPEG.DecodingError.undefinedScanHuffmanACReference(component.selector.ac)
         }
         
+        let rows:Range<Int> = 
+            (blocks.lowerBound / self.units.x ..< blocks.upperBound / self.units.x)
+            .clamped(to: 0 ..< (extend ? .max : self.units.y))
         let bits:JPEG.Bitstream = .init(data)
         var b:Int               = 0
         var predecessor:Int16   = 0
         row: 
-        for y:Int in blocks.lowerBound / self.units.x ..< blocks.upperBound / self.units.x
+        for y:Int in rows
         {
-            guard b < bits.count, bits[b, count: 16] != 0xffff 
-            else 
+            if extend 
             {
-                break row 
-            }
-            
-            if y >= self.units.y
-            {
-                self.set(height: y + 1)
+                guard b < bits.count, bits[b, count: 16] != 0xffff 
+                else 
+                {
+                    break row 
+                }
+                
+                if y >= self.units.y
+                {
+                    self.set(height: y + 1)
+                }
             }
             
             column:
@@ -3203,7 +3218,8 @@ extension JPEG.Data.Spectral.Plane
     // progressive mode 
     mutating 
     func decode(_ data:[UInt8], blocks:Range<Int>, bits a:PartialRangeFrom<Int>, 
-        component:JPEG.Scan.Component, tables slots:JPEG.Table.HuffmanDC.Slots) throws 
+        component:JPEG.Scan.Component, tables slots:JPEG.Table.HuffmanDC.Slots, 
+        extend:Bool) throws 
     {
         guard let table:JPEG.Table.HuffmanDC.Decoder = 
             slots[keyPath: component.selector.dc]?.decoder()
@@ -3212,21 +3228,27 @@ extension JPEG.Data.Spectral.Plane
             throw JPEG.DecodingError.undefinedScanHuffmanDCReference(component.selector.dc)
         }
         
+        let rows:Range<Int> = 
+            (blocks.lowerBound / self.units.x ..< blocks.upperBound / self.units.x)
+            .clamped(to: 0 ..< (extend ? .max : self.units.y))
         let bits:JPEG.Bitstream = .init(data)
         var b:Int               = 0
         var predecessor:Int16   = 0
         row: 
-        for y:Int in blocks.lowerBound / self.units.x ..< blocks.upperBound / self.units.x
+        for y:Int in rows
         {
-            guard b < bits.count, bits[b, count: 16] != 0xffff 
-            else 
+            if extend 
             {
-                break row 
-            }
-            
-            if y >= self.units.y
-            {
-                self.set(height: y + 1)
+                guard b < bits.count, bits[b, count: 16] != 0xffff 
+                else 
+                {
+                    break row 
+                }
+                
+                if y >= self.units.y
+                {
+                    self.set(height: y + 1)
+                }
             }
             
             column:
@@ -3395,7 +3417,8 @@ extension JPEG.Data.Spectral
     private mutating 
     func decode(_ data:[UInt8], blocks:Range<Int>, 
         components:[(c:Int, component:JPEG.Scan.Component)], 
-        tables slots:(dc:JPEG.Table.HuffmanDC.Slots, ac:JPEG.Table.HuffmanAC.Slots)) throws 
+        tables slots:(dc:JPEG.Table.HuffmanDC.Slots, ac:JPEG.Table.HuffmanAC.Slots), 
+        extend:Bool) throws 
     {
         guard components.count > 1 
         else 
@@ -3409,7 +3432,8 @@ extension JPEG.Data.Spectral
                 return 
             }
             
-            try self[p].decode(data, blocks: blocks, component: component, tables: slots)
+            try self[p].decode(data, blocks: blocks, component: component, 
+                tables: slots, extend: extend)
             return 
         }
         
@@ -3438,30 +3462,36 @@ extension JPEG.Data.Spectral
             return (self.indices ~= $0.c ? $0.c : nil, factor, (dc, ac))
         }
         
+        let rows:Range<Int> = 
+            (blocks.lowerBound / self.blocks.x ..< blocks.upperBound / self.blocks.x)
+            .clamped(to: 0 ..< (extend ? .max : self.blocks.y))
         let bits:JPEG.Bitstream = .init(data)
         var b:Int               = 0
         var predecessor:[Int16] = .init(repeating: 0, count: descriptors.count)
         row:
-        for my:Int in blocks.lowerBound / self.blocks.x ..< blocks.upperBound / self.blocks.x
+        for my:Int in rows
         {
-            guard b < bits.count, bits[b, count: 16] != 0xffff 
-            else 
+            if extend 
             {
-                break row 
-            }
-            
-            for (p, factor, _):Descriptor in descriptors 
-            {
-                guard let p:Int = p 
+                guard b < bits.count, bits[b, count: 16] != 0xffff 
                 else 
                 {
-                    continue 
+                    break row 
                 }
                 
-                let height:Int = (my + 1) * factor.y
-                if height > self[p].units.y
+                for (p, factor, _):Descriptor in descriptors 
                 {
-                    self[p].set(height: height)
+                    guard let p:Int = p 
+                    else 
+                    {
+                        continue 
+                    }
+                    
+                    let height:Int = (my + 1) * factor.y
+                    if height > self[p].units.y
+                    {
+                        self[p].set(height: height)
+                    }
                 }
             }
             
@@ -3524,7 +3554,8 @@ extension JPEG.Data.Spectral
     private mutating 
     func decode(_ data:[UInt8], blocks:Range<Int>, bits a:PartialRangeFrom<Int>, 
         components:[(c:Int, component:JPEG.Scan.Component)], 
-        tables slots:JPEG.Table.HuffmanDC.Slots) throws
+        tables slots:JPEG.Table.HuffmanDC.Slots, 
+        extend:Bool) throws
     {
         // it is allowed (in the case of a custom implementation of `Format`) for 
         // jpegs to encode components that aren’t represented by a plane in this 
@@ -3543,7 +3574,8 @@ extension JPEG.Data.Spectral
                 return 
             }
             
-            try self[p].decode(data, blocks: blocks, bits: a, component: component, tables: slots)
+            try self[p].decode(data, blocks: blocks, bits: a, component: component, 
+                tables: slots, extend: extend)
             return 
         }
         
@@ -3560,30 +3592,36 @@ extension JPEG.Data.Spectral
             return (self.indices ~= $0.c ? $0.c : nil, factor, huffman)
         }
         
+        let rows:Range<Int> = 
+            (blocks.lowerBound / self.blocks.x ..< blocks.upperBound / self.blocks.x)
+            .clamped(to: 0 ..< (extend ? .max : self.blocks.y))
         let bits:JPEG.Bitstream = .init(data)
         var b:Int               = 0
         var predecessor:[Int16] = .init(repeating: 0, count: descriptors.count)
         row:
-        for my:Int in blocks.lowerBound / self.blocks.x ..< blocks.upperBound / self.blocks.x
+        for my:Int in rows
         {
-            guard b < bits.count, bits[b, count: 16] != 0xffff 
-            else 
+            if extend 
             {
-                break row 
-            }
-            
-            for (p, factor, _):Descriptor in descriptors 
-            {
-                guard let p:Int = p 
+                guard b < bits.count, bits[b, count: 16] != 0xffff 
                 else 
                 {
-                    continue 
+                    break row 
                 }
                 
-                let height:Int = (my + 1) * factor.y
-                if height > self[p].units.y
+                for (p, factor, _):Descriptor in descriptors 
                 {
-                    self[p].set(height: height)
+                    guard let p:Int = p 
+                    else 
+                    {
+                        continue 
+                    }
+                    
+                    let height:Int = (my + 1) * factor.y
+                    if height > self[p].units.y
+                    {
+                        self[p].set(height: height)
+                    }
                 }
             }
             
@@ -3700,7 +3738,8 @@ extension JPEG.Data.Spectral
             dc:JPEG.Table.HuffmanDC.Slots, 
             ac:JPEG.Table.HuffmanAC.Slots, 
             quanta:JPEG.Table.Quantization.Slots
-        )) throws 
+        ), 
+        extend:Bool) throws 
     {
         let scan:JPEG.Scan = try self.layout.push(scan: scan)
         switch (initial: scan.bits.upperBound == .max, band: scan.band)
@@ -3725,7 +3764,7 @@ extension JPEG.Data.Spectral
             {
             case (initial: true,  band: 0 ..< 64):
                 try self.decode(data, blocks: blocks, components: scan.components, 
-                    tables: (slots.dc, slots.ac))
+                    tables: (slots.dc, slots.ac), extend: extend)
             
             case (initial: false, band: 0 ..< 64):
                 // successive approximation cannot happen without spectral selection. 
@@ -3734,7 +3773,7 @@ extension JPEG.Data.Spectral
             
             case (initial: true,  band: 0 ..<  1):
                 try self.decode(data, blocks: blocks, bits: scan.bits.lowerBound..., 
-                    components: scan.components, tables: slots.dc) 
+                    components: scan.components, tables: slots.dc, extend: extend) 
             
             case (initial: false, band: 0 ..<  1):
                 try self.decode(data, blocks: blocks, bit: scan.bits.lowerBound, 
@@ -4254,7 +4293,7 @@ extension JPEG.Context
     }
     
     mutating 
-    func push(scan:JPEG.Header.Scan, ecss:[[UInt8]]) throws 
+    func push(scan:JPEG.Header.Scan, ecss:[[UInt8]], extend:Bool) throws 
     {
         let interval:Int
         if let stride:Int = self.interval 
@@ -4272,7 +4311,7 @@ extension JPEG.Context
         
         try self.progression.update(scan)
         try self.spectral.decode(ecss: ecss, interval: interval, scan: scan, 
-            tables: self.tables)
+            tables: self.tables, extend: extend)
     }
     
     static 
@@ -4351,7 +4390,7 @@ extension JPEG.Context
             case .scan:
                 throw JPEG.DecodingError.prematureScanHeaderSegment
             case .height:
-                throw JPEG.DecodingError.prematureDefineHeightSegment
+                throw JPEG.DecodingError.prematureHeightRedefinitionSegment
             
             case .end:
                 throw JPEG.DecodingError.prematureEndOfImage
@@ -4391,6 +4430,7 @@ extension JPEG.Context
             context.push(interval: interval)
         }
         
+        var first:Bool = true
         scans:
         while true 
         {
@@ -4425,18 +4465,36 @@ extension JPEG.Context
             case .scan:
                 let scan:JPEG.Header.Scan   = try .parse(marker.data, 
                     process: context.layout.process)
-                
                 var ecss:[[UInt8]] = []
                 for index:Int in 0...
                 {
                     let ecs:[UInt8]
                     (ecs, marker) = try stream.segment(prefix: true)
-                    
                     ecss.append(ecs)
                     guard case .restart(let phase) = marker.type
                     else 
                     {
-                        try context.push(scan: scan, ecss: ecss)
+                        try context.push(scan: scan, ecss: ecss, extend: first)
+                        if first 
+                        {
+                            let height:JPEG.Header.HeightRedefinition
+                            if case .height = marker.type 
+                            {
+                                height = try .parse(marker.data)
+                                marker = try stream.segment() 
+                            }
+                            // same guarantees for `!` as before
+                            else if frame!.size.y > 0
+                            {
+                                height = .init(height: frame!.size.y)
+                            }
+                            else 
+                            {
+                                throw JPEG.DecodingError.missingHeightRedefinitionSegment
+                            }
+                            context.push(height: height)
+                            first = false 
+                        }
                         continue scans 
                     }
                     
@@ -4446,9 +4504,6 @@ extension JPEG.Context
                         throw JPEG.DecodingError.invalidRestartPhase(phase, expected: index % 8)
                     }
                 }
-            
-            case .height:
-                context.push(height: try .parse(marker.data))
             
             case .interval:
                 context.push(interval: try .parse(marker.data))
@@ -4461,6 +4516,8 @@ extension JPEG.Context
             
             case .restart(_):
                 throw JPEG.DecodingError.unexpectedRestart
+            case .height:
+                throw JPEG.DecodingError.unexpectedHeightRedefinitionSegment
             
             // unimplemented 
             case .arithmeticCodingCondition:

@@ -26,3 +26,4 @@ matrix:
     - swiftenv install $SWIFT_VERSION
     - swiftenv rehash
     - utils/test
+    - utils/examples
