@@ -12,6 +12,7 @@ Swift *JPEG* is a cross-platform pure Swift framework which provides a full-feat
 decode an image:
 
 ```swift 
+import JPEG
 func decode(jpeg path:String) throws
 {
     guard let image:JPEG.Data.Rectangular<JPEG.Common> = try .decompress(path: path)
@@ -28,6 +29,7 @@ func decode(jpeg path:String) throws
 encode an image: 
 
 ```swift 
+import JPEG
 func encode(jpeg path:String, size:(x:Int, y:Int), pixels:[JPEG.RGB], 
     compression:Double) // 0.0 = highest quality
     throws 
