@@ -295,7 +295,7 @@ extension JPEG.Data.Spectral.Plane
                 .init(sign: .plus, exponent: precision - 1, significand: 1) * scale
             let limit:SIMD8<Float>  = .init(repeating: 
                 .init(sign: .plus, exponent: precision    , significand: 1)) - 1
-            for (x, y):(Int, Int) in plane.indices 
+            for (x, y):(Int, Int) in (0, 0) ..< plane.units
             {
                 let g:Block8x8<Float> = plane.load(x: x, y: y, limit: limit), 
                     h:Block8x8<Float> = Self.fdct8x8(g, shift: level)
