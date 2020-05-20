@@ -21,32 +21,27 @@ else
     fatalError("failed to open file '\(path).rgb'")
 }
 
-let format:JPEG.Common      = .ycc8
-let Y:JPEG.Component.Key    = format.components[0],
-    Cb:JPEG.Component.Key   = format.components[1],
-    Cr:JPEG.Component.Key   = format.components[2]
-
 for factor:(luminance:(x:Int, y:Int), chrominance:(x:Int, y:Int), name:String) in 
 [
     ((1, 1), (1, 1), "4:4:4"),
-    ((2, 1), (1, 1), "4:2:2H"),
-    ((1, 2), (1, 1), "4:2:2V"),
+    ((1, 2), (1, 1), "4:4:0"),
+    ((2, 1), (1, 1), "4:2:2"),
     ((2, 2), (1, 1), "4:2:0"),
 ]
 {
     let layout:JPEG.Layout<JPEG.Common> = .init(
-        format:     format,
+        format:     .ycc8,
         process:    .baseline, 
         components: 
         [
-            Y:  (factor: factor.luminance,   qi: 0 as JPEG.Table.Quantization.Key), 
-            Cb: (factor: factor.chrominance, qi: 1 as JPEG.Table.Quantization.Key), 
-            Cr: (factor: factor.chrominance, qi: 1 as JPEG.Table.Quantization.Key),
+            1: (factor: factor.luminance,   qi: 0 as JPEG.Table.Quantization.Key), 
+            2: (factor: factor.chrominance, qi: 1 as JPEG.Table.Quantization.Key), 
+            3: (factor: factor.chrominance, qi: 1 as JPEG.Table.Quantization.Key),
         ], 
         scans: 
         [
-            .sequential((Y,  \.0, \.0)),
-            .sequential((Cb, \.1, \.1), (Cr, \.1, \.1))
+            .sequential((1, \.0, \.0)),
+            .sequential((2, \.1, \.1), (3, \.1, \.1))
         ])
     let jfif:JPEG.JFIF = .init(version: .v1_2, density: (1, 1, .dpcm))
     let image:JPEG.Data.Rectangular<JPEG.Common> = 
