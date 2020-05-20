@@ -26,8 +26,8 @@ The `unpack(as:)` method is non-mutating, so you can unpack the same image to mu
 
 > *Karlie Kloss at Kode With Klossy 2019 (photo by Shantell Martin)*
 
-<img src="decode-basic/karlie-kwk-2019.jpg" alt="output (as png)" style="width: 512px;"/>
+<img src="decode-basic/karlie-kwk-2019.jpg" alt="output (as png)" width=512/>
 > original jpeg file 
 
-<img src="decode-basic/karlie-kwk-2019.jpg.rgb.png" alt="output (as png)" style="width: 512px;"/>
+<img src="decode-basic/karlie-kwk-2019.jpg.rgb.png" alt="output (as png)" width=512/>
 > decoded jpeg image, saved in png format
