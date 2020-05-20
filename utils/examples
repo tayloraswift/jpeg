@@ -49,17 +49,21 @@ for path in examples/*/ ; do
 done 
 
 # run `decode-basic` example
-check   "error: runtime error" \
-        .build/$build_configuration/decode-basic 
-
-for file in examples/decode-basic/*.jpg ; do 
-    size=$(identify -format "%wx%h" jpg:$file)
-    convert -depth 8 -size $size "rgb:$file.rgb" "png:$file.rgb.png"
-done 
+#check   "error: runtime error" \
+#        .build/$build_configuration/decode-basic 
+#
+#for file in examples/decode-basic/*.jpg ; do 
+#    size=$(identify -format "%wx%h" jpg:$file)
+#    convert -depth 8 -size $size "rgb:$file.rgb" "png:$file.rgb.png"
+#done 
 
 # run `encode-basic` example
+#check   "error: runtime error" \
+#        .build/$build_configuration/encode-basic 
+
+# run `recompress` example
 check   "error: runtime error" \
-        .build/$build_configuration/encode-basic 
+        .build/$build_configuration/recompress
 
 # run `rotate` example
 check   "error: runtime error" \

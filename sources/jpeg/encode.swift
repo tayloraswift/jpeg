@@ -295,7 +295,7 @@ extension JPEG.Data.Spectral.Plane
                 .init(sign: .plus, exponent: precision - 1, significand: 1) * scale
             let limit:SIMD8<Float>  = .init(repeating: 
                 .init(sign: .plus, exponent: precision    , significand: 1)) - 1
-            for (x, y):(Int, Int) in (0, 0) ..< plane.units 
+            for (x, y):(Int, Int) in plane.indices 
             {
                 let g:Block8x8<Float> = plane.load(x: x, y: y, limit: limit), 
                     h:Block8x8<Float> = Self.fdct8x8(g, shift: level)
@@ -920,7 +920,7 @@ extension JPEG.Data.Spectral.Plane
             .init(unsafeUninitializedCapacity: count) 
         {
             var predecessor:Int16 = 0
-            for (x, y):(Int, Int) in (0, 0) ..< self.units
+            for (x, y):(Int, Int) in self.indices
             {
                 // can use `!` here because loop execution implies `count > 0`
                 ($0.baseAddress! + y * self.units.x + x).initialize(to:
@@ -971,7 +971,7 @@ extension JPEG.Data.Spectral.Plane
             .init(unsafeUninitializedCapacity: count) 
         {
             var predecessor:Int16 = 0
-            for (x, y):(Int, Int) in (0, 0) ..< self.units
+            for (x, y):(Int, Int) in self.indices
             {
                 let high:Int16              = self[x: x, y: y, z: 0] >> a.lowerBound
                 $0[y * self.units.x + x]    = .init(difference: high &- predecessor)
@@ -1017,7 +1017,7 @@ extension JPEG.Data.Spectral.Plane
         assert(band.upperBound <= 64)
         
         var composites:[JPEG.Bitstream.Composite.AC] = []
-        for (x, y):(Int, Int) in (0, 0) ..< self.units
+        for (x, y):(Int, Int) in self.indices
         {
             var zeroes:Int = 0
             for z:Int in band
@@ -1077,7 +1077,7 @@ extension JPEG.Data.Spectral.Plane
         
         let mask:Int16 = .init(bitPattern: UInt16.max << (a + 1))
         var pairs:[(JPEG.Bitstream.Composite.AC, [Bool])]   = []
-        for (x, y):(Int, Int) in (0, 0) ..< self.units
+        for (x, y):(Int, Int) in self.indices
         {
             var zeroes                  = 0
             var refinements:[[Bool]]    = [], 
