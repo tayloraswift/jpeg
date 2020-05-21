@@ -1818,8 +1818,10 @@ extension JPEG.Data.Spectral
             {
             case .jfif(let jfif):
                 try stream.format(marker: .application(0), tail: jfif.serialized())
-            case .unknown(application: let a, let serialized):
+            case .application(let a, data: let serialized):
                 try stream.format(marker: .application(a), tail: serialized)
+            case .comment(data: let data):
+                try stream.format(marker: .comment, tail: data)
             }
         }
         

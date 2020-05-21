@@ -36,9 +36,9 @@ enum JPEG
     public 
     enum Metadata 
     {
-        // case exif(EXIF)
         case jfif(JFIF)
-        case unknown(application:Int, [UInt8])
+        case application(Int, data:[UInt8])
+        case comment(data:[UInt8])
     }
     
     // sample types 
@@ -4343,9 +4343,11 @@ extension JPEG.Context
                 let jfif:JPEG.JFIF = try .parse(marker.data)
                 metadata.append(.jfif(jfif))
             
-            case .application(1): // EXIF 
-                // unsupported 
-                break  
+            case .application(let application):
+                metadata.append(.application(application, data: marker.data))
+            
+            case .comment:
+                metadata.append(.comment(data: marker.data))
             
             default:
                 break preamble 
@@ -4383,9 +4385,13 @@ extension JPEG.Context
             
             case .interval:
                 interval = try .parse(marker.data)
-                
-            case .comment, .application:
-                break 
+            
+            // an APP0 segment after the preamble just gets recorded as an APP0 segment, 
+            // not a JFIF record
+            case .application(let application):
+                metadata.append(.application(application, data: marker.data))
+            case .comment:
+                metadata.append(.comment(data: marker.data))
             
             case .scan:
                 throw JPEG.DecodingError.prematureScanHeaderSegment
@@ -4413,6 +4419,10 @@ extension JPEG.Context
         
         // can use `!` here, previous loop cannot exit without initializing `frame`
         var context:Self = try .init(frame: frame!)
+        for metadata:JPEG.Metadata in metadata 
+        {
+            context.push(metadata: metadata)
+        }
         for table:JPEG.Table.HuffmanDC in dc 
         {
             context.push(dc: table)
@@ -4459,9 +4469,11 @@ extension JPEG.Context
                     context.push(ac: table)
                 }
             
-            case .comment, .application:
-                break 
-            
+            case .application(let application):
+                context.push(metadata: .application(application, data: marker.data))
+            case .comment:
+                context.push(metadata: .comment(data: marker.data))        
+
             case .scan:
                 let scan:JPEG.Header.Scan   = try .parse(marker.data, 
                     process: context.layout.process)

@@ -139,9 +139,15 @@ extension Test
                 {
                 case .jfif(let jfif):
                     Swift.print(jfif)
-                case .unknown(application: let a, let data):
-                    Swift.print("metadata (application \(a))")
-                    Swift.print(data)
+                case .application(let a, data: let data):
+                    Swift.print("metadata (application \(a), \(data.count) bytes)")
+                case .comment(data: let data):
+                    Swift.print("""
+                    comment 
+                    {
+                        '\(String.init(decoding: data, as: Unicode.UTF8.self))'
+                    }
+                    """)
                 }
             }
             
