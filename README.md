@@ -49,7 +49,7 @@ func encode(jpeg path:String, size:(x:Int, y:Int), pixels:[JPEG.RGB],
         [
             .sequential((Y,  \.0, \.0), (Cb, \.1, \.1), (Cr, \.1, \.1)),
         ])
-    let jfif:JPEG.JFIF = .init(version: .v1_2, density: (1, 1, .dpcm))
+    let jfif:JPEG.JFIF = .init(version: .v1_2, density: (1, 1, .centimeters))
     let image:JPEG.Data.Rectangular<JPEG.Common> = 
         .pack(size: size, layout: layout, metadata: [.jfif(jfif)], pixels: rgb)
 

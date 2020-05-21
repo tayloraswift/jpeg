@@ -2,11 +2,16 @@
 
 *jump to:*
 
-* [basic decoding](#basic-decoding) ([sources](decode-basic/))
-* [basic encoding](#basic-encoding) ([sources](encode-basic/))
-* [lossless rotations](#lossless-rotations) ([sources](rotate/))
-* [increasing a file’s compression level](#increasing-a-files-compression-level) ([sources](recompress/))
-
+1. [basic decoding](#basic-decoding) ([sources](decode-basic/))
+2. [basic encoding](#basic-encoding) ([sources](encode-basic/))
+3. [advanced decoding](#advanced-decoding) (sources)
+4. [advanced encoding](#advanced-encoding) (sources)
+5. [using in-memory images](#using-in-memory-images) (sources)
+6. [online decoding](#online-decoding) (sources)
+7. [annotating images](#annotating-files) (sources)
+8. [requantizing images](#requantizing-images) ([sources](recompress/))
+9. [lossless rotations](#lossless-rotations) ([sources](rotate/))
+10. [custom color formats](#custom-color-formats) (sources)
 ---
 
 ## basic decoding 
@@ -163,7 +168,7 @@ There are four possible selectors for each table type (`\.0`, `\.1`, `\.2`, and 
 Next, we initialize a `JPEG.JFIF` metadata record with some placeholder values.
 
 ```swift 
-let jfif:JPEG.JFIF = .init(version: .v1_2, density: (1, 1, .dpcm))
+let jfif:JPEG.JFIF = .init(version: .v1_2, density: (1, 1, .centimeters))
 ```
 
 This step is not really necessary, but some applications may expect [JFIF](https://en.wikipedia.org/wiki/JPEG_File_Interchange_Format) metadata to be present, so we fill out this record with some junk values anyway.

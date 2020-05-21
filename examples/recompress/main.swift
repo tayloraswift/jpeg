@@ -35,7 +35,7 @@ var recompressed:JPEG.Data.Spectral<JPEG.Common> = .init(
     }, 
     metadata:   
     [
-        .jfif(.init(version: .v1_2, density: (1, 1, .dpcm))),
+        .jfif(.init(version: .v1_2, density: (1, 1, .centimeters))),
     ])
 
 for ci:JPEG.Component.Key in recompressed.layout.recognized 

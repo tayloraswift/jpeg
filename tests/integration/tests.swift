@@ -139,6 +139,8 @@ extension Test
                 {
                 case .jfif(let jfif):
                     Swift.print(jfif)
+                case .exif(let exif):
+                    Swift.print(exif)
                 case .application(let a, data: let data):
                     Swift.print("metadata (application \(a), \(data.count) bytes)")
                 case .comment(data: let data):
@@ -320,7 +322,7 @@ extension Test
                 layout:     layout, 
                 metadata:   
                 [
-                    .jfif(.init(version: .v1_2, density: (1, 1, .dpcm))),
+                    .jfif(.init(version: .v1_2, density: (1, 1, .centimeters))),
                 ])
             
             let ycc:[JPEG.YCbCr] = rgb.map(\.ycc)

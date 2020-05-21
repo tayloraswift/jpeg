@@ -1575,54 +1575,6 @@ extension JPEG.Data.Spectral
 }
 
 // serializers (opposite of parsers)
-extension JPEG.JFIF.Version 
-{
-    var serialized:(UInt8, UInt8) 
-    {
-        switch self 
-        {
-        case .v1_0:
-            return (1, 0)
-        case .v1_1:
-            return (1, 1)
-        case .v1_2:
-            return (1, 2)
-        }
-    }
-}
-extension JPEG.JFIF.Unit 
-{
-    var serialized:UInt8 
-    {
-        switch self 
-        {
-        case .none:
-            return 0
-        case .dpi:
-            return 1
-        case .dpcm:
-            return 2
-        }
-    }
-}
-extension JPEG.JFIF 
-{
-    public 
-    func serialized() -> [UInt8] 
-    {
-        var bytes:[UInt8] = Self.signature 
-        bytes.append(self.version.serialized.0)
-        bytes.append(self.version.serialized.1)
-        bytes.append(self.density.unit.serialized)
-        bytes.append(contentsOf: [UInt8].store(self.density.x, asBigEndian: UInt16.self))
-        bytes.append(contentsOf: [UInt8].store(self.density.y, asBigEndian: UInt16.self))
-        // no thumbnail 
-        bytes.append(0) 
-        bytes.append(0)
-        return bytes
-    }
-}
-
 extension JPEG.AnyTable 
 {
     static 
@@ -1818,6 +1770,8 @@ extension JPEG.Data.Spectral
             {
             case .jfif(let jfif):
                 try stream.format(marker: .application(0), tail: jfif.serialized())
+            case .exif(let exif):
+                try stream.format(marker: .application(1), tail: exif.serialized())
             case .application(let a, data: let serialized):
                 try stream.format(marker: .application(a), tail: serialized)
             case .comment(data: let data):

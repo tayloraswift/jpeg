@@ -46,7 +46,7 @@ func fuzz<RNG>(rng:inout RNG, path:String) throws where RNG:RandomNumberGenerato
         layout:     layout, 
         metadata:   
         [
-            .jfif(.init(version: .v1_2, density: (1, 1, .dpcm))),
+            .jfif(.init(version: .v1_2, density: (1, 1, .centimeters))),
         ])
     
     let colors:[JPEG.YCbCr] = ((0 as UInt8) ..< (8 * 8 as UInt8)).map 

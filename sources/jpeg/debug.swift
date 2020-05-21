@@ -165,8 +165,22 @@ extension JPEG.JFIF:CustomStringConvertible
         metadata (\(Self.self))
         {
             version  : \(self.version)
-            unit     : \(self.density.unit)
+            unit     : \(self.density.unit.map(String.init(describing:)) ?? "none")
             density  : (\(self.density.x), \(self.density.y))
+        }
+        """
+    }
+}
+extension JPEG.EXIF:CustomStringConvertible
+{
+    public 
+    var description:String 
+    {
+        """
+        metadata (\(Self.self))
+        {
+            endianness  : \(self.endianness)
+            storage     : \(self.storage.count) bytes 
         }
         """
     }

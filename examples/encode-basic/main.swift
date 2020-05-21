@@ -43,7 +43,7 @@ for factor:(luminance:(x:Int, y:Int), chrominance:(x:Int, y:Int), name:String) i
             .sequential((1, \.0, \.0)),
             .sequential((2, \.1, \.1), (3, \.1, \.1))
         ])
-    let jfif:JPEG.JFIF = .init(version: .v1_2, density: (1, 1, .dpcm))
+    let jfif:JPEG.JFIF = .init(version: .v1_2, density: (1, 1, .centimeters))
     let image:JPEG.Data.Rectangular<JPEG.Common> = 
         .pack(size: size, layout: layout, metadata: [.jfif(jfif)], pixels: rgb)
     

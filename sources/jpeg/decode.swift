@@ -37,6 +37,7 @@ enum JPEG
     enum Metadata 
     {
         case jfif(JFIF)
+        case exif(EXIF)
         case application(Int, data:[UInt8])
         case comment(data:[UInt8])
     }
@@ -575,6 +576,9 @@ extension JPEG
         case invalidJFIFVersionCode((major:UInt8, minor:UInt8))
         case invalidJFIFDensityUnitCode(UInt8)
         
+        case invalidEXIFSignature([UInt8])
+        case invalidEXIFEndiannessCode((UInt8, UInt8, UInt8, UInt8))
+        
         case invalidFrameWidth(Int)
         case invalidFramePrecision(Int, Process)
         case invalidFrameComponentCount(Int, Process)
@@ -635,6 +639,11 @@ extension JPEG
                 return "invalid JFIF version"
             case .invalidJFIFDensityUnitCode:
                 return "invalid JFIF density unit"
+            
+            case .invalidEXIFSignature:
+                return "invalid EXIF signature"
+            case .invalidEXIFEndiannessCode:
+                return "invalid EXIF endianness code"
             
             case .invalidFrameWidth:
                 return "invalid frame width"
@@ -699,6 +708,11 @@ extension JPEG
             case .invalidJFIFDensityUnitCode(let code):
                 return "density code (\(code)) does not correspond to a valid density unit"
             
+            case .invalidEXIFSignature(let string):
+                return "string (\(string.map{ "0x\(String.init($0, radix: 16))" }.joined(separator: ", "))) is not a valid EXIF signature"
+            case .invalidEXIFEndiannessCode(let code):
+                return "endianness code (\(code.0), \(code.1), \(code.2), \(code.3)) does not correspond to a valid EXIF endianness"
+                
             case .invalidFrameWidth(let width):
                 return "frame cannot have width \(width)"
             case .invalidFramePrecision(let precision, let process):
@@ -1092,40 +1106,6 @@ extension JPEG.Bitstream
 
 extension JPEG 
 {
-    // public 
-    // struct EXIF 
-    // {
-    // }
-    public 
-    struct JFIF
-    {
-        public 
-        enum Version 
-        {
-            case v1_0, v1_1, v1_2
-        }
-        
-        public 
-        enum Unit
-        {
-            case none
-            case dpi 
-            case dpcm 
-        }
-        
-        public 
-        let version:Version,
-            density:(x:Int, y:Int, unit:Unit)
-        
-        // initializer has to live here due to compiler issue
-        public  
-        init(version:Version, density:(x:Int, y:Int, unit:Unit))
-        {
-            self.version = version 
-            self.density = density
-        }
-    }
-    
     public 
     typealias AnyTable = _JPEGAnyTable 
     public 
@@ -1218,87 +1198,7 @@ extension JPEG
         }
     }
 }
-// jfif segment parsing 
-extension JPEG.JFIF.Version  
-{
-    static 
-    func parse(code:(UInt8, UInt8)) -> Self?
-    {
-        switch (major: code.0, minor: code.1)
-        {
-        case (major: 1, minor: 0):
-            return .v1_0
-        case (major: 1, minor: 1):
-            return .v1_1
-        case (major: 1, minor: 2):
-            return .v1_2
-        default:
-            return nil 
-        }
-    }
-}
-extension JPEG.JFIF.Unit 
-{
-    static 
-    func parse(code:UInt8) -> Self?
-    {
-        switch code 
-        {
-        case 0:
-            return .some(.none) 
-        case 1:
-            return .dpi 
-        case 2:
-            return .dpcm 
-        default:
-            return nil 
-        }
-    }
-}
-extension JPEG.JFIF 
-{
-    static 
-    let signature:[UInt8] = [0x4a, 0x46, 0x49, 0x46, 0x00]
-    
-    public static 
-    func parse(_ data:[UInt8]) throws -> Self
-    {
-        guard data.count >= 14
-        else
-        {
-            throw JPEG.ParsingError.mismatched(marker: .application(0), 
-                count: data.count, minimum: 14)
-        }
-        
-        // look for 'JFIF' signature
-        guard data[0 ..< 5] == Self.signature[...]
-        else 
-        {
-            throw JPEG.ParsingError.invalidJFIFSignature(.init(data[0 ..< 5]))
-        }
 
-        guard let version:Version   = .parse(code: (data[5], data[6]))
-        else 
-        {
-            throw JPEG.ParsingError.invalidJFIFVersionCode((data[5], data[6]))
-        }
-        guard let unit:Unit         = .parse(code: data[7])
-        else
-        {
-            // invalid JFIF density unit
-            throw JPEG.ParsingError.invalidJFIFDensityUnitCode(data[7])
-        }
-
-        let density:(x:Int, y:Int)  = 
-        (
-            data.load(bigEndian: UInt16.self, as: Int.self, at:  8), 
-            data.load(bigEndian: UInt16.self, as: Int.self, at: 10)
-        )
-        
-        // we ignore the thumbnail data
-        return .init(version: version, density: (density.x, density.y, unit))
-    }
-}
 // table parsing 
 extension JPEG.AnyTable  
 {
@@ -4332,21 +4232,28 @@ extension JPEG.Context
         // segments are supposed to be the second segment in the file), but since 
         // many applications include both of them, we look for all “application”
         // segments immediately following the start-of-image 
-        var metadata:[JPEG.Metadata] = []
+        var metadata:[JPEG.Metadata]    = []
+        var seen:(jfif:Bool, exif:Bool) = (false, false)
         marker = try stream.segment()
         preamble: 
         while true 
         {
-            switch marker.type
+            switch (seen, marker.type)
             {
-            case .application(0): // JFIF 
+            case ((jfif: false, exif: _), .application(0)): // JFIF 
                 let jfif:JPEG.JFIF = try .parse(marker.data)
                 metadata.append(.jfif(jfif))
+                seen.jfif = true
             
-            case .application(let application):
+            case ((jfif: _, exif: false), .application(1)): // EXIF 
+                let exif:JPEG.EXIF = try .parse(marker.data)
+                metadata.append(.exif(exif))
+                seen.exif = true 
+            
+            case ((jfif: _, exif: _), .application(let application)):
                 metadata.append(.application(application, data: marker.data))
             
-            case .comment:
+            case ((jfif: _, exif: _), .comment):
                 metadata.append(.comment(data: marker.data))
             
             default:
