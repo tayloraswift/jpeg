@@ -1134,13 +1134,19 @@ extension JPEG
         struct Quantization:AnyTable
         {
             public 
-            struct Key:Hashable 
+            struct Key:Hashable, Comparable  
             {
                 let value:Int 
                 
                 init<I>(_ value:I) where I:BinaryInteger 
                 {
                     self.value = .init(value)
+                }
+                
+                public static 
+                func < (lhs:Self, rhs:Self) -> Bool 
+                {
+                    lhs.value < rhs.value
                 }
             }
             

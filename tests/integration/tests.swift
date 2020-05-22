@@ -121,7 +121,7 @@ extension Test
                     {
                         let (x, y):(Int, Int) = 
                             image.layout.planes[$0.value].component.factor
-                        return "[\($0.key)]: (\(x), \(y))"
+                        return "\($0.key): (\(x), \(y))"
                     }.joined(separator: "\n        "))
                 ]
                 scans       : 

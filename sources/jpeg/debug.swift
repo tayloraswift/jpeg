@@ -79,7 +79,15 @@ extension JPEG.Component.Key:CustomStringConvertible
     public 
     var description:String 
     {
-        "\(self.value)"
+        "[\(self.value)]"
+    }
+}
+extension JPEG.Table.Quantization.Key:CustomStringConvertible 
+{
+    public 
+    var description:String 
+    {
+        "[\(self.value)]"
     }
 }
 

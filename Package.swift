@@ -14,6 +14,7 @@ let package = Package(
         
         .executable(name: "decode-basic",       targets: ["JPEGDecodeBasic"]),
         .executable(name: "encode-basic",       targets: ["JPEGEncodeBasic"]),
+        .executable(name: "decode-advanced",    targets: ["JPEGDecodeAdvanced"]),
         .executable(name: "recompress",         targets: ["JPEGRecompress"]),
         .executable(name: "rotate",             targets: ["JPEGRotate"]),
     ],
@@ -28,6 +29,7 @@ let package = Package(
         
         .target(name: "JPEGDecodeBasic",        dependencies: ["JPEG"], path: "examples/decode-basic"),
         .target(name: "JPEGEncodeBasic",        dependencies: ["JPEG"], path: "examples/encode-basic"),
+        .target(name: "JPEGDecodeAdvanced",     dependencies: ["JPEG"], path: "examples/decode-advanced"),
         .target(name: "JPEGRecompress",         dependencies: ["JPEG"], path: "examples/recompress"),
         .target(name: "JPEGRotate",             dependencies: ["JPEG"], path: "examples/rotate"),
     ], 
