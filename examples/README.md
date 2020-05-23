@@ -479,7 +479,7 @@ The quantum values (and the spectral coefficients) are stored in a special zigza
 └────┴────┴────┴────┴────┴────┴────┴────┘  h
 ```
 
-To obtain the zigzag coordinate from a 2D grid coordinate using the static `JPEG.Table.Quantization.x(k:h:)` function, where `k` is the column index and `h` is the row index.
+To obtain the zigzag coordinate from a 2D grid coordinate, you use the static `JPEG.Table.Quantization.x(k:h:)` function, where `k` is the column index and `h` is the row index.
 
 We can print out the quantum values as a matrix like this:
 
