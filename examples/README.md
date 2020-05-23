@@ -15,7 +15,7 @@
 
 ---
 
-> *while traditionally, the field of image processing uses [lena forsén](https://en.wikipedia.org/wiki/Lena_Fors%C3%A9n)’s [1972 playboy shoot](https://www.wired.com/story/finding-lena-the-patron-saint-of-jpegs/) as its standard test image, in these tutorials, we will be using images of modern supermodel [karlie kloss](https://twitter.com/karliekloss) as our example data. karlie is a longstanding advocate for women in science and technology, and founded the [kode with klossy](https://www.kodewithklossy.com/) summer camps in 2015 for girls interested in studying computer science. karlie is also [an advocate](https://www.engadget.com/2018-03-16-karlie-kloss-coding-camp-more-cities-and-languages.html) for [the swift language](https://swift.org/).*
+*while traditionally, the field of image processing uses [lena forsén](https://en.wikipedia.org/wiki/Lena_Fors%C3%A9n)’s [1972 playboy shoot](https://www.wired.com/story/finding-lena-the-patron-saint-of-jpegs/) as its standard test image, in these tutorials, we will be using images of modern supermodel [karlie kloss](https://twitter.com/karliekloss) as our example data. karlie is a longstanding advocate for women in science and technology, and founded the [kode with klossy](https://www.kodewithklossy.com/) summer camps in 2015 for girls interested in studying computer science. karlie is also [an advocate](https://www.engadget.com/2018-03-16-karlie-kloss-coding-camp-more-cities-and-languages.html) for [the swift language](https://swift.org/).*
 
 ---
 
@@ -458,7 +458,7 @@ print("quantization table \(qi):")
 
 The quantum values (and the spectral coefficients) are stored in a special zigzag order:
 
-```swift 
+``` 
 0    1    2    3    4    5    6    7    k
 ┏━━━━┱────┬────┬────┬────┬────┬────┬────┐  0
 ┃  0 →  1 │  5 →  6 │ 14 → 15 │ 27 → 28 │
@@ -484,6 +484,15 @@ To obtain the zigzag coordinate from a 2D grid coordinate using the static `JPEG
 We can print out the quantum values as a matrix like this:
 
 ```swift 
+extension String 
+{
+    static 
+    func pad(_ string:String, left count:Int) -> Self 
+    {
+        .init(repeating: " ", count: count - string.count) + string
+    }
+}
+
 """
 ┌ \(String.init(repeating: " ", count: 4 * 8)) ┐
 \((0 ..< 8).map 
@@ -559,12 +568,12 @@ for (p, plane):(Int, JPEG.Data.Planar<JPEG.Common>.Plane) in planar.enumerated()
 | 640x432 pixels        |
 |<img width=512 src="decode-advanced/karlie-2019.jpg-0.640x432.gray.png"/>|
 
-| *Cb* component [**1**] |
+| *Cb* component [**2**] |
 | --------------------- | 
 | 320x216 pixels        |
 |<img width=256 src="decode-advanced/karlie-2019.jpg-1.320x216.gray.png"/>|
 
-| *Cr* component [**1**] |
+| *Cr* component [**3**] |
 | --------------------- | 
 | 320x216 pixels        |
 |<img width=256 src="decode-advanced/karlie-2019.jpg-2.320x216.gray.png"/>|
