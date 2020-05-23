@@ -13,6 +13,8 @@
 9. [lossless rotations](#lossless-rotations) ([sources](rotate/))
 10. [custom color formats](#custom-color-formats) (sources)
 
+---
+
 > *while traditionally, the field of image processing uses [lena forsén](https://en.wikipedia.org/wiki/Lena_Fors%C3%A9n)’s [1972 playboy shoot](https://www.wired.com/story/finding-lena-the-patron-saint-of-jpegs/) as its standard test image, in these tutorials, we will be using images of modern supermodel [karlie kloss](https://twitter.com/karliekloss) as our example data. karlie is a longstanding advocate for women in science and technology, and founded the [kode with klossy](https://www.kodewithklossy.com/) summer camps in 2015 for girls interested in studying computer science. karlie is also [an advocate](https://www.engadget.com/2018-03-16-karlie-kloss-coding-camp-more-cities-and-languages.html) for [the swift language](https://swift.org/).*
 
 ---
@@ -161,7 +163,7 @@ The `process:` argument specifies the JPEG coding process we are going to use to
 
 The `components:` argument takes a dictionary mapping `JPEG.Component.Key`s to their sampling factors and `JPEG.Table.Quantization.Key`s. Both key types are [`ExpressibleByIntegerLiteral`](https://developer.apple.com/documentation/swift/expressiblebyintegerliteral)s, so we’ve written them with their integer values. (We need the `as` coercion for the quantization keys in this example because the compiler is having issues inferring the type context here.)
 
-Because we are using the standard `ycc8` color format, component 1 always represents the *Y* channel; component 2, the *Cb* channel; and component 3, the *Cr* channel. As long as we are using the `ycc8` color format, the dictionary must consist of these three component keys. (The quantization table keys can be anything you want.)
+Because we are using the standard `ycc8` color format, component **1** always represents the *Y* channel; component **2**, the *Cb* channel; and component **3**, the *Cr* channel. As long as we are using the `ycc8` color format, the dictionary must consist of these three component keys. (The quantization table keys can be anything you want.)
 
 The `scans:` argument specifies the scan progression of the JPEG file, and takes an array of `JPEG.Header.Scan`s. Because we are using the `baseline` coding process, we can only use sequential scans, which we initialize using the `.sequential(_:...)` static constructor. Here, we have defined one single-component scan containing the luminance channel, and another two-component interleaved scan containing the two color channels.
 
@@ -343,9 +345,9 @@ We can print some of this information out like this:
     [
         \(spectral.layout.residents.sorted(by: { $0.key < $1.key }).map 
         {
-            let (x, y):(Int, Int) = 
-                spectral.layout.planes[$0.value].component.factor
-            return "\($0.key): (\(x), \(y))"
+            let (component, qi):(JPEG.Component, JPEG.Table.Quantization.Key) = 
+                spectral.layout.planes[$0.value]
+            return "\($0.key): (\(component.factor.x), \(component.factor.y), qi: \(qi))"
         }.joined(separator: "\n        "))
     ]
     scans       : 
@@ -367,23 +369,25 @@ We can print some of this information out like this:
     precision   : 8
     components  : 
     [
-        [1]: (2, 2)
-        [2]: (1, 1)
-        [3]: (1, 1)
+        [1]: (2, 2, qi: [0])
+        [2]: (1, 1, qi: [1])
+        [3]: (1, 1, qi: [1])
     ]
     scans       : 
     [
         [band: 0..<64, bits: 0..<9223372036854775807]: [[1], [2], [3]]
     ]
 }
+
 ```
 
 Here we can see that this image:
 
-* is 640 pixels wide, and 426 pixels high 
-* uses the baseline sequential coding process 
-* uses the 8-bit YCbCr color format, with standard component key assignments *Y*&nbsp;=&nbsp;1, *Cb*&nbsp;=&nbsp;2, and *Cr*&nbsp;=&nbsp;3
-* uses 4:2:0 chroma subsampling 
+* is 640 pixels wide, and 426 pixels high,
+* uses the baseline sequential coding process ,
+* uses the 8-bit YCbCr color format, with standard component key assignments *Y*&nbsp;=&nbsp;**1**, *Cb*&nbsp;=&nbsp;**2**, and *Cr*&nbsp;=&nbsp;**3**,
+* uses one quantization table (key **0**) for the *Y* component, and one (key **1**) for the *Cb* and *Cr* components,
+* uses 4:2:0 chroma subsampling, and 
 * has one sequential, interleaved scan encoding all three color components.
 
 We can also read (and modify) the image metadata through the `.metadata` property, which stores an array of metadata records in the order in which they were encountered in the file. The metadata records are enumerations which come in four cases:
@@ -434,3 +438,171 @@ metadata (application 2, 538 bytes)
 ```
 
 We can see that this image contains an EXIF segment which uses big-endian byte order. (JPEG data is always big-endian, but EXIF data can be big-endian or little-endian.) It also contains a [Flashpix EXIF extension](https://en.wikipedia.org/wiki/Exif#FlashPix_extensions) segment, which shows up here as an unparsed 538-byte APP2 segment.
+
+The `.size`, `.layout`, and `.metadata` properties are available on all image representations, including `JPEG.Data.Rectangular`, so you don’t need to go through this multistep decompression process to access them. However, the spectral representation is unique in that it also provides access to the quantization tables used by the image.
+
+First we uniquify the quanta keys used by the all the planes in the image, since some planes may reference the same quantization table.
+
+```swift 
+let keys:Set<JPEG.Table.Quantization.Key> = .init(spectral.layout.planes.map(\.qi))
+```
+
+Then, for each of the quanta keys, we use the `.index(forKey:)` method on the `.quanta` member of the `JPEG.Data.Spectral` structure to obtain an integer index we can subscript the quanta storage with to get the table. (Accessing quantization tables with an index is a little more efficient than doing a new key lookup each time.)
+
+```swift
+let q:Int                           = spectral.quanta.index(forKey: qi) 
+let table:JPEG.Table.Quantization   = spectral.quanta[q]
+
+print("quantization table \(qi):")
+```
+
+The quantum values (and the spectral coefficients) are stored in a special zigzag order:
+
+```swift 
+0    1    2    3    4    5    6    7    k
+┏━━━━┱────┬────┬────┬────┬────┬────┬────┐  0
+┃  0 →  1 │  5 →  6 │ 14 → 15 │ 27 → 28 │
+┡━━━ ↙ ── ↗ ── ↙ ── ↗ ── ↙ ── ↗ ── ↙ ───┤  1
+│  2 │  4 │  7 │ 13 │ 16 │ 26 │ 29 │ 42 │
+├─ ↓ ↗ ── ↙ ── ↗ ── ↙ ── ↗ ── ↙ ── ↗ ↓ ─┤  2
+│  3 │  8 │ 12 │ 17 │ 25 │ 30 │ 41 │ 43 │
+├─── ↙ ── ↗ ── ↙ ── ↗ ── ↙ ── ↗ ── ↙ ───┤  3
+│  9 │ 11 │ 18 │ 24 │ 31 │ 40 │ 44 │ 53 │
+├─ ↓ ↗ ── ↙ ── ↗ ── ↙ ── ↗ ── ↙ ── ↗ ↓ ─┤  4
+│ 10 │ 19 │ 23 │ 32 │ 39 │ 45 │ 52 │ 54 │
+├─── ↙ ── ↗ ── ↙ ── ↗ ── ↙ ── ↗ ── ↙ ───┤  5
+│ 20 │ 22 │ 33 │ 38 │ 46 │ 51 │ 55 │ 60 │
+├─ ↓ ↗ ── ↙ ── ↗ ── ↙ ── ↗ ── ↙ ── ↗ ↓ ─┤  6
+│ 21 │ 34 │ 37 │ 47 │ 50 │ 56 │ 59 │ 61 │
+├─── ↙ ── ↗ ── ↙ ── ↗ ── ↙ ── ↗ ── ↙ ───┤  7
+│ 35 → 36 │ 48 → 49 │ 57 → 58 │ 62 → 63 │
+└────┴────┴────┴────┴────┴────┴────┴────┘  h
+```
+
+To obtain the zigzag coordinate from a 2D grid coordinate using the static `JPEG.Table.Quantization.x(k:h:)` function, where `k` is the column index and `h` is the row index.
+
+We can print out the quantum values as a matrix like this:
+
+```swift 
+"""
+┌ \(String.init(repeating: " ", count: 4 * 8)) ┐
+\((0 ..< 8).map 
+{
+    (h:Int) in 
+    """
+    │ \((0 ..< 8).map 
+    {
+        (k:Int) in 
+        String.pad("\(table[z: JPEG.Table.Quantization.z(k: k, h: h)]) ", left: 4)
+    }.joined()) │
+    """
+}.joined(separator: "\n"))
+└ \(String.init(repeating: " ", count: 4 * 8)) ┘
+"""
+```
+
+```
+quantization table [0]:
+┌                                  ┐
+│   4   3   3   4   6  10  13  16  │
+│   3   3   4   5   7  15  16  14  │
+│   4   3   4   6  10  15  18  15  │
+│   4   4   6   8  13  23  21  16  │
+│   5   6  10  15  18  28  27  20  │
+│   6   9  14  17  21  27  29  24  │
+│  13  17  20  23  27  31  31  26  │
+│  19  24  25  25  29  26  27  26  │
+└                                  ┘
+quantization table [1]:
+┌                                  ┐
+│   4   5   6  12  26  26  26  26  │
+│   5   5   7  17  26  26  26  26  │
+│   6   7  15  26  26  26  26  26  │
+│  12  17  26  26  26  26  26  26  │
+│  26  26  26  26  26  26  26  26  │
+│  26  26  26  26  26  26  26  26  │
+│  26  26  26  26  26  26  26  26  │
+│  26  26  26  26  26  26  26  26  │
+└                                  ┘
+```
+
+We can convert the spectral representation into a planar spatial representation, modeled by the `JPEG.Data.Planar` structure, using the `.idct()` method. This function performs an inverse frequency transform on the spectral data.
+
+```swift
+let planar:JPEG.Data.Planar<JPEG.Common> = spectral.idct()
+```
+
+The size of the planes in a `JPEG.Data.Planar` structure (and a `JPEG.Data.Spectral` structure as well) always corresponds to a whole number of pixel blocks, which may not match the declared size of the image given by the `.size` property. In addition, if the image uses chroma subsampling, the planes will not all be the same size.
+
+Both `JPEG.Data.Spectral` and `JPEG.Data.Planar` structures are `RandomAccessCollection`s of their `Plane` types. The `Plane` types provide 2D index iterators which traverse their index spaces in row-major order.
+
+```swift 
+for (p, plane):(Int, JPEG.Data.Planar<JPEG.Common>.Plane) in planar.enumerated()
+{
+    print("""
+    plane \(p) 
+    {
+        size: (\(plane.size.x), \(plane.size.y))
+    }
+    """)
+    
+    let samples:[UInt8] = plane.indices.map 
+    {
+        (i:(x:Int, y:Int)) in 
+        .init(clamping: plane[x: i.x, y: i.y])
+    }
+}
+```
+
+| *Y* component [**1**] |
+| --------------------- | 
+| 640x432 pixels        |
+|<img width=512 src="decode-advanced/karlie-2019.jpg-0.640x432.gray.png"/>|
+
+| *Cb* component [**1**] |
+| --------------------- | 
+| 320x216 pixels        |
+|<img width=256 src="decode-advanced/karlie-2019.jpg-1.320x216.gray.png"/>|
+
+| *Cr* component [**1**] |
+| --------------------- | 
+| 320x216 pixels        |
+|<img width=256 src="decode-advanced/karlie-2019.jpg-2.320x216.gray.png"/>|
+
+The last step is to convert the planar representation into rectangular representation using the `.interleaved(cosite:)` method. Cositing refers to the positioning of color samples relative to the pixel grid. If samples are not cosited, then they are centered. The default setting is centered, meaning `cosite:` is `false`.
+
+```
+        centered                             cosited 
+     (cosite: false)                     (cosite: true)
+┏━━━━━┱─────┬─────┬─────┐           ┏━━━━━┱─────┬─────┬─────┐
+┃  ×  ┃  ×  │  ×  │  ×  │           ┃  ×  ┃  ×  │  ×  │  ×  │
+┡━━━━━╃─────┼─────┼─────┤   4:4:4   ┡━━━━━╃─────┼─────┼─────┤
+│  ×  │  ×  │  ×  │  ×  │           │  ×  │  ×  │  ×  │  ×  │
+└─────┴─────┴─────┴─────┘           └─────┴─────┴─────┴─────┘
+
+┏━━━━━┯━━━━━┱─────┬─────┐           ┏━━━━━┯━━━━━┱─────┬─────┐
+┃  ·  ×  ·  ┃  ·  ×  ·  │           ┃  ×  │  ·  ┃  ×  │  ·  │
+┡━━━━━┿━━━━━╃─────┼─────┤   4:2:2   ┡━━━━━┿━━━━━╃─────┼─────┤
+│  ·  ×  ·  │  ·  ×  ·  │           │  ×  │  ·  │  ×  │  ·  │
+└─────┴─────┴─────┴─────┘           └─────┴─────┴─────┴─────┘
+
+┏━━━━━┯━━━━━┱─────┬─────┐           ┏━━━━━┯━━━━━┱─────┬─────┐
+┃  ·  │  ·  ┃  ·  │  ·  │           ┃  ×  │  ·  ┃  ×  │  ·  │
+┠──── × ────╂──── × ────┤   4:2:0   ┠─────┼─────╂─────┼─────┤
+┃  ·  │  ·  ┃  ·  │  ·  │           ┃  ·  │  ·  ┃  ·  │  ·  │
+┗━━━━━┷━━━━━┹─────┴─────┘           ┗━━━━━┷━━━━━┹─────┴─────┘
+
+            luminance sample  ·
+          chrominance sample  ×
+```
+
+In this example, we are using centered sampling to obtain the final pixel array.
+
+```swift 
+let rectangular:JPEG.Data.Rectangular<JPEG.Common> = planar.interleaved(cosite: false)
+let rgb:[JPEG.RGB] = rectangular.unpack(as: JPEG.RGB.self)
+```
+
+<img width=512 src="decode-advanced/karlie-2019.jpg.rgb.png"/>
+
+> decoded jpeg image, saved in png format

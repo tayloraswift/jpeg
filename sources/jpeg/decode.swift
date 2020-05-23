@@ -2322,7 +2322,17 @@ extension JPEG.Data.Spectral.Quanta:RandomAccessCollection
     }
     
     public 
-    func index(forKey qi:JPEG.Table.Quantization.Key) -> Int? 
+    func index(forKey qi:JPEG.Table.Quantization.Key) -> Int
+    {
+        guard let q:Int = self.q[qi] 
+        else 
+        {
+            fatalError("key error: attempt to lookup index for invalid quanta key")
+        }
+        return q
+    }
+    // impossible for lookup to fail if only public apis are used 
+    func contains(key qi:JPEG.Table.Quantization.Key) -> Int?
     {
         self.q[qi]
     }
@@ -2739,7 +2749,7 @@ extension JPEG.Data.Spectral
         {
             let qi:JPEG.Table.Quantization.Key = self.layout.planes[c].qi
             let q:Int 
-            if let index:Int = self.quanta.index(forKey: qi)
+            if let index:Int = self.quanta.contains(key: qi)
             {
                 q = index 
             }

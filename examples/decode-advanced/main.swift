@@ -31,9 +31,9 @@ print("""
     [
         \(spectral.layout.residents.sorted(by: { $0.key < $1.key }).map 
         {
-            let (x, y):(Int, Int) = 
-                spectral.layout.planes[$0.value].component.factor
-            return "\($0.key): (\(x), \(y))"
+            let (component, qi):(JPEG.Component, JPEG.Table.Quantization.Key) = 
+                spectral.layout.planes[$0.value]
+            return "\($0.key): (\(component.factor.x), \(component.factor.y), qi: \(qi))"
         }.joined(separator: "\n        "))
     ]
     scans       : 
@@ -66,22 +66,11 @@ for metadata:JPEG.Metadata in spectral.metadata
     }
 }
 
-for (ci, qi):(JPEG.Component.Key, JPEG.Table.Quantization.Key) in 
-    zip(spectral.layout.recognized, spectral.layout.planes.map(\.qi))
-{
-    print("component \(ci): (qi: \(qi))")
-}
-
 let keys:Set<JPEG.Table.Quantization.Key> = .init(spectral.layout.planes.map(\.qi))
 for qi:JPEG.Table.Quantization.Key in keys.sorted() 
 {
-    guard let q:Int = spectral.quanta.index(forKey: qi) 
-    else 
-    {
-        continue 
-    }
-    
-    let table:JPEG.Table.Quantization = spectral.quanta[q]
+    let q:Int                           = spectral.quanta.index(forKey: qi) 
+    let table:JPEG.Table.Quantization   = spectral.quanta[q]
     print("quantization table \(qi):")
     print("""
     ┌ \(String.init(repeating: " ", count: 4 * 8)) ┐

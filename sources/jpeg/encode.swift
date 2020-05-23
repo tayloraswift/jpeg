@@ -1784,9 +1784,9 @@ extension JPEG.Data.Spectral
         for (qi, scans):([JPEG.Table.Quantization.Key], [JPEG.Scan]) in 
             self.layout.definitions 
         {
-            let quanta:[JPEG.Table.Quantization] = qi.compactMap
+            let quanta:[JPEG.Table.Quantization] = qi.map
             { 
-                self.quanta.index(forKey: $0).map{ self.quanta[$0] }
+                self.quanta[self.quanta.index(forKey: $0)]
             }
             
             if !quanta.isEmpty
