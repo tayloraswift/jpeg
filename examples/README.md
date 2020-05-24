@@ -666,7 +666,7 @@ let Y:JPEG.Component.Key            = format.components[0],
 
 Note that if the format case was `y8`, then we would only be able to subscript up to index `0`. There is also no guarantee that `.components[0]` is the same in all cases, though for `y8` and `ycc8`, they are.
 
-We begin to initialize a `JPEG.Layout` structure just as we did in the [basic encoding](#basic-encoding) tutorial, only this time we specify the `progressive(coding:differential:)` coding process. The only supported values for the `coding:` and `differential:` parameters are `huffman` and `false`, respectively, but they are defined because other library APIs can still recognize images using arithmetic (`arithmetic` coding) and hierarchical (differential) modes of operation.
+We begin to initialize a `JPEG.Layout` structure just as we did in the [basic encoding](#basic-encoding) tutorial, only this time we specify the `progressive(coding:differential:)` coding process. The only supported values for the `coding:` and `differential:` parameters are `huffman` and `false`, respectively, but they are defined because other library APIs can still recognize images using arithmetic (`arithmetic`) coding and hierarchical (differential) modes of operation.
 
 ```swift 
 let layout:JPEG.Layout<JPEG.Common> = .init(
@@ -682,7 +682,7 @@ let layout:JPEG.Layout<JPEG.Common> = .init(
 
 The scan progression rules for progressive JPEGs are different than for sequential (`baseline` or `extended(coding:differential:)`) JPEGs. A sequential scan encodes all bits (0 to infinity) of all coefficients (0 to 63) for each channel, and are always allowed to contain multiple channels. A progressive scan subsets bits in a process called **successive approximation**, and coefficients in a process called **spectral selection**. (In an analogy to signal processing, a coefficient subset is also called a **band**.) Only progressive scans which encode the DC coefficient only (band indices `0 ..< 1`) are allowed to encode multiple channels.
 
-Progressive scans using successive approximation can be either **initial scans** or **refining scans**. An initial scan encodes all the bits from some starting index to infinity. A refining scan encodes a single bit. One valid successive approximation sequence is `(3..., 2 ..< 3, 1 ..< 2, 0 ..< 1)`, which contains one initial scan, and three refining scans. It is possible for there to be no refining scans, in which case, the refining scan will simply encode bits `0...`.
+Progressive scans using successive approximation can be either **initial scans** or **refining scans**. An initial scan encodes all the bits from some starting index to infinity. A refining scan encodes a single bit. One valid successive approximation sequence is `(3..., 2 ..< 3, 1 ..< 2, 0 ..< 1)`, which contains one initial scan, and three refining scans. It is possible for there to be no refining scans, in which case, the initial scan will simply encode bits `0...`.
 
 The progressive coding process is not backwards compatible with the sequential processes — progressive images always have to encode AC bands and the DC coefficient in separate scans, so a sequential scan, which contains coefficients 0 through 63, is not a valid progressive scan. It would have to be broken up into a scan encoding coefficient 0, and at least one scan encoding coefficients 1 through 63.
 
@@ -852,6 +852,6 @@ else
 }
 ```
 
-<img width=300 src="/home/klossy/dev/jpeg/examples/encode-advanced/karlie-cfdas-2011.png.rgb.jpg"/>
+<img width=300 src="encode-advanced/karlie-cfdas-2011.png.rgb.jpg"/>
 
 > Output JPEG, 189.8 KB. (Original RGB data was 1.6 MB, PNG image was 805.7 KB.)
