@@ -5,17 +5,20 @@
 1. [basic decoding](#basic-decoding) ([sources](decode-basic/))
 2. [basic encoding](#basic-encoding) ([sources](encode-basic/))
 3. [advanced decoding](#advanced-decoding) ([sources](decode-advanced/))
-4. [advanced encoding](#advanced-encoding) (sources)
+4. [advanced encoding](#advanced-encoding) ([sources](encode-advanced/))
 5. [using in-memory images](#using-in-memory-images) (sources)
-6. [online decoding](#online-decoding) (sources)
-7. [annotating images](#annotating-files) (sources)
-8. [requantizing images](#requantizing-images) ([sources](recompress/))
-9. [lossless rotations](#lossless-rotations) ([sources](rotate/))
-10. [custom color formats](#custom-color-formats) (sources)
+6. [artistic degradation](#artistic-degradation) (sources)
+7. [online decoding](#online-decoding) (sources)
+8. [annotating images](#annotating-files) (sources)
+9. [requantizing images](#requantizing-images) ([sources](recompress/))
+10. [lossless rotations](#lossless-rotations) ([sources](rotate/))
+11. [custom color formats](#custom-color-formats) (sources)
 
 ---
 
-*while traditionally, the field of image processing uses [lena forsén](https://en.wikipedia.org/wiki/Lena_Fors%C3%A9n)’s [1972 playboy shoot](https://www.wired.com/story/finding-lena-the-patron-saint-of-jpegs/) as its standard test image, in these tutorials, we will be using images of modern supermodel [karlie kloss](https://twitter.com/karliekloss) as our example data. karlie is a longstanding advocate for women in science and technology, and founded the [kode with klossy](https://www.kodewithklossy.com/) summer camps in 2015 for girls interested in studying computer science. karlie is also [an advocate](https://www.engadget.com/2018-03-16-karlie-kloss-coding-camp-more-cities-and-languages.html) for [the swift language](https://swift.org/).*
+*while traditionally, the field of image processing uses [lena forsén](https://en.wikipedia.org/wiki/Lena_Fors%C3%A9n)’s [1972 playboy shoot](https://www.wired.com/story/finding-lena-the-patron-saint-of-jpegs/) as its standard test image, in these tutorials, we will be using pictures of modern supermodel [karlie kloss](https://twitter.com/karliekloss) as our example data. karlie is a longstanding advocate for women in science and technology, and founded the [kode with klossy](https://www.kodewithklossy.com/) summer camps in 2015 for girls interested in studying computer science. karlie is also [an advocate](https://www.engadget.com/2018-03-16-karlie-kloss-coding-camp-more-cities-and-languages.html) for [the swift language](https://swift.org/).*
+
+*[view photo attributions](attribution.md)*
 
 ---
 
@@ -58,7 +61,7 @@ The `.unpack(as:)` method is [non-mutating](https://docs.swift.org/swift-book/La
 
 <img src="decode-basic/karlie-kwk-2019.jpg.rgb.png" alt="output (as png)" width=512/>
 
-> decoded jpeg image, saved in png format
+> Decoded JPEG image, saved in PNG format.
 
 ---
 
@@ -88,7 +91,7 @@ let path:String         = "examples/encode-basic/karlie-milan-sp12-2011",
 > 
 > *(photo by John “hugo971”)*
 
-To explore some of the possible encoding options, we will export images under varying subsampling schemes and quality levels. The outer loop will iterate through four different subsampling modes, which include human-readable suffixes that will go into the generated file names:
+To explore some of the possible encoding options, we will export images under varying **subsampling** schemes and quality levels. The outer loop will iterate through four different subsampling modes, which include human-readable suffixes that will go into the generated file names:
 
 ```swift 
 for factor:(luminance:(x:Int, y:Int), chrominance:(x:Int, y:Int), name:String) in 
@@ -165,7 +168,7 @@ The `components:` argument takes a dictionary mapping `JPEG.Component.Key`s to t
 
 Because we are using the standard `ycc8` color format, component **1** always represents the *Y* channel; component **2**, the *Cb* channel; and component **3**, the *Cr* channel. As long as we are using the `ycc8` color format, the dictionary must consist of these three component keys. (The quantization table keys can be anything you want.)
 
-The `scans:` argument specifies the scan progression of the JPEG file, and takes an array of `JPEG.Header.Scan`s. Because we are using the `baseline` coding process, we can only use sequential scans, which we initialize using the `.sequential(_:...)` static constructor. Here, we have defined one single-component scan containing the luminance channel, and another two-component interleaved scan containing the two color channels.
+The `scans:` argument specifies the **scan progression** of the JPEG file, and takes an array of `JPEG.Header.Scan`s. Because we are using the `baseline` coding process, we can only use sequential scans, which we initialize using the `.sequential(_:...)` static constructor. Here, we have defined one single-component scan containing the luminance channel, and another two-component interleaved scan containing the two color channels.
 
 The two [keypaths](https://developer.apple.com/documentation/swift/keypath) in each component tuple specify [huffman table](https://en.wikipedia.org/wiki/Huffman_coding) destinations (DC and AC, respectively); if the AC or DC selectors are the same for each component in a scan, then those components will share the same (AC or DC) huffman table. The interleaved color scan 
 
@@ -285,6 +288,14 @@ This example program will generate 32 output images. For comparison, the PNG-enc
 ## advanced decoding 
 
 [`sources`](decode-advanced/)
+
+> ***by the end of this tutorial, you should be able to:***
+> * *use the multi-stage decompression api*
+> * *read image sizes, metadata records, and layouts*
+> * *understand the size metrics used by different data models*
+> * *understand the difference between centered and cosited sampling*
+> * *convert intra-data unit grid coordinates to zigzag indices*
+> * *access values from a quantization table*
 
 In the [basic decoding](#basic-decoding) tutorial, we used the single-stage `.decompress(path:)` function to inflate a JPEG file from disk directly to its `Data.Rectangular` representation. This time, we will decompress the file to an intermediate representation modeled by the `JPEG.Data.Spectral` type.
 
@@ -456,7 +467,7 @@ let table:JPEG.Table.Quantization   = spectral.quanta[q]
 print("quantization table \(qi):")
 ```
 
-The quantum values (and the spectral coefficients) are stored in a special zigzag order:
+The quantum values (and the spectral coefficients) are stored in a special **zigzag order**:
 
 ``` 
 0    1    2    3    4    5    6    7    k
@@ -479,7 +490,7 @@ The quantum values (and the spectral coefficients) are stored in a special zigza
 └────┴────┴────┴────┴────┴────┴────┴────┘  h
 ```
 
-To obtain the zigzag coordinate from a 2D grid coordinate, you use the static `JPEG.Table.Quantization.x(k:h:)` function, where `k` is the column index and `h` is the row index.
+To obtain the zigzag coordinate from a 2D grid coordinate, you use the static `JPEG.Table.Quantization.z(k:h:)` function, where `k` is the column index and `h` is the row index.
 
 We can print out the quantum values as a matrix like this:
 
@@ -535,7 +546,7 @@ quantization table [1]:
 └                                  ┘
 ```
 
-We can convert the spectral representation into a planar spatial representation, modeled by the `JPEG.Data.Planar` structure, using the `.idct()` method. This function performs an inverse frequency transform on the spectral data.
+We can convert the spectral representation into a planar spatial representation, modeled by the `JPEG.Data.Planar` structure, using the `.idct()` method. This function performs an **inverse frequency transform** (or **i**nverse **d**iscrete **c**osine **t**ransform) on the spectral data.
 
 ```swift
 let planar:JPEG.Data.Planar<JPEG.Common> = spectral.idct()
@@ -578,7 +589,7 @@ for (p, plane):(Int, JPEG.Data.Planar<JPEG.Common>.Plane) in planar.enumerated()
 | 320x216 pixels        |
 |<img width=256 src="decode-advanced/karlie-2019.jpg-2.320x216.gray.png"/>|
 
-The last step is to convert the planar representation into rectangular representation using the `.interleaved(cosite:)` method. Cositing refers to the positioning of color samples relative to the pixel grid. If samples are not cosited, then they are centered. The default setting is centered, meaning `cosite:` is `false`.
+The last step is to convert the planar representation into rectangular representation using the `.interleaved(cosite:)` method. **Cositing** refers to the positioning of color samples relative to the pixel grid. If samples are not cosited, then they are **centered**. The default setting is centered, meaning `cosite:` is `false`.
 
 ```
         centered                             cosited 
@@ -615,3 +626,232 @@ let rgb:[JPEG.RGB] = rectangular.unpack(as: JPEG.RGB.self)
 <img width=512 src="decode-advanced/karlie-2019.jpg.rgb.png"/>
 
 > decoded jpeg image, saved in png format
+
+---
+
+## advanced encoding  
+
+[`sources`](encode-advanced/)
+
+> ***by the end of this tutorial, you should be able to:***
+> * *use custom quantization tables*
+> * *use the multi-stage compression api*
+> * *use the progressive coding process to encode images*
+> * *define valid scan progressions for progressive images*
+> * *view generated jpeg declarations and selector assignments*
+> * *initialize various data models directly*
+
+In this tutorial, we will use the same multi-stage API we used in the [advanced decoding](#advanced-decoding) tutorial, but in reverse. We will also use the progressive coding process to define a more sophisticated scan progression. As before, we will assume we have an input image, its pixel dimensions, and a file destination available.
+
+```swift 
+let rgb:[JPEG.RGB]       = [ ... ] 
+let path:String          = "examples/encode-advanced/karlie-cfdas-2011.png.rgb",
+    size:(x:Int, y:Int)  = (600, 900)
+```
+
+<img width=300 src="encode-advanced/karlie-cfdas-2011.png"/>
+
+> *Karlie Kloss at the 2011 [CFDA Fashion Awards](https://en.wikipedia.org/wiki/Council_of_Fashion_Designers_of_America#CFDA_Fashion_Awards) in New York City*
+> 
+> *(photo by John “hugo971”)*
+
+To make the code a little more readable, we will give names to the three YCbCr component keys in the `ycc8` format this image is going to use. The `.components` property of the color format returns an array containing the component keys in the format, in canonical order.
+
+```swift 
+let format:JPEG.Common              = .ycc8
+let Y:JPEG.Component.Key            = format.components[0],
+    Cb:JPEG.Component.Key           = format.components[1],
+    Cr:JPEG.Component.Key           = format.components[2]
+```
+
+Note that if the format case was `y8`, then we would only be able to subscript up to index `0`. There is also no guarantee that `.components[0]` is the same in all cases, though for `y8` and `ycc8`, they are.
+
+We begin to initialize a `JPEG.Layout` structure just as we did in the [basic encoding](#basic-encoding) tutorial, only this time we specify the `progressive(coding:differential:)` coding process. The only supported values for the `coding:` and `differential:` parameters are `huffman` and `false`, respectively, but they are defined because other library APIs can still recognize images using arithmetic (`arithmetic` coding) and hierarchical (differential) modes of operation.
+
+```swift 
+let layout:JPEG.Layout<JPEG.Common> = .init(
+    format:     format,
+    process:    .progressive(coding: .huffman, differential: false), 
+    components: 
+    [
+        Y:  (factor: (2, 1), qi: 0), // 4:2:2 subsampling
+        Cb: (factor: (1, 1), qi: 1), 
+        Cr: (factor: (1, 1), qi: 1),
+    ], 
+```
+
+The scan progression rules for progressive JPEGs are different than for sequential (`baseline` or `extended(coding:differential:)`) JPEGs. A sequential scan encodes all bits (0 to infinity) of all coefficients (0 to 63) for each channel, and are always allowed to contain multiple channels. A progressive scan subsets bits in a process called **successive approximation**, and coefficients in a process called **spectral selection**. (In an analogy to signal processing, a coefficient subset is also called a **band**.) Only progressive scans which encode the DC coefficient only (band indices `0 ..< 1`) are allowed to encode multiple channels.
+
+Progressive scans using successive approximation can be either **initial scans** or **refining scans**. An initial scan encodes all the bits from some starting index to infinity. A refining scan encodes a single bit. One valid successive approximation sequence is `(3..., 2 ..< 3, 1 ..< 2, 0 ..< 1)`, which contains one initial scan, and three refining scans. It is possible for there to be no refining scans, in which case, the refining scan will simply encode bits `0...`.
+
+The progressive coding process is not backwards compatible with the sequential processes — progressive images always have to encode AC bands and the DC coefficient in separate scans, so a sequential scan, which contains coefficients 0 through 63, is not a valid progressive scan. It would have to be broken up into a scan encoding coefficient 0, and at least one scan encoding coefficients 1 through 63.
+
+There are several more rules that have to be followed, or else the `JPEG.Layout` initializer will suffer a [precondition failure](https://developer.apple.com/documentation/swift/1539374-preconditionfailure):
+
+* The first scan for a particular component must be an initial DC scan, which can be interleaved with other components.
+* Refining DC scans can be interleaved, but not refining AC scans.
+* The initial scan encoding the high bits of any coefficient must come before any refining scans encoding bits in that coefficient.
+* Refining scans must count downwards toward bit zero in increments of 1.
+* No bit of any coefficient can be encoded twice.
+* The total sampling volume (product of the sampling factors) of all the components in an interleaved scan cannot be greater than 10. This restriction does not apply to scans encoding a single component.
+
+The following is an example of a valid scan progression, which we will be using in this tutorial:
+
+```swift 
+    scans: 
+    [
+        .progressive((Y,  \.0), (Cb, \.1), (Cr, \.1),  bits: 2...),
+        .progressive( Y,         Cb,        Cr      ,  bit:  1   ),
+        .progressive( Y,         Cb,        Cr      ,  bit:  0   ),
+        
+        .progressive((Y,  \.0),        band: 1 ..< 64, bits: 1...), 
+        
+        .progressive((Cb, \.0),        band: 1 ..<  6, bits: 1...), 
+        .progressive((Cr, \.0),        band: 1 ..<  6, bits: 1...), 
+        
+        .progressive((Cb, \.0),        band: 6 ..< 64, bits: 1...), 
+        .progressive((Cr, \.0),        band: 6 ..< 64, bits: 1...), 
+        
+        .progressive((Y,  \.0),        band: 1 ..< 64, bit:  0   ), 
+        .progressive((Cb, \.0),        band: 1 ..< 64, bit:  0   ), 
+        .progressive((Cr, \.0),        band: 1 ..< 64, bit:  0   ), 
+    ])
+```
+
+The library provides four progressive scan header constructors:
+
+1. `.progressive(_:... bits:)`
+
+ Returns an initial DC scan header. The variadic argument takes tuples of component keys and huffman table selectors; components with the same huffman table selector will share the same huffman table.
+
+2. `.progressive(_:... bit:)`
+
+ Returns a refining DC scan header. The variadic argument takes scalar component keys with no huffman table selectors, because refining DC scans do not use entropy coding.
+
+3. `.progressive(_:band:bits:)`
+
+ Returns an initial AC scan header. For flexibility, you can specify the huffman table selector you want the scan in the encoded JPEG file to use, though this will have no discernable effect on image compression.
+
+4. `.progressive(_:band:bit:)`
+
+ Returns a refining AC scan header. The huffman table selector has the same significance that it does in the initial AC scan headers.
+
+All the scan header constructors, including `.sequential(_:... )` return the same type, `JPEG.Header.Scan`, but using a sequential constructor to define a scan for a progressive image will always produce an error.
+
+When you initialize a layout, it will automatically assign quantization tables to table selectors and generate the sequence of JPEG declarations needed to associate the right table resources with the right scans. This can sometimes fail (with a fatal error) if the scan progression you provided requires more tables to be referenced at once than there are selectors for them to be attached to. The lifetime of a table extends from the first scan that contains a component using it, to the last scan containing such a component. (It does not have to be the same component.) 
+
+Just as with the limits on the number of simultaneously referenced huffman tables, the `baseline` coding process allows for up to two simultaneously referenced quantization tables, while all other coding processes allow for up to four. In practice, since each component can only use one quantization table, the total number of quantization tables in a JPEG image can never exceed the number of components in the image, so these limitations are rarely encountered.
+
+We can view the generated declarations and selector assignments with the following code: 
+
+```swift 
+for (tables, scans):([JPEG.Table.Quantization.Key], [JPEG.Scan]) in layout.definitions 
+{
+    print("""
+    define quantization tables: 
+    [
+        \(tables.map(String.init(describing:)).joined(separator: "\n    "))
+    ]
+    """)
+    print("""
+    scans: \(scans.count) scans 
+    """)
+}
+
+for (c, (component, qi)):(Int, (component:JPEG.Component, qi:JPEG.Table.Quantization.Key)) in layout.planes.enumerated() 
+{
+    print("""
+    plane \(c)
+    {
+        sampling factor         : (\(component.factor.x), \(component.factor.y))
+        quantization table      : \(qi)
+        quantization selector   : \\.\(String.init(selector: component.selector))
+    }
+    """)
+}
+```
+
+```
+define quantization tables: 
+[
+    [0]
+    [1]
+]
+scans: 11 scans 
+plane 0
+{
+    sampling factor         : (2, 1)
+    quantization table      : [0]
+    quantization selector   : \.0
+}
+plane 1
+{
+    sampling factor         : (1, 1)
+    quantization table      : [1]
+    quantization selector   : \.1
+}
+plane 2
+{
+    sampling factor         : (1, 1)
+    quantization table      : [1]
+    quantization selector   : \.1
+}
+```
+
+Here we can see that the library has decided to define both quantization tables up front, with no need for additional declarations later on. Unsurprisingly, table **0** has been assigned to selector `\.0` and table **1** to selector `\.1`.
+
+In the last encoding tutorial, we inserted a meaningless JFIF metadata segment into the encoded file; this time we will skip that and instead insert a JPEG comment segment.
+
+```swift 
+let comment:[UInt8] = .init("the way u say ‘important’ is important".utf8)
+let rectangular:JPEG.Data.Rectangular<JPEG.Common> = 
+    .pack(size: size, layout: layout, metadata: [.comment(data: comment)], pixels: rgb)
+```
+
+Here, we have stored a string encoded as [UTF-8](https://en.wikipedia.org/wiki/UTF-8) data into the comment body. The text encoding is irrelevant to JPEG, but many metadata viewers will display JPEG comments as UTF-8 text, so this is how we will store it.
+
+When we created the rectangular data structure, we used the `.pack(size:layout:metadata:pixels:)` constructor, but we could also have used the regular `.init(size:layout:metadata:values:)` initializer, which takes a `[UInt16]` array of (row-major) interleaved color samples. This initializer assumes you already have the image data stored in the right order and format, so it’s a somewhat lower-level API.
+
+The next step is to convert the rectangular data into planar data. The method which returns the planar representation is the `.decomposed()` method.
+
+```swift 
+let planar:JPEG.Data.Planar<JPEG.Common> = rectangular.decomposed()
+```
+
+If the image layout uses subsampling, this method will downsample the image data with a basic box filter for the appropriate image planes. There is no concept of cositing or centering when downsampling, so this method takes no arguments. The box filter the library applies is a pretty bad low-pass filter, so it may be beneficial for you to implement your own subsampling filter and construct the planar data structure “manually” if you are trying to squeeze some extra quality into a subsampled JPEG. The `.init(size:layout:metadata:initializingWith:)` initializer can be used for this. It has the following signature:
+
+```swift 
+init(size:(x:Int, y:Int), 
+    layout:JPEG.Layout<Format>, 
+    metadata:[JPEG.Metadata], 
+    initializingWith initializer:
+    (Int, (x:Int, y:Int), (x:Int, y:Int), UnsafeMutableBufferPointer<UInt16>) throws -> ())
+```
+
+The first closure argument is the component index (also the plane index), the second closure argument is the dimensions of the plane in 8x8 unit blocks, the third closure argument is the sampling factor of the plane, and the last closure argument is the uninitialized (row-major) plane buffer. It stores 64*XY* elements, where (*X*,&nbsp;*Y*) are the dimensions of the plane in unit blocks.
+
+The `JPEG.Data.Planar` type also has a plain `.init(size:layout:metadata:)` initializer with no data argument which initializes all planes to a neutral color. You can read and modify sample values through the 2D subscript `[x:y:]` available on the plane type. 
+
+To convert the planar data to spectral representation, we have to do a **forward frequency transform** (or **f**orward **d**iscrete **c**osine **t**ransform) using the `.fdct(quanta:)` method. It is at this point where you have to provide the actual quantum values for each quantization table used in the image. In the [basic encoding](#basic-encoding) tutorial, we used the parameterized quality API to generate quantum values for us, but you can also specify the quanta yourself. Usually, it’s a good idea to pick smaller values for the earlier coefficients, and larger values for the later coefficients.
+
+```swift 
+let spectral:JPEG.Data.Spectral<JPEG.Common> = planar.fdct(quanta:     
+    [
+        0: [1, 2, 2, 3, 3, 3] + .init(repeating:  4, count: 58),
+        1: [1, 2, 2, 5, 5, 5] + .init(repeating: 30, count: 58),
+    ])
+```
+
+Finally, we can use the file system-aware compression API to encode the image and write it to disk.
+
+```swift 
+guard let _:Void = try spectral.compress(path: "\(path).jpg")
+else 
+{
+    fatalError("failed to open file '\(path).jpg'")
+}
+```
+
+<img width=300 src="/home/klossy/dev/jpeg/examples/encode-advanced/karlie-cfdas-2011.png.rgb.jpg"/>
+
+> Output JPEG, 189.8 KB. (Original RGB data was 1.6 MB, PNG image was 805.7 KB.)

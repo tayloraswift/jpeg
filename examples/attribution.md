@@ -10,6 +10,10 @@
 
 1. [Erik Drost](https://commons.wikimedia.org/wiki/File:Karlie_Kloss_%2847541292642%29.jpg) (CC BY 2.0)
 
+`encode-advanced`:
+
+1. [John “hugo971”](https://www.flickr.com/photos/30375176@N08/5813054049) (CC BY-NC-SA 2.0)
+
 `rotate`:
 
 1. [Kode With Klossy (Facebook)](https://www.facebook.com/kodewithklossy/photos/kodewithklossy-scholars-attending-a-panel-with-editor-in-chief-at-teen-vogue-ela/1756483347711968/) (unknown)

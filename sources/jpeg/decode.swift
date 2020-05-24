@@ -1348,7 +1348,7 @@ extension JPEG.Table.Quantization
     public 
     init(precision:Precision, values:[UInt16], target:Selector) 
     {
-        precondition(values.count == 64)
+        precondition(values.count == 64, "quantization table must have exactly 64 quanta")
         self.precision  = precision
         self.storage    = values 
         self.target     = target 
@@ -2327,7 +2327,7 @@ extension JPEG.Data.Spectral.Quanta:RandomAccessCollection
         guard let q:Int = self.q[qi] 
         else 
         {
-            fatalError("key error: attempt to lookup index for invalid quanta key")
+            preconditionFailure("key error: attempt to lookup index for invalid quanta key")
         }
         return q
     }
@@ -2453,7 +2453,7 @@ extension JPEG.Data.Spectral
         guard let p:Int = self.index(forKey: ci)
         else 
         {
-            fatalError("component key out of range")
+            preconditionFailure("component key out of range")
         }
         return try body(self[p], self.quanta[self[p].q])
     }
@@ -2465,7 +2465,7 @@ extension JPEG.Data.Spectral
         guard let p:Int = self.index(forKey: ci)
         else 
         {
-            fatalError("component key out of range")
+            preconditionFailure("component key out of range")
         }
         return try body(&self[p], self.quanta[self[p].q])
     }
@@ -2482,7 +2482,7 @@ extension JPEG.Data.Planar
         guard let p:Int = self.index(forKey: ci)
         else 
         {
-            fatalError("component key out of range")
+            preconditionFailure("component key out of range")
         }
         return try body(self[p])
     }
@@ -2494,7 +2494,7 @@ extension JPEG.Data.Planar
         guard let p:Int = self.index(forKey: ci)
         else 
         {
-            fatalError("component key out of range")
+            preconditionFailure("component key out of range")
         }
         return try body(&self[p])
     }
@@ -2758,7 +2758,7 @@ extension JPEG.Data.Spectral
                 guard let values:[UInt16] = quanta[qi]
                 else 
                 {
-                    fatalError("missing quantization table for component \(ci)")
+                    preconditionFailure("missing quantization table for component \(ci)")
                 }
                 
                 let table:JPEG.Table.Quantization = .init(
@@ -3806,7 +3806,7 @@ extension JPEG.Layout
                 combined[$0]
             else 
             {
-                fatalError("missing definition for component \($0) in format '\(format)'")
+                preconditionFailure("missing definition for component \($0) in format '\(format)'")
             }
             
             return value 
@@ -3957,11 +3957,11 @@ extension JPEG.Layout
                 }
                 catch let error as JPEG.ParsingError // validation error 
                 {
-                    fatalError(error.message)
+                    preconditionFailure(error.message)
                 }
                 catch let error as JPEG.DecodingError // invalid progression 
                 {
-                    fatalError(error.message)
+                    preconditionFailure(error.message)
                 }
                 catch 
                 {

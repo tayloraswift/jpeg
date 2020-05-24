@@ -492,7 +492,7 @@ extension JPEG.Data.Spectral
         {
             // there are only a few ways validation can fail, and all of them 
             // are programmer errors (zero width, broken `Format` implementation)
-            fatalError((error as? JPEG.Error)?.message ?? "\(error)")
+            preconditionFailure((error as? JPEG.Error)?.message ?? "\(error)")
         }
     }
 }
@@ -1173,7 +1173,7 @@ extension JPEG.Data.Spectral
             guard self.indices ~= p
             else 
             {
-                fatalError("scan component not a member of this spectral image")
+                preconditionFailure("scan component not a member of this spectral image")
             }
             
             let (bytes, dc, ac):([UInt8], JPEG.Table.HuffmanDC, JPEG.Table.HuffmanAC) = 
@@ -1189,7 +1189,7 @@ extension JPEG.Data.Spectral
                 // unlike in the decoder, we don’t have a good reason to allow scans to 
                 // reference components which have not been included in the spectral image, 
                 // so every component must be linked to an existing plane index (non-optional `p`)
-                fatalError("scan component not a member of this spectral image")
+                preconditionFailure("scan component not a member of this spectral image")
             }
             return self.layout.planes[$0.c].component.factor
         }
@@ -1349,7 +1349,7 @@ extension JPEG.Data.Spectral
             guard self.indices ~= p
             else 
             {
-                fatalError("scan component not a member of this spectral image")
+                preconditionFailure("scan component not a member of this spectral image")
             }
             let (bytes, table):([UInt8], JPEG.Table.HuffmanDC) = 
                 self[p].encode(bits: a, component: component)
@@ -1361,7 +1361,7 @@ extension JPEG.Data.Spectral
             guard self.indices ~= $0.c
             else 
             {
-                fatalError("scan component not a member of this spectral image")
+                preconditionFailure("scan component not a member of this spectral image")
             }
             return self.layout.planes[$0.c].component.factor
         }
@@ -1475,7 +1475,7 @@ extension JPEG.Data.Spectral
             guard self.indices ~= p
             else 
             {
-                fatalError("scan component not a member of this spectral image")
+                preconditionFailure("scan component not a member of this spectral image")
             }
             
             return self[p].encode(bit: a)
@@ -1487,7 +1487,7 @@ extension JPEG.Data.Spectral
             guard self.indices ~= $0.c
             else 
             {
-                fatalError("scan component not a member of this spectral image")
+                preconditionFailure("scan component not a member of this spectral image")
             }
             
             return ($0.c, self.layout.planes[$0.c].component.factor)
@@ -1551,7 +1551,7 @@ extension JPEG.Data.Spectral
             guard self.indices ~= p
             else 
             {
-                fatalError("scan component not a member of this spectral image") 
+                preconditionFailure("scan component not a member of this spectral image") 
             }
             
             let (data, ac):([UInt8], JPEG.Table.HuffmanAC) = self[p].encode(
@@ -1564,7 +1564,7 @@ extension JPEG.Data.Spectral
             guard self.indices ~= p
             else 
             {
-                fatalError("scan component not a member of this spectral image") 
+                preconditionFailure("scan component not a member of this spectral image") 
             }
             
             let (data, ac):([UInt8], JPEG.Table.HuffmanAC) = self[p].encode(
