@@ -1022,6 +1022,8 @@ Some applications accomplish this by sending many copies of the same image at di
 To mock up a file being transferred over a network, we are going to modify the blob type from the [last tutorial](#using-in-memory-images) by adding an integer field `.available` representing the amount of the file we “have” at a given moment.
 
 ```swift 
+import JPEG 
+
 struct Stream  
 {
     private(set)
@@ -1449,3 +1451,132 @@ try decodeOnline(stream: &stream)
 | **7** | `1 ..< 64` | `0`     | **3**               |<img width=200 src="decode-online/karlie-oscars-2017.jpg-difference-7.rgb.png"/>|<img width=200 src="decode-online/karlie-oscars-2017.jpg-7.rgb.png"/>|
 | **8** | `1 ..< 64` | `0`     | **2**               |<img width=200 src="decode-online/karlie-oscars-2017.jpg-difference-8.rgb.png"/>|<img width=200 src="decode-online/karlie-oscars-2017.jpg-8.rgb.png"/>|
 | **9** | `1 ..< 64` | `0`     | **1**               |<img width=200 src="decode-online/karlie-oscars-2017.jpg-difference-9.rgb.png"/>|<img width=200 src="decode-online/karlie-oscars-2017.jpg-9.rgb.png"/>|
+
+---
+
+## requantizing images 
+[`sources`](recompress/)
+
+> ***by the end of this tutorial, you should be able to:***
+> * *use the plane locking api to access spectral coefficients and quanta*
+> * *manually quantize and dequantize spectral blocks*
+> * *change the compression level of a jpeg with minimal information loss*
+
+The concept of JPEG “quality” reflects the inherent tradeoff between visual fidelity and compression ratio. So what happens when you want to increase compresson by resaving a JPEG at a lower quality level?
+
+What most people do is use an image editor to re-export the image with lower quality settings. While this can work, this is a *bad* way to adjust a JPEG’s compression level, since the image exporter ends up compressing the *noise* introduced by the last round of compression. When done repeatedly, this can actually *increase* file size relative to the amount of visual information retained in the file.
+
+A better way to increase a JPEG’s compression level is to **requantize** the image in its spectral representation. This means rather than round-tripping the image all the way to its rectangular representation and back, we decode it to its spectral representation — at which point, no information has been lost — and then replace the old quantization tables with new quantization tables reflecting the new quality level we want to save the image with.
+
+We already know how to decode a file to spectral representation, from the [advanced decoding](#advanced-decoding) tutorial:
+
+```swift 
+import JPEG
+
+let path:String = "examples/recompress/original.jpg"
+guard let original:JPEG.Data.Spectral<JPEG.Common> = try .decompress(path: path)
+else 
+{
+    fatalError("failed to open file '\(path)'")
+}
+```
+
+<img src="recompress/original.jpg"/>
+
+> Karlie Kloss advertising concept from Carolina Herrera’s [*Good Girl* perfume](https://www.carolinaherrera.com/us/en/fragrances/carolina-herrera-new-york/good-girl-2/) campaign. The rocket and moon base is a reference to STEM traditions in her fan base.
+>
+> ([image](https://twitter.com/karliekloss/status/1258889670357856257) from Karlie’s twitter account)
+
+We can construct a progressive layout for our output image, just as we did in the [advanced encoding](#advanced-encoding) tutorial. Here we have used spectral selection, but no successive approximation:
+
+```swift 
+let format:JPEG.Common              = .ycc8
+let Y:JPEG.Component.Key            = format.components[0],
+    Cb:JPEG.Component.Key           = format.components[1],
+    Cr:JPEG.Component.Key           = format.components[2]
+
+let layout:JPEG.Layout<JPEG.Common> = .init(
+    format:     format,
+    process:    .progressive(coding: .huffman, differential: false), 
+    components: original.layout.components, 
+    scans: 
+    [
+        .progressive((Y,  \.0), (Cb, \.1), (Cr, \.1),  bits: 0...),
+        
+        .progressive((Y,  \.0),        band: 1 ..< 64, bits: 0...), 
+        .progressive((Cb, \.0),        band: 1 ..< 64, bits: 0...), 
+        .progressive((Cr, \.0),        band: 1 ..< 64, bits: 0...)
+    ])
+```
+
+Next, we create an empty spectral image using the `.init(size:layout:metadata:quanta:)` initializer. For the quantum values, we use the quanta from the original image, multiplied by 3, reflecting an increase in quantization, and therefore compression. We don’t scale the quantum for the DC coefficient, since posterizing the base colors of an image is a lot more noticable than dropping a few AC coefficients. It is important that we clamp the scaled quantum values to the range `0 ... 255`, since the `ycc8` color format stores quantum values as 8-bit unsigned integers.
+
+```swift 
+var recompressed:JPEG.Data.Spectral<JPEG.Common> = .init(
+    size:       original.size, 
+    layout:     layout, 
+    metadata:   
+    [
+        .jfif(.init(version: .v1_2, density: (1, 1, .centimeters))),
+    ], 
+    quanta: original.quanta.mapValues
+    {
+        [$0[0]] + $0.dropFirst().map{ min($0 * 3 as UInt16, 255) }
+    })
+```
+
+We can use the `.read(ci:_:)` method on the spectral image to access the spectral plane and its associated quantization table for its component key argument. The `.with(ci:_:)` method does the same thing, except it allows you to mutate the plane coefficients. (It does not allow you to change the quantization tables — editing quantization tables by plane is a bad idea because doing so would affect all of the other planes using that quantization table.) 
+
+```swift 
+for ci:JPEG.Component.Key in recompressed.layout.recognized 
+{
+    original.read(ci: ci)
+    {
+        (plane:JPEG.Data.Spectral<JPEG.Common>.Plane, quanta:JPEG.Table.Quantization) in 
+        
+        recompressed.with(ci: ci) 
+        {
+```
+
+We *could* access the planes and quanta by performing index lookups for the component and quantization keys, and then using the integer subscripts on `self` and `.quanta`, but the `.read(ci:_:)` and `.with(ci:_:)` APIs provide a more convenient interface, with fewer spurious optionals. The `JPEG.Data.Planar` type also has `.read(ci:_:)` and `.with(ci:_:)` methods, but their closures don’t recieve quantization table arguments, since the coefficients have already been premultiplied in the planar representation.
+
+Transferring the spectral data from the original image to the recompressed image is then a matter of iterating through the coefficient blocks, multiplying coefficients by the old quanta, and then dividing them by the new quanta.
+
+```swift 
+            for b:((x:Int, y:Int), (x:Int, y:Int)) in zip(plane.indices, $0.indices)
+            {
+                for z:Int in 0 ..< 64 
+                {
+                    let coefficient:Int16 = .init(quanta[z: z]) * plane[x: b.0.x, y: b.0.y, z: z]
+                    let rescaled:Double   = .init(coefficient) / .init($1[z: z])
+```
+
+When writing the coefficients back to the recompressed image, we use a trick to improve the visual quality of the requantized image. An AC coefficient that has increased in magnitude is far more noticable than an AC coefficient that has gone missing, so we bias the coefficient rounding towards zero:
+
+```swift 
+                    $0[x: b.1.x, y: b.1.y, z: z] = .init(rescaled + (0.3 * (rescaled < 0 ? -1 : 1)))
+```
+
+This will also improve the compression ratio of the encoded image, since JPEGs encode zero coefficients very efficiently.
+
+Then, we encode and save the image using the `.compress(path:)` method:
+
+```swift 
+                }
+            }
+        }
+    }
+} 
+
+try recompressed.compress(path: "examples/recompress/recompressed-requantized.jpg")
+```
+
+Compared with the output of an image editor used with quality settings chosen to produce a similarly-sized file, the requantized output is both smaller, and visually closer to the original:
+
+<img src="recompress/recompressed-full-cycle.jpg"/>
+
+> JPEG image, 12.2&nbsp;KB, resaved using [GIMP](https://www.gimp.org/), at quality 7, and with progressive encoding and JPEG optimization enabled.
+
+<img src="recompress/recompressed-requantized.jpg"/>
+
+> JPEG image, 11.2&nbsp;KB, resaved using our requantization implementation.
