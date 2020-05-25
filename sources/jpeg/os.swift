@@ -131,7 +131,7 @@ extension Common.File.Source
             return nil 
         }
         
-        return status.st_size
+        return Int.init(status.st_size)
     } 
 }
 extension Common.File.Destination
