@@ -1,15 +1,7 @@
 #if os(macOS)
-    import func     Darwin.fopen
-    import func     Darwin.fread
-    import func     Darwin.fwrite
-    import func     Darwin.fclose
-    import struct   Darwin.FILE
+    import Darwin
 #elseif os(Linux)
-    import func     Glibc.fopen
-    import func     Glibc.fread
-    import func     Glibc.fwrite
-    import func     Glibc.fclose
-    import struct   Glibc.FILE
+    import Glibc
 #else
     #warning("unsupported or untested platform (please open an issue at https://github.com/kelvin13/jpeg/issues)")
 #endif
@@ -105,6 +97,42 @@ extension Common.File.Source
 
         return buffer
     }
+    
+    public 
+    var count:Int? 
+    {
+        let descriptor:Int32 = fileno(self.descriptor)
+        guard descriptor != -1 
+        else 
+        {
+            return nil 
+        }
+        
+        guard let status:stat = 
+        ({
+            var status:stat = .init()
+            guard fstat(descriptor, &status) == 0 
+            else 
+            {
+                return nil 
+            }
+            return status 
+        }())
+        else 
+        {
+            return nil 
+        }
+        
+        switch status.st_mode & S_IFMT 
+        {
+        case S_IFREG, S_IFLNK:
+            break 
+        default:
+            return nil 
+        }
+        
+        return status.st_size
+    } 
 }
 extension Common.File.Destination
 {

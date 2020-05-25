@@ -29,14 +29,14 @@ let layout:JPEG.Layout<JPEG.Common> = .init(
 var recompressed:JPEG.Data.Spectral<JPEG.Common> = .init(
     size:       original.size, 
     layout:     layout, 
-    quanta: original.quanta.mapValues
-    {
-        [$0[0]] + $0.dropFirst().map{ min($0 * 3 as UInt16, 255) }
-    }, 
     metadata:   
     [
         .jfif(.init(version: .v1_2, density: (1, 1, .centimeters))),
-    ])
+    ], 
+    quanta: original.quanta.mapValues
+    {
+        [$0[0]] + $0.dropFirst().map{ min($0 * 3 as UInt16, 255) }
+    })
 
 for ci:JPEG.Component.Key in recompressed.layout.recognized 
 {

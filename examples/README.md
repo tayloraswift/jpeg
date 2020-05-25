@@ -6,13 +6,12 @@
 2. [basic encoding](#basic-encoding) ([sources](encode-basic/))
 3. [advanced decoding](#advanced-decoding) ([sources](decode-advanced/))
 4. [advanced encoding](#advanced-encoding) ([sources](encode-advanced/))
-5. [using in-memory images](#using-in-memory-images) (sources)
-6. [artistic degradation](#artistic-degradation) (sources)
-7. [online decoding](#online-decoding) (sources)
-8. [annotating images](#annotating-files) (sources)
-9. [requantizing images](#requantizing-images) ([sources](recompress/))
-10. [lossless rotations](#lossless-rotations) ([sources](rotate/))
-11. [custom color formats](#custom-color-formats) (sources)
+5. [using in-memory images](#using-in-memory-images) ([sources](in-memory/))
+6. [online decoding](#online-decoding) (sources)
+7. [annotating images](#annotating-files) (sources)
+8. [requantizing images](#requantizing-images) ([sources](recompress/))
+9. [lossless rotations](#lossless-rotations) ([sources](rotate/))
+10. [custom color formats](#custom-color-formats) (sources)
 
 ---
 
@@ -61,7 +60,7 @@ The `.unpack(as:)` method is [non-mutating](https://docs.swift.org/swift-book/La
 
 <img src="decode-basic/karlie-kwk-2019.jpg.rgb.png" alt="output (as png)" width=512/>
 
-> Decoded JPEG image, saved in PNG format.
+> Decoded JPEG, saved in PNG format.
 
 ---
 
@@ -625,7 +624,7 @@ let rgb:[JPEG.RGB] = rectangular.unpack(as: JPEG.RGB.self)
 
 <img width=512 src="decode-advanced/karlie-2019.jpg.rgb.png"/>
 
-> decoded jpeg image, saved in png format
+> Decoded JPEG, saved in PNG format.
 
 ---
 
@@ -644,6 +643,8 @@ let rgb:[JPEG.RGB] = rectangular.unpack(as: JPEG.RGB.self)
 In this tutorial, we will use the same multi-stage API we used in the [advanced decoding](#advanced-decoding) tutorial, but in reverse. We will also use the progressive coding process to define a more sophisticated scan progression. As before, we will assume we have an input image, its pixel dimensions, and a file destination available.
 
 ```swift 
+import JPEG 
+
 let rgb:[JPEG.RGB]       = [ ... ] 
 let path:String          = "examples/encode-advanced/karlie-cfdas-2011.png.rgb",
     size:(x:Int, y:Int)  = (600, 900)
@@ -758,7 +759,8 @@ for (tables, scans):([JPEG.Table.Quantization.Key], [JPEG.Scan]) in layout.defin
     """)
 }
 
-for (c, (component, qi)):(Int, (component:JPEG.Component, qi:JPEG.Table.Quantization.Key)) in layout.planes.enumerated() 
+for (c, (component, qi)):(Int, (component:JPEG.Component, qi:JPEG.Table.Quantization.Key)) in 
+    layout.planes.enumerated() 
 {
     print("""
     plane \(c)
@@ -842,7 +844,9 @@ let spectral:JPEG.Data.Spectral<JPEG.Common> = planar.fdct(quanta:
     ])
 ```
 
-Finally, we can use the file system-aware compression API to encode the image and write it to disk.
+Like the `JPEG.Data.Planar` type, the `JPEG.Data.Spectral` type has a plain `.init(size:layout:metadata:quanta:)` initializer which initializes all AC coefficients to zero, and all DC coefficients to a neutral gray.
+    
+We can use the file system-aware compression API to encode the image and write it to disk.
 
 ```swift 
 guard let _:Void = try spectral.compress(path: "\(path).jpg")
@@ -854,4 +858,145 @@ else
 
 <img width=300 src="encode-advanced/karlie-cfdas-2011.png.rgb.jpg"/>
 
-> Output JPEG, 189.8 KB. (Original RGB data was 1.6 MB, PNG image was 805.7 KB.)
+> Output JPEG, 189.8&nbsp;KB. (Original RGB data was 1.6&nbsp;MB, PNG image was 805.7&nbsp;KB.)
+
+--- 
+
+## using in-memory images 
+
+[`sources`](in-memory/)
+
+> ***by the end of this tutorial, you should be able to:***
+> * *decode a jpeg image from a memory blob*
+> * *encode a jpeg image into a memory blob*
+> * *implement a custom data source or destination*
+
+Up to this point we have been using the built-in file system-based API that the library provides on Linux and MacOS platforms. These APIs are built atop of the library’s core data stream APIs, which are available on all Swift platforms. (The core library is universally portable because it is written in pure Swift, with no dependencies, even [Foundation](https://developer.apple.com/documentation/foundation).) In this tutorial, we will use this lower-level interface to implement reading and writing JPEG files in memory.
+
+Our basic data type modeling a memory blob is incredibly simple; it consists of a Swift array containing the data buffer, and a file position pointer in the form of an integer. Here, we have namespaced it under the libary’s `Common` namespace to parallel the built-in file system APIs. 
+
+```swift 
+import JPEG 
+
+extension Common 
+{
+    struct Blob 
+    {
+        private(set)
+        var data:[UInt8], 
+            position:Int 
+    }
+}
+```
+
+> Note for those unfamiliar with Swift’s name resolution behaviors: 
+> 
+> The `Common` namespace, whose fully qualified name is `JPEG.Common` is *not* the same as the `JPEG.Common` color format, whose fully qualified name is `JPEG.JPEG.Common`. In user programs, the Swift compiler will resolve the name `JPEG` to the library symbol `JPEG.JPEG`, which means that the name `JPEG.Common` will refer to the `JPEG.JPEG.Common` color format type, not the `JPEG.Common` namespace. This is true even if you import the library namespaces separately, with `import enum JPEG.JPEG` and `import enum JPEG.Common`. To refer to the `JPEG.Common` namespace, you must spell it without the prefix, as `Common`.
+
+There are two protocols a custom data stream type can support: `JPEG.Bytestream.Source`, and `JPEG.Bytestream.Destination`. The first one enables image decoding, while the second one enables image encoding. We can conform to both with the following implementations:
+
+```swift 
+extension Common.Blob:JPEG.Bytestream.Source, JPEG.Bytestream.Destination 
+{
+    init(_ data:[UInt8]) 
+    {
+        self.data       = data 
+        self.position   = data.startIndex
+    }
+    
+    mutating 
+    func read(count:Int) -> [UInt8]? 
+    {
+        guard self.position + count <= data.endIndex 
+        else 
+        {
+            return nil 
+        }
+        
+        defer 
+        {
+            self.position += count 
+        }
+        
+        return .init(self.data[self.position ..< self.position + count])
+    }
+    
+    mutating 
+    func write(_ bytes:[UInt8]) -> Void? 
+    {
+        self.data.append(contentsOf: bytes) 
+        return ()
+    }
+}
+```
+
+For the sake of tutorial brevity, we are not going to bother bootstrapping the task of obtaining the JPEG memory blob in the first place, so we will just use the built-in file system API for this. But we could have gotten the data any other way.
+
+```swift 
+let path:String         = "examples/in-memory/karlie-2011.jpg"
+guard let data:[UInt8]  = (Common.File.Source.open(path: path) 
+{
+    (source:inout Common.File.Source) -> [UInt8]? in
+    
+    guard let count:Int = source.count
+    else 
+    {
+        return nil 
+    }
+    return source.read(count: count)
+} ?? nil)
+else 
+{
+    fatalError("failed to open or read file '\(path)'")
+}
+
+var blob:Common.Blob = .init(data)
+```
+
+<img width=300 src="in-memory/karlie-2011.jpg"/>
+
+> Karlie Kloss in 2011, unknown setting. 
+>
+> (photo by John “hugo971”)
+
+To decode using our `Common.Blob` type, we use the `.decompress(stream:)` functions, which are part of the core library, and do essentially the same things as the file system-aware `.decompress(path:)` functions.
+
+```swift 
+let spectral:JPEG.Data.Spectral<JPEG.Common>    = try .decompress(stream: &blob)
+let image:JPEG.Data.Rectangular<JPEG.Common>    = spectral.idct().interleaved()
+let rgb:[JPEG.RGB]                              = image.unpack(as: JPEG.RGB.self)
+```
+
+Here, we have saved the intermediate `JPEG.Data.Spectral` representation, because we will be using it later to encode the image back into an in-memory JPEG.
+
+<img width=300 src="in-memory/karlie-2011.jpg.rgb.png"/>
+
+> Decoded JPEG, saved in PNG format.
+
+Just as with the decompression APIs, the `.compress(path:)`/`.compress(path:quanta:)` functions have generic `.compress(stream:)`/`.compress(stream:quanta:)` versions. Here, we have cleared the blob storage, and written the spectral image we saved earlier to it:
+
+```swift 
+blob = .init([])
+try spectral.compress(stream: &blob)
+```
+
+Then, we can save the blob to disk, to verify that the memory blob does indeed contain a valid JPEG file. 
+
+```swift 
+guard let _:Void = (Common.File.Destination.open(path: "\(path).jpg")
+{
+    guard let _:Void = $0.write(blob.data)
+    else 
+    {
+        fatalError("failed to write to file '\(path).jpg'")
+    }
+}) 
+else
+{
+    fatalError("failed to open file '\(path).jpg'")
+} 
+```
+
+<img width=300 src="in-memory/karlie-2011.jpg.jpg"/>
+
+> Re-encoded JPEG. Original file was 310.3&nbsp;KB; new file is 307.6&nbsp;KB, most likely due to differences in entropy coding.

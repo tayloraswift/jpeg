@@ -2683,8 +2683,8 @@ extension JPEG.Data.Spectral
     
     public 
     init(size:(x:Int, y:Int), layout:JPEG.Layout<Format>, 
-        quanta:[JPEG.Table.Quantization.Key: [UInt16]], 
-        metadata:[JPEG.Metadata])
+        metadata:[JPEG.Metadata], 
+        quanta:[JPEG.Table.Quantization.Key: [UInt16]])
     {
         self.init(layout: layout)
         self.set(width:   size.x)

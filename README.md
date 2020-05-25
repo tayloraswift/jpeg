@@ -23,7 +23,8 @@ func decode(jpeg path:String) throws
         // failed to access file from file system
     }
 
-    let rgb:[JPEG.RGB] = image.unpack(as: JPEG.RGB.self)
+    let rgb:[JPEG.RGB]      = image.unpack(as: JPEG.RGB.self), 
+        size:(x:Int, y:Int) = image.size
     // ...
 }
 ```

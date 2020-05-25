@@ -157,6 +157,7 @@ func rotate(_ rotation:Rotation, input:String, output:String) throws
     var rotated:JPEG.Data.Spectral<JPEG.Common> = .init(
         size:   size, 
         layout: layout, 
+        metadata: original.metadata, 
         quanta: original.quanta.mapValues 
         {
             (old:[UInt16]) in 
@@ -169,8 +170,7 @@ func rotate(_ rotation:Rotation, input:String, output:String) throws
                 
                 $1 = 64
             }
-        }, 
-        metadata: original.metadata) 
+        }) 
     
     for p:(Int, Int) in zip(original.indices, rotated.indices)
     {
