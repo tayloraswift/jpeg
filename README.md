@@ -42,15 +42,15 @@ func encode(jpeg path:String, size:(x:Int, y:Int), pixels:[JPEG.RGB],
         process:    .baseline, 
         components: 
         [
-            Y:  (factor: (2, 2), qi: 0), 
-            Cb: (factor: (1, 1), qi: 1), 
-            Cr: (factor: (1, 1), qi: 1),
+            1: (factor: (2, 2), qi: 0), // Y
+            2: (factor: (1, 1), qi: 1), // Cb
+            3: (factor: (1, 1), qi: 1), // Cr 
         ], 
         scans: 
         [
-            .sequential((Y,  \.0, \.0), (Cb, \.1, \.1), (Cr, \.1, \.1)),
+            .sequential((1, \.0, \.0), (2, \.1, \.1), (3, \.1, \.1)),
         ])
-    let jfif:JPEG.JFIF = .init(version: .v1_2, density: (1, 1, .centimeters))
+    let jfif:JPEG.JFIF = .init(version: .v1_2, density: (72, 72, .inches))
     let image:JPEG.Data.Rectangular<JPEG.Common> = 
         .pack(size: size, layout: layout, metadata: [.jfif(jfif)], pixels: rgb)
 

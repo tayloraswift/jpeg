@@ -7,11 +7,10 @@
 3. [advanced decoding](#advanced-decoding) ([sources](decode-advanced/))
 4. [advanced encoding](#advanced-encoding) ([sources](encode-advanced/))
 5. [using in-memory images](#using-in-memory-images) ([sources](in-memory/))
-6. [online decoding](#online-decoding) (sources)
-7. [annotating images](#annotating-files) (sources)
-8. [requantizing images](#requantizing-images) ([sources](recompress/))
-9. [lossless rotations](#lossless-rotations) ([sources](rotate/))
-10. [custom color formats](#custom-color-formats) (sources)
+6. [online decoding](#online-decoding) ([sources](decode-online/))
+7. [requantizing images](#requantizing-images) ([sources](recompress/))
+8. [lossless rotations](#lossless-rotations) ([sources](rotate/))
+9. [custom color formats](#custom-color-formats) (sources)
 
 ---
 
@@ -1000,3 +999,453 @@ else
 <img width=300 src="in-memory/karlie-2011.jpg.jpg"/>
 
 > Re-encoded JPEG. Original file was 310.3&nbsp;KB; new file is 307.6&nbsp;KB, most likely due to differences in entropy coding.
+
+---
+
+## online decoding 
+[`sources`](decode-online/)
+
+> ***by the end of this tutorial, you should be able to:***
+> * *use the contextual api to manually manage decoder state*
+> * *display partially-downloaded progressive images*
+
+Many applications using JPEG images transmit them to users over a network. In this use-case, it is often valuable for applications to be able to display a lower-quality preview of the image before it is fully downloaded onto a user’s device.
+
+Some applications accomplish this by sending many copies of the same image at different resolutions, though this increases the total data that must be transferred. Alternatively, we can take advantage of the progressive JPEG coding process to display previews of partially downloaded JPEG images without data duplication. In this tutorial, we will implement a very rudimentary version of this, which will display partial “snapshots” of an image as successive scans arrive. Needless to say, for this to be worthwhile, we need the images to use the progressive coding process (not the baseline or extended processes). But assuming you control the server hosting the images you want to serve, you are probably already doing some preprocessing anyway.
+
+<img width=400 src="decode-online/karlie-oscars-2017.jpg"/>
+
+> Karlie Kloss at the 2017 [Academy Awards](https://en.wikipedia.org/wiki/Academy_Awards). 
+> 
+> (photo by Walt Disney Television)
+
+To mock up a file being transferred over a network, we are going to modify the blob type from the [last tutorial](#using-in-memory-images) by adding an integer field `.available` representing the amount of the file we “have” at a given moment.
+
+```swift 
+struct Stream  
+{
+    private(set)
+    var data:[UInt8], 
+        position:Int, 
+        available:Int 
+}
+```
+
+Each time we try to `read` from this stream, it will either return data from the available portion of the buffer, or it will return `nil` and “download” an additional 4&nbsp;KB of the file. We also allow for rewinding the current file position to an earlier state.
+
+```swift 
+extension Stream:JPEG.Bytestream.Source
+{
+    init(_ data:[UInt8]) 
+    {
+        self.data       = data 
+        self.position   = data.startIndex
+        self.available  = data.startIndex
+    }
+    
+    mutating 
+    func read(count:Int) -> [UInt8]? 
+    {
+        guard self.position + count <= data.endIndex 
+        else 
+        {
+            return nil 
+        }
+        guard self.position + count < self.available 
+        else 
+        {
+            self.available += 4096
+            return nil 
+        }
+        
+        defer 
+        {
+            self.position += count 
+        }
+        
+        return .init(self.data[self.position ..< self.position + count])
+    }
+    
+    mutating 
+    func reset(position:Int) 
+    {
+        precondition(self.data.indices ~= position)
+        self.position = position
+    }
+}
+```
+
+For the purposes of this tutorial we again initialize our mock data stream using the file system APIs, though we could just as easily imagine the data coming over an actual network.
+
+```swift 
+let path:String         = "examples/decode-online/karlie-oscars-2017.jpg"
+guard let data:[UInt8]  = (Common.File.Source.open(path: path) 
+{
+    (source:inout Common.File.Source) -> [UInt8]? in
+    
+    guard let count:Int = source.count
+    else 
+    {
+        return nil 
+    }
+    return source.read(count: count)
+} ?? nil)
+else 
+{
+    fatalError("failed to open or read file '\(path)'")
+}
+
+var stream:Stream = .init(data)
+```
+
+The key to making this work is understanding that, if the `.read(count:)` call on the data stream returns `nil` (due to there not being enough data available), then one of four library errors will get thrown:
+
+* `JPEG.LexingError.truncatedMarkerSegmentType`
+* `JPEG.LexingError.truncatedMarkerSegmentHeader`
+* `JPEG.LexingError.truncatedMarkerSegmentBody`
+* `JPEG.LexingError.truncatedEntropyCodedSegment`
+
+These errors get thrown from the library’s lexer functions, which lex JPEG marker and entropy-coded segments out of a raw bytestream. (The lexer functions are provided as extensions on the `JPEG.Bytestream.Source` protocol, so they are available on any conforming data stream type.)
+
+```swift 
+mutating 
+func segment(prefix:Bool) throws -> ([UInt8], (JPEG.Marker, [UInt8]))
+
+mutating 
+func segment() throws -> (JPEG.Marker, [UInt8])
+```
+
+They are spelled this way because the high-level grammar of a JPEG file is essentially this:
+
+```
+JPEG                    ::= <Segment> * 
+Segment                 ::= <Marker Segment> 
+                          | <Prefixed Marker Segment>
+Prefixed Marker Segment ::= <Entropy-Coded Segment> <Marker Segment> 
+
+Entropy-Coded Segment   ::= data:[UInt8]
+Marker Segment          ::= type:JPEG.Marker data:[UInt8]
+```
+
+The `.segment(prefix:)` method returns either a prefixed or regular marker segment; the `.segment()` method is a convenience method which always expects a regular marker segment with no prefixed entropy-coded segment.
+
+To allow the lexing functions to recover on end-of-stream instead of crashing the application, we wrap them in the following `waitSegment(stream:)` and `waitSegmentPrefix(stream:)` functions, making sure to reset the file position if end-of-stream is encountered:
+
+```swift 
+func waitSegment(stream:inout Stream) throws -> (JPEG.Marker, [UInt8]) 
+{
+    let position:Int = stream.position
+    while true 
+    {
+        do 
+        {
+            return try stream.segment()
+        }
+        catch JPEG.LexingError.truncatedMarkerSegmentType 
+        {
+            stream.reset(position: position)
+            continue 
+        }
+        catch JPEG.LexingError.truncatedMarkerSegmentHeader 
+        {
+            stream.reset(position: position)
+            continue 
+        }
+        catch JPEG.LexingError.truncatedMarkerSegmentBody 
+        {
+            stream.reset(position: position)
+            continue 
+        }
+        catch JPEG.LexingError.truncatedEntropyCodedSegment 
+        {
+            stream.reset(position: position)
+            continue 
+        }
+    }
+}
+func waitSegmentPrefix(stream:inout Stream) throws -> ([UInt8], (JPEG.Marker, [UInt8]))
+{
+    let position:Int = stream.position
+    while true 
+    {
+        do 
+        {
+            return try stream.segment(prefix: true)
+        }
+        catch JPEG.LexingError.truncatedMarkerSegmentType 
+        {
+            stream.reset(position: position)
+            continue 
+        }
+        catch JPEG.LexingError.truncatedMarkerSegmentHeader 
+        {
+            stream.reset(position: position)
+            continue 
+        }
+        catch JPEG.LexingError.truncatedMarkerSegmentBody 
+        {
+            stream.reset(position: position)
+            continue 
+        }
+        catch JPEG.LexingError.truncatedEntropyCodedSegment 
+        {
+            stream.reset(position: position)
+            continue 
+        }
+    }
+}
+```
+
+Because we are trying to interact with a decoded image while it is in an incomplete state, we have to take on the responsibility of managing decoder state ourselves. The basic rules that apply here are:
+
+1. The first segment in a JPEG must be the **start-of-image** segment.
+2. The last segment in a JPEG must be the **end-of-image** segment.
+3. There is one **frame header** segment in a (non-hierarchical) JPEG, and it must come before any of the **scan header** segments.
+4. A **scan header** segment is always followed by an **entropy-coded segment**.
+5. A **restart** segment is always followed by an **entropy-coded segment**.
+6. A **height redefinition** segment, if it appears in a JPEG, must come immediately after the last **entropy-coded segment** associated with the first scan. 
+7. A **quantization table definition**, **huffman table definition**, or **restart interval definition** (not to be confused with a **restart** segment) can come anywhere in a JPEG, unless it would break rules 1, 2, 4, 5, or 6.
+
+There are more rules relating to JFIF and EXIF metadata segments, but for simplicity, we will ignore all such segments. We will implement this in a function `decodeOnline(stream:_:)` which invokes its closure argument whenever a scan is fully encoded (that is, when rules 4 and 5 go out of scope).
+
+```swift 
+func decodeOnline(stream:inout Stream, _ capture:(JPEG.Data.Spectral<JPEG.Common>) throws -> ()) 
+    throws
+{
+```
+
+The first thing we do is lex the start-of-image segment:
+
+```swift 
+    var marker:(type:JPEG.Marker, data:[UInt8]) 
+
+    // start of image 
+    marker = try waitSegment(stream: &stream)
+    guard case .start = marker.type 
+    else 
+    {
+        fatalError()
+    }
+    marker = try waitSegment(stream: &stream)
+```
+
+The next section lexes segments in a loop, parsing and saving table and restart interval definitions, and exiting once it encounters and parses the frame header segment. Although we won’t do it here, the exit point of this loop is a good time for display applications to reserve visual space for the image, since the image width, and possibly the image height is known at this point.
+
+```swift 
+    var dc:[JPEG.Table.HuffmanDC]           = [], 
+        ac:[JPEG.Table.HuffmanAC]           = [], 
+        quanta:[JPEG.Table.Quantization]    = []
+    var interval:JPEG.Header.RestartInterval?, 
+        frame:JPEG.Header.Frame?
+    definitions:
+    while true 
+    {
+        switch marker.type 
+        {
+        case .frame(let process):
+            frame   = try .parse(marker.data, process: process)
+            marker  = try waitSegment(stream: &stream)
+            break definitions
+        
+        case .quantization:
+            let parsed:[JPEG.Table.Quantization] = try JPEG.Table.parse(marker.data, 
+                as: JPEG.Table.Quantization.self)
+            quanta.append(contentsOf: parsed)
+        
+        case .huffman:
+            let parsed:(dc:[JPEG.Table.HuffmanDC], ac:[JPEG.Table.HuffmanAC]) = 
+                try JPEG.Table.parse(marker.data, 
+                    as: (JPEG.Table.HuffmanDC.self, JPEG.Table.HuffmanAC.self))
+            dc.append(contentsOf: parsed.dc)
+            ac.append(contentsOf: parsed.ac)
+        
+        case .interval:
+            interval = try .parse(marker.data)
+        
+        // ignore 
+        case .application, .comment:
+            break 
+        
+        // unexpected 
+        case .scan, .height, .end, .start, .restart:
+            fatalError()
+        
+        // unsupported  
+        case .arithmeticCodingCondition, .hierarchical, .expandReferenceComponents:
+            break 
+        }
+        
+        marker = try waitSegment(stream: &stream)
+    }
+```
+
+Fortunately for us, the library provides the `JPEG.Context` state manager which will handle table selector bindings, restart intervals, scan progression validation, and other details. It also stores an instance of `JPEG.Data.Spectral` and keeps it in a good state as we progressively build up the image. We can initialize the state manager once we have the frame header parsed:
+
+```swift 
+    // can use `!` here, previous loop cannot exit without initializing `frame`
+    var context:JPEG.Context<JPEG.Common> = try .init(frame: frame!)
+```
+
+Then we can feed it all the definitions we saved from before encountering the frame header: 
+
+```swift 
+    for table:JPEG.Table.HuffmanDC in dc 
+    {
+        context.push(dc: table)
+    }
+    for table:JPEG.Table.HuffmanAC in ac 
+    {
+        context.push(ac: table)
+    }
+    for table:JPEG.Table.Quantization in quanta 
+    {
+        try context.push(quanta: table)
+    }
+    if let interval:JPEG.Header.RestartInterval = interval 
+    {
+        context.push(interval: interval)
+    }
+```
+
+At this point, we are in the “body” of the JPEG file, and can proceed to parse and decode image scans. The first scan constitutes a special state, so we use a boolean flag to track this:
+
+```swift 
+    var first:Bool = true
+    scans:
+    while true 
+    {
+        switch marker.type 
+        {
+        // ignore 
+        case .application, .comment:
+            break 
+        // unexpected
+        case .frame, .start, .restart, .height:
+            fatalError()
+        // unsupported  
+        case .arithmeticCodingCondition, .hierarchical, .expandReferenceComponents:
+            break 
+            
+        case .quantization:
+            for table:JPEG.Table.Quantization in 
+                try JPEG.Table.parse(marker.data, as: JPEG.Table.Quantization.self)
+            {
+                try context.push(quanta: table)
+            }
+        
+        case .huffman:
+            let parsed:(dc:[JPEG.Table.HuffmanDC], ac:[JPEG.Table.HuffmanAC]) = 
+                try JPEG.Table.parse(marker.data, 
+                    as: (JPEG.Table.HuffmanDC.self, JPEG.Table.HuffmanAC.self))
+            for table:JPEG.Table.HuffmanDC in parsed.dc 
+            {
+                context.push(dc: table)
+            }
+            for table:JPEG.Table.HuffmanAC in parsed.ac 
+            {
+                context.push(ac: table)
+            }
+        
+        case .interval:
+            context.push(interval: try .parse(marker.data))
+```
+
+The scan parsing looks more complex than it is. After parsing the scan header, it tries to lex out pairs of entropy-coded segments and marker segments, stopping if the marker segment is anything but a restart segment. 
+
+```swift 
+        case .scan:
+            let scan:JPEG.Header.Scan   = try .parse(marker.data, 
+                process: context.spectral.layout.process)
+            var ecss:[[UInt8]] = []
+            for index:Int in 0...
+            {
+                let ecs:[UInt8]
+                (ecs, marker) = try waitSegmentPrefix(stream: &stream)
+                ecss.append(ecs)
+                guard case .restart(let phase) = marker.type
+                else 
+                {
+```
+
+The exit clause of the guard statement pushes the entropy-coded segments to the state manager, which invokes the decoder on them. The `extend:` argument of the `.push(scan:ecss:extend:)` method reflects the fact that the image height is not fully known at this point, which means that the image dimensions are flexible, and so can be *extend*ed.
+
+```swift 
+                    try context.push(scan: scan, ecss: ecss, extend: first)
+```
+
+If we had just decoded the first scan, then we look for a height redefinition segment immediately following it (rule 6). If it isn’t there, then we know the dimensions given in the frame header are real, and use that to construct a “virtual” height redefinition segment, which we then push to the state manager. This is a necessary step because the decoder could have extended the image vertically beyond its declared height while decoding image padding, so this padding needs to be trimmed off.
+
+```swift 
+                    if first 
+                    {
+                        let height:JPEG.Header.HeightRedefinition
+                        if case .height = marker.type 
+                        {
+                            height = try .parse(marker.data)
+                            marker = try waitSegment(stream: &stream)
+                        }
+                        // same guarantees for `!` as before
+                        else if frame!.size.y > 0
+                        {
+                            height = .init(height: frame!.size.y)
+                        }
+                        else 
+                        {
+                            fatalError()
+                        }
+                        context.push(height: height)
+                        first = false 
+                    }
+```
+
+Then we print out some information about the scan for debugging purposes, invoke the closure argument, and validate the restart phase (if the guard statement did not exit the inner loop).
+
+```swift 
+                    print("band: \(scan.band), bits: \(scan.bits), components: \(scan.components.map(\.ci))")
+                    try capture(context.spectral)
+                    continue scans 
+                }
+
+                guard phase == index % 8 
+                else 
+                {
+                    fatalError()
+                }
+            }
+```
+
+We exit the function when we encounter the end-of-image segment.
+
+```swift 
+        case .end:
+            return
+        }
+
+        marker = try waitSegment(stream: &stream)
+    }
+}
+```
+
+Then we can invoke the `decodeOnline(stream:)` function like this:
+
+```swift 
+try decodeOnline(stream: &stream) 
+{
+    let image:JPEG.Data.Rectangular<JPEG.Common>    = $0.idct().interleaved()
+    let rgb:[JPEG.RGB]                              = image.unpack(as: JPEG.RGB.self)
+}
+```
+
+|       | scan                                     ||| image                               ||
+| ----- | ---------- | ------- | ------------------- | -------------------------- | ------- | 
+|       | band       | bit(s)  | components          | difference (50x) | current |
+| **0** | `0 ..< 1`  | `1 ...` | **1**, **2**, **3** |<img width=200 src="decode-online/karlie-oscars-2017.jpg-difference-0.rgb.png"/>|<img width=200 src="decode-online/karlie-oscars-2017.jpg-0.rgb.png"/>|
+| **1** | `1 ..< 6`  | `2 ...` | **1**               |<img width=200 src="decode-online/karlie-oscars-2017.jpg-difference-1.rgb.png"/>|<img width=200 src="decode-online/karlie-oscars-2017.jpg-1.rgb.png"/>|
+| **2** | `1 ..< 64` | `1 ...` | **3**               |<img width=200 src="decode-online/karlie-oscars-2017.jpg-difference-2.rgb.png"/>|<img width=200 src="decode-online/karlie-oscars-2017.jpg-2.rgb.png"/>|
+| **3** | `1 ..< 64` | `1 ...` | **2**               |<img width=200 src="decode-online/karlie-oscars-2017.jpg-difference-3.rgb.png"/>|<img width=200 src="decode-online/karlie-oscars-2017.jpg-3.rgb.png"/>|
+| **4** | `6 ..< 64` | `2 ...` | **1**               |<img width=200 src="decode-online/karlie-oscars-2017.jpg-difference-4.rgb.png"/>|<img width=200 src="decode-online/karlie-oscars-2017.jpg-4.rgb.png"/>|
+| **5** | `1 ..< 64` | `1`     | **1**               |<img width=200 src="decode-online/karlie-oscars-2017.jpg-difference-5.rgb.png"/>|<img width=200 src="decode-online/karlie-oscars-2017.jpg-5.rgb.png"/>|
+| **6** | `0 ..< 1`  | `0`     | **1**, **2**, **3** |<img width=200 src="decode-online/karlie-oscars-2017.jpg-difference-6.rgb.png"/>|<img width=200 src="decode-online/karlie-oscars-2017.jpg-6.rgb.png"/>|
+| **7** | `1 ..< 64` | `0`     | **3**               |<img width=200 src="decode-online/karlie-oscars-2017.jpg-difference-7.rgb.png"/>|<img width=200 src="decode-online/karlie-oscars-2017.jpg-7.rgb.png"/>|
+| **8** | `1 ..< 64` | `0`     | **2**               |<img width=200 src="decode-online/karlie-oscars-2017.jpg-difference-8.rgb.png"/>|<img width=200 src="decode-online/karlie-oscars-2017.jpg-8.rgb.png"/>|
+| **9** | `1 ..< 64` | `0`     | **1**               |<img width=200 src="decode-online/karlie-oscars-2017.jpg-difference-9.rgb.png"/>|<img width=200 src="decode-online/karlie-oscars-2017.jpg-9.rgb.png"/>|

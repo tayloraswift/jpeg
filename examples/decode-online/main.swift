@@ -47,7 +47,7 @@ extension Stream:JPEG.Bytestream.Source
     }
 }
 
-let path:String         = "examples/decode-online/karlie-2011.jpg"
+let path:String         = "examples/decode-online/karlie-oscars-2017.jpg"
 guard let data:[UInt8]  = (Common.File.Source.open(path: path) 
 {
     (source:inout Common.File.Source) -> [UInt8]? in
@@ -244,6 +244,9 @@ func decodeOnline(stream:inout Stream, _ capture:(JPEG.Data.Spectral<JPEG.Common
                 context.push(ac: table)
             }
         
+        case .interval:
+            context.push(interval: try .parse(marker.data))
+        
         case .scan:
             let scan:JPEG.Header.Scan   = try .parse(marker.data, 
                 process: context.spectral.layout.process)
@@ -272,7 +275,7 @@ func decodeOnline(stream:inout Stream, _ capture:(JPEG.Data.Spectral<JPEG.Common
                         }
                         else 
                         {
-                            throw JPEG.DecodingError.missingHeightRedefinitionSegment
+                            fatalError()
                         }
                         context.push(height: height)
                         first = false 
@@ -286,13 +289,10 @@ func decodeOnline(stream:inout Stream, _ capture:(JPEG.Data.Spectral<JPEG.Common
                 guard phase == index % 8 
                 else 
                 {
-                    throw JPEG.DecodingError.invalidRestartPhase(phase, expected: index % 8)
+                    fatalError()
                 }
             }
-        
-        case .interval:
-            context.push(interval: try .parse(marker.data))
-        
+
         case .end:
             return
         }
@@ -302,10 +302,25 @@ func decodeOnline(stream:inout Stream, _ capture:(JPEG.Data.Spectral<JPEG.Common
 }
 
 var counter:Int = 0
+var last:[JPEG.RGB] = []
 try decodeOnline(stream: &stream) 
 {
     let image:JPEG.Data.Rectangular<JPEG.Common>    = $0.idct().interleaved()
     let rgb:[JPEG.RGB]                              = image.unpack(as: JPEG.RGB.self)
+    let difference:[JPEG.RGB] = 
+        zip(last + .init(repeating: .init(0, 0, 0), count: rgb.count - last.count), rgb).map 
+    {
+        let d:(r:Int, g:Int, b:Int) = 
+        (
+            abs(.init($1.r) - .init($0.r)),
+            abs(.init($1.g) - .init($0.g)),
+            abs(.init($1.b) - .init($0.b))
+        )
+        return .init(.init(clamping: 50 * d.r), .init(clamping: 50 * d.g), .init(clamping: 50 * d.b))
+    }
+    
+    last = rgb
+    
     guard let _:Void = (Common.File.Destination.open(path: "\(path)-\(counter).rgb")
     {
         guard let _:Void = $0.write(rgb.flatMap{ [$0.r, $0.g, $0.b] })
@@ -317,6 +332,19 @@ try decodeOnline(stream: &stream)
     else
     {
         fatalError("failed to open file '\(path)-\(counter).rgb'")
+    } 
+    
+    guard let _:Void = (Common.File.Destination.open(path: "\(path)-difference-\(counter).rgb")
+    {
+        guard let _:Void = $0.write(difference.flatMap{ [$0.r, $0.g, $0.b] })
+        else 
+        {
+            fatalError("failed to write to file '\(path)-difference-\(counter).rgb'")
+        }
+    }) 
+    else
+    {
+        fatalError("failed to open file '\(path)-difference-\(counter).rgb'")
     } 
     
     counter += 1

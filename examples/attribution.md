@@ -18,6 +18,10 @@
 
 1. [John “hugo971”](https://www.flickr.com/photos/30375176@N08/5734204790) (CC BY-NC-ND 2.0)
 
+`decode-online`:
+
+1. [Walt Disney Television](https://www.flickr.com/photos/91795856@N02/33011712301) (CC BY-ND 2.0)
+
 `rotate`:
 
 1. [Kode With Klossy (Facebook)](https://www.facebook.com/kodewithklossy/photos/kodewithklossy-scholars-attending-a-panel-with-editor-in-chief-at-teen-vogue-ela/1756483347711968/) (unknown)
