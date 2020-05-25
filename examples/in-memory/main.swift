@@ -1,7 +1,4 @@
-import enum JPEG.JPEG 
-import enum JPEG.Common 
-
-print(Common.self == JPEG.Common.self)
+import JPEG 
 
 extension Common 
 {

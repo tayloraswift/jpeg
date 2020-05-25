@@ -88,6 +88,16 @@ for file in examples/in-memory/*.jpg ; do
     fi
 done 
 
+# run `decode-online` example 
+check   "error: runtime error" \
+        .build/$build_configuration/decode-online
+for file in examples/decode-online/*.jpg ; do 
+    size=$(identify -format "%wx%h" jpg:$file)
+done 
+for file in examples/decode-online/*.rgb ; do 
+    convert -depth 8 -size $size "rgb:$file" "png:$file.png"
+done 
+
 # run `recompress` example
 check   "error: runtime error" \
         .build/$build_configuration/recompress

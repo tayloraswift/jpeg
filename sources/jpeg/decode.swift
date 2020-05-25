@@ -1174,6 +1174,12 @@ extension JPEG
         {
             public 
             let height:Int 
+            
+            public 
+            init(height:Int)
+            {
+                self.height = height
+            }
         }
         
         public 
@@ -1181,6 +1187,12 @@ extension JPEG
         {
             public 
             let interval:Int? 
+            
+            public 
+            init(interval:Int?)
+            {
+                self.interval = interval
+            }
         }
         
         public 
@@ -4130,6 +4142,7 @@ extension JPEG.Header.Scan
 }
 extension JPEG 
 {
+    public 
     struct Context<Format> where Format:JPEG.Format
     {
         private
@@ -4143,21 +4156,18 @@ extension JPEG
         private 
         var interval:Int?
         
+        public private(set)
+        var spectral:Data.Spectral<Format>
         private 
-        var spectral:Data.Spectral<Format>, 
-            progression:Layout<Format>.Progression 
+        var progression:Layout<Format>.Progression 
         
         private 
         var counter:Int 
-        
-        var layout:Layout<Format> 
-        {
-            self.spectral.layout 
-        }
     }
 }
 extension JPEG.Context 
 {
+    public 
     init(frame:JPEG.Header.Frame) throws 
     {
         self.counter        = 0
@@ -4172,27 +4182,27 @@ extension JPEG.Context
         self.interval       = nil
     }
     
-    mutating 
+    public mutating 
     func push(height:JPEG.Header.HeightRedefinition) 
     {
         self.spectral.set(height: height.height)
     }
-    mutating 
+    public mutating 
     func push(interval:JPEG.Header.RestartInterval) 
     {
         self.interval = interval.interval 
     }
-    mutating 
+    public mutating 
     func push(dc table:JPEG.Table.HuffmanDC) 
     {
         self.tables.dc[keyPath: table.target] = table
     }
-    mutating 
+    public mutating 
     func push(ac table:JPEG.Table.HuffmanAC) 
     {
         self.tables.ac[keyPath: table.target] = table
     }
-    mutating 
+    public mutating 
     func push(quanta table:JPEG.Table.Quantization) throws 
     {
         // generate a new `qi`, and get the corresponding `q` from the 
@@ -4202,13 +4212,13 @@ extension JPEG.Context
         self.counter += 1
         self.tables.quanta[keyPath: table.target]   = (q, qi)
     }
-    mutating 
+    public mutating 
     func push(metadata:JPEG.Metadata) 
     {
         self.spectral.metadata.append(metadata)
     }
     
-    mutating 
+    public mutating 
     func push(scan:JPEG.Header.Scan, ecss:[[UInt8]], extend:Bool) throws 
     {
         let interval:Int
@@ -4399,7 +4409,7 @@ extension JPEG.Context
 
             case .scan:
                 let scan:JPEG.Header.Scan   = try .parse(marker.data, 
-                    process: context.layout.process)
+                    process: context.spectral.layout.process)
                 var ecss:[[UInt8]] = []
                 for index:Int in 0...
                 {
