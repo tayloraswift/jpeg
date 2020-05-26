@@ -102,10 +102,18 @@ done
 check   "error: runtime error" \
         .build/$build_configuration/recompress
 
-# run `rotate` example
+ run `rotate` example
 check   "error: runtime error" \
         .build/$build_configuration/rotate examples/rotate/karlie-kwk-wwdc-2017.jpg examples/rotate/karlie-kwk-wwdc-2017-ii.jpg --rotation ii
 check   "error: runtime error" \
         .build/$build_configuration/rotate examples/rotate/karlie-kwk-wwdc-2017.jpg examples/rotate/karlie-kwk-wwdc-2017-iii.jpg --rotation iii
 check   "error: runtime error" \
         .build/$build_configuration/rotate examples/rotate/karlie-kwk-wwdc-2017.jpg examples/rotate/karlie-kwk-wwdc-2017-iv.jpg --rotation iv
+
+# run `custom-color` example
+check   "error: runtime error" \
+        .build/$build_configuration/custom-color
+for file in examples/custom-color/*.rgb ; do 
+    convert -depth 16 -endian msb -size 1000x200 rgb:$file -depth 16 png:$file-16.png
+    convert -depth 16 -endian msb -size 1000x200 rgb:$file -depth 8  png:$file-8.png
+done 

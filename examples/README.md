@@ -10,7 +10,7 @@
 6. [online decoding](#online-decoding) ([sources](decode-online/))
 7. [requantizing images](#requantizing-images) ([sources](recompress/))
 8. [lossless rotations](#lossless-rotations) ([sources](rotate/))
-9. [custom color formats](#custom-color-formats) (sources)
+9. [custom color formats](#custom-color-formats) ([sources](custom-color/))
 
 ---
 
@@ -1003,6 +1003,7 @@ else
 ---
 
 ## online decoding 
+
 [`sources`](decode-online/)
 
 > ***by the end of this tutorial, you should be able to:***
@@ -1455,6 +1456,7 @@ try decodeOnline(stream: &stream)
 ---
 
 ## requantizing images 
+
 [`sources`](recompress/)
 
 > ***by the end of this tutorial, you should be able to:***
@@ -1584,6 +1586,7 @@ Compared with the output of an image editor used with quality settings chosen to
 ---
 
 ## lossless rotations 
+
 [`sources`](rotate/)
 
 > ***by the end of this tutorial, you should be able to:***
@@ -1851,3 +1854,302 @@ We write the output to disk using the `compress(path:)` method.
 <img width=386 src="rotate/karlie-kwk-wwdc-2017-iv.jpg"/>
 
 > Output JPEG, rotated 270°, 89.1&nbsp;KB.
+
+---
+
+## custom color formats 
+
+[`sources`](custom-color/)
+
+> ***by the end of this tutorial, you should be able to:***
+> * *implement conforming custom color format types*
+> * *implement conforming custom color target types*
+> * *encode and decode deep-color images*
+
+So far, we have only ever used image layouts with the built-in `JPEG.Common` type parameter. As you might expect from the generic nature of this API and other APIs, the library allows you to go beyond the 8-bit built-in YCbCr color formats and implement your own color formats. Subject to a few constraints, images using such custom color formats are compliant JPEG files, but are not compliant JFIF or EXIF images. Virtually no consumer image viewers support such JPEG images, but they can still be useful in medical and scientific applications that want to use specialized color formats, but still want to take advantage of JPEG compression. For example, some applications may want to augment a YCbCr image with an alpha or infrared channel, or use a completely different color space such as RGB. Other applications may want to increase the bit-depth to work with deep-color images.
+
+In this tutorial, we will implement a custom 12-bit color format, `JPEG.Deep`, and define two color targets, `JPEG.RGB12` and `JPEG.RGBA12` that it can be used with. The `JPEG.Deep` format will have one case, `rgba12`, representing a 12-bit RGBA native format.
+
+```swift 
+import JPEG 
+
+extension JPEG 
+{
+    enum Deep 
+    {
+        case rgba12
+    }
+    
+    struct RGB12 
+    {
+        var r:UInt16
+        var g:UInt16
+        var b:UInt16
+        
+        init(_ r:UInt16, _ g:UInt16, _ b:UInt16)
+        {
+            self.r = r
+            self.g = g
+            self.b = b
+        }
+    }
+    
+    struct RGBA12 
+    {
+        var r:UInt16
+        var g:UInt16
+        var b:UInt16
+        var a:UInt16
+        
+        init(_ r:UInt16, _ g:UInt16, _ b:UInt16, _ a:UInt16)
+        {
+            self.r = r
+            self.g = g
+            self.b = b
+            self.a = a
+        }
+    }
+}
+```
+
+To make these user-defined types work with the library APIs, we need to conform them to the `JPEG.Format` and `JPEG.Color` protocols, respectively. For the library to use a custom color format type, it must implement the following requirements:
+
+```swift 
+protocol JPEG.Format
+{
+    static 
+    func recognize(_ components:Set<JPEG.Component.Key>, precision:Int) -> Self?
+    
+    // the ordering here is used to determine planar indices 
+    var components:[JPEG.Component.Key]
+    {
+        get 
+    }
+    var precision:Int 
+    {
+        get 
+    }
+}
+```
+
+The static `recognize(_:precision:)` function takes a set of component keys and a bit precision and returns an instance of `Self`, or `nil` if the arguments don’t match any case of this color format. (The arguments are assumed to have been read from a JPEG frame header.)
+
+The `components` property returns an array containing the *recognized* components of the color format, in the same order that the planes of an image with a layout using this format would be arranged in. This does *not* have to be the same as the set of components passed to `recognize(_:precision:)` constructor earlier, but it should be a subset of it. If the frame header declared components that don’t appear in this array, the decoder won’t allocate planes for them and will skip over those components when decoding scans. (This implies the decoder still expects those components to be present in the file.) Only components in this array will get encoded by the encoder.
+
+The `precision` property should return the same precision that was passed to the constructor; in other words, bit-depths in custom color formats should have read-write semantics.
+
+We conform the `JPEG.Deep` type to `JPEG.Format` like this:
+
+```swift 
+extension JPEG.Deep:JPEG.Format 
+{
+    static 
+    func recognize(_ components:Set<JPEG.Component.Key>, precision:Int) -> Self?
+    {
+        switch (components.sorted(), precision)
+        {
+        case ([4, 5, 6, 7], 12):
+            return .rgba12 
+        default:
+            return nil 
+        }
+    }
+    
+    // the ordering here is used to determine planar indices 
+    var components:[JPEG.Component.Key]
+    {
+        [4, 5, 6, 7]
+    }
+    var precision:Int 
+    {
+        12 
+    }
+}
+```
+
+Here, we have chosen to assign component keys **4**, **5**, **6**, and **7** to the red, green, blue, and alpha channels, respectively. We started the count from **4** to avoid conflicting with normal YCbCr JPEGs, which use the numbering **1**, **2**, and **3**.
+
+The protocol supports a lot of flexibility, but the particular JPEG coding process used by an image limits the number of valid combinations. In particular:
+
+* The baseline coding process only supports 8-bit color formats.
+* The extended and progressive coding processes only support 8-bit and 12-bit color formats.
+* The progressive coding process only supports color formats with up to four components.
+* No coding process supports color formats with more than 255 components.
+
+To implement a color target type for a particular color format type, we need to satisfy the following requirements:
+
+```
+protocol JPEG.Color
+{
+    associatedtype Format:JPEG.Format 
+    
+    static 
+    func unpack(_ interleaved:[UInt16], of format:Format) -> [Self]
+    static 
+    func pack(_ pixels:[Self], as format:Format) -> [UInt16]
+}
+```
+
+The static `unpack(_:of:)` and `pack(_:as:)` provide the functionality for the `unpack(as:)` and `pack(size:layout:metadata:pixels:)` APIs. We conform our `JPEG.RGB12` and `JPEG.RGBA12` types like this:
+
+```swift 
+extension JPEG.RGB12:JPEG.Color 
+{
+    static 
+    func unpack(_ interleaved:[UInt16], of format:JPEG.Deep) -> [Self]
+    {
+        switch format 
+        {
+        case .rgba12:
+            return stride(from: interleaved.startIndex, to: interleaved.endIndex, by: 4).map 
+            {
+                (base:Int) -> Self in 
+                .init(
+                    interleaved[base    ], 
+                    interleaved[base + 1], 
+                    interleaved[base + 2])
+            }
+        }
+    }
+    static 
+    func pack(_ pixels:[Self], as format:JPEG.Deep) -> [UInt16]
+    {
+        switch format 
+        {
+        case .rgba12:
+            return pixels.flatMap
+            {
+                [min($0.r, 0x0fff), min($0.g, 0x0fff), min($0.b, 0x0fff), 0x0fff]
+            }
+        }
+    }
+}
+extension JPEG.RGBA12:JPEG.Color 
+{
+    static 
+    func unpack(_ interleaved:[UInt16], of format:JPEG.Deep) -> [Self]
+    {
+        switch format 
+        {
+        case .rgba12:
+            return stride(from: interleaved.startIndex, to: interleaved.endIndex, by: 4).map 
+            {
+                (base:Int) -> Self in 
+                .init(
+                    interleaved[base    ], 
+                    interleaved[base + 1], 
+                    interleaved[base + 2], 
+                    interleaved[base + 3])
+            }
+        }
+    }
+    static 
+    func pack(_ pixels:[Self], as format:JPEG.Deep) -> [UInt16]
+    {
+        switch format 
+        {
+        case .rgba12:
+            return pixels.flatMap
+            {
+                [min($0.r, 0x0fff), min($0.g, 0x0fff), min($0.b, 0x0fff), min($0.a, 0x0fff)]
+            }
+        }
+    }
+}
+```
+
+Here, we have the `JPEG.RGB12` type drop the alpha channel while unpacking and fill it with the maximum 12-bit integer value while packing. This is completely arbitrary; you can define whatever semantics you want here.
+
+To create a test image, we can generate a procedural deep-color gradient using the `_sin(_:)` LLVM intrinsic like this:
+
+```swift 
+func sin(_ x:Double) -> UInt16 
+{
+    .init(0x0fff * (_sin(2.0 * .pi * x) * 0.5 + 0.5))
+} 
+let gradient:[JPEG.RGBA12] = stride(from: 0.0, to: 1.0, by: 0.005).flatMap 
+{
+    (phase:Double) in 
+    stride(from: 0.0, to: 1.0, by: 0.001).map
+    {
+        .init(sin(phase + $0 - 0.15), sin(phase + $0), sin(phase + $0 + 0.15), 0x0fff)
+    }
+}
+```
+
+The code to construct the image layout, and encode the test image to disk should look familiar, only we have substituted our custom `JPEG.Deep` color format type for the usual `JPEG.Common` type:
+
+```swift 
+let format:JPEG.Deep     = .rgba12 
+let R:JPEG.Component.Key = format.components[0],
+    G:JPEG.Component.Key = format.components[1],
+    B:JPEG.Component.Key = format.components[2],
+    A:JPEG.Component.Key = format.components[3]
+
+let layout:JPEG.Layout<JPEG.Deep> = .init(
+    format:     format, 
+    process:    .progressive(coding: .huffman, differential: false), 
+    components: 
+    [
+        R: (factor: (2, 2), qi: 0),
+        G: (factor: (2, 2), qi: 0),
+        B: (factor: (2, 2), qi: 0),
+        A: (factor: (1, 1), qi: 1),
+    ], 
+    scans: 
+    [
+        .progressive((G, \.0), (A, \.1),       bits: 0...),
+        .progressive((R, \.0), (B, \.1),       bits: 0...),
+        
+        .progressive((R, \.0), band: 1 ..< 64, bits: 1...),
+        .progressive((G, \.0), band: 1 ..< 64, bits: 1...),
+        .progressive((B, \.0), band: 1 ..< 64, bits: 1...),
+        .progressive((A, \.0), band: 1 ..< 64, bits: 1...),
+        
+        .progressive((R, \.0), band: 1 ..< 64, bit:  0),
+        .progressive((G, \.0), band: 1 ..< 64, bit:  0),
+        .progressive((B, \.0), band: 1 ..< 64, bit:  0),
+        .progressive((A, \.0), band: 1 ..< 64, bit:  0),
+    ])
+
+let path:String                             = "examples/custom-color/output.jpg"
+let image:JPEG.Data.Rectangular<JPEG.Deep>  = 
+    .pack(size: (1000, 200), layout: layout, metadata: [], pixels: gradient)
+try image.compress(path: path, quanta: 
+[
+    0: [1, 2, 2, 3, 3, 3] + .init(repeating:  10, count: 58),
+    1: [1]                + .init(repeating: 100, count: 63),
+])
+```
+
+<img width=500 src="custom-color/output.jpg"/>
+
+> Output JPEG, 98.1&nbsp;KB. (Your browser or image viewer almost certainly can’t display this image.)
+
+Note that the DC coefficients for the green and alpha channels have to go in a separate scan from the red and blue channels, because the four components together have a total sampling volume (13) greater than the limit of 10.
+
+We can read this image back into our test program like this:
+
+```swift 
+guard let saved:JPEG.Data.Rectangular<JPEG.Deep> = try .decompress(path: path)
+else 
+{
+    fatalError("failed to open file '\(path)'")
+}
+
+let rgb12:[JPEG.RGB12] = image.unpack(as: JPEG.RGB12.self)
+```
+
+<img width=500 src="custom-color/output.jpg.rgb-16.png"/>
+
+> Re-decoded deep-color image, saved as a 16-bit PNG, 15.2&nbsp;KB. The small file size relative to the JPEG file is because PNG’s [differential filtering](http://www.libpng.org/pub/png/spec/iso/index-object.html#4Concepts.EncodingFiltering) is extremely efficient at compressing linear gradients. ‘Real’ photographic data would compress much better as a JPEG than as a PNG.
+
+To verify that this image really contains deep colors, we can difference it with an 8-bit truncated version of the same decoded data:
+
+<img width=500 src="custom-color/output.jpg.rgb-16.png"/>
+
+> Re-decoded deep-color image, saved as an 8-bit PNG, 5.8&nbsp;KB. 
+
+<img width=500 src="custom-color/output.jpg.rgb-difference.png"/>
+
+> Difference between 16-bit and 8-bit re-decoded images, amplified 128x.

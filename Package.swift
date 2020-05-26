@@ -20,6 +20,7 @@ let package = Package(
         .executable(name: "decode-online",      targets: ["JPEGDecodeOnline"]),
         .executable(name: "recompress",         targets: ["JPEGRecompress"]),
         .executable(name: "rotate",             targets: ["JPEGRotate"]),
+        .executable(name: "custom-color",       targets: ["JPEGCustomColor"]),
     ],
     targets: 
     [
@@ -38,6 +39,7 @@ let package = Package(
         .target(name: "JPEGDecodeOnline",       dependencies: ["JPEG"], path: "examples/decode-online"),
         .target(name: "JPEGRecompress",         dependencies: ["JPEG"], path: "examples/recompress"),
         .target(name: "JPEGRotate",             dependencies: ["JPEG"], path: "examples/rotate"),
+        .target(name: "JPEGCustomColor",        dependencies: ["JPEG"], path: "examples/custom-color"),
     ], 
     swiftLanguageVersions: [.v4_2, .v5]
 )
