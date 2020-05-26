@@ -55,7 +55,7 @@ The pixel unpacking can also be done with the `JPEG.YCbCr` built-in target, to o
 let ycc:[JPEG.YCbCr] = image.unpack(as: JPEG.YCbCr.self)
 ```
 
-The `.unpack(as:)` method is [non-mutating](https://docs.swift.org/swift-book/LanguageGuide/Methods.html#ID239), so you can unpack the same image to multiple color targets without having to re-decode the file each time.
+The `unpack(as:)` method is [non-mutating](https://docs.swift.org/swift-book/LanguageGuide/Methods.html#ID239), so you can unpack the same image to multiple color targets without having to re-decode the file each time.
 
 <img src="decode-basic/karlie-kwk-2019.jpg.rgb.png" alt="output (as png)" width=512/>
 
@@ -130,7 +130,7 @@ If you don’t know what subsampling is, or what the colon-separated notation me
 ┗━━━━┷━━━━┹────┴────┘    ┗━━━━━━━━━┹─────────┘
 ```
 
-The sampling factors are alternative ways of expressing these configurations, indicating the number of samples in a minimum coded unit (bolded line).
+The sampling factors are alternative ways of expressing these configurations, indicating the number of samples in a **minimum coded unit** (bolded line).
 
 We will use these settings to initialize a `JPEG.Layout` structure specifying the shape and scan progression of the JPEG file you want to output.
 
@@ -166,7 +166,7 @@ The `components:` argument takes a dictionary mapping `JPEG.Component.Key`s to t
 
 Because we are using the standard `ycc8` color format, component **1** always represents the *Y* channel; component **2**, the *Cb* channel; and component **3**, the *Cr* channel. As long as we are using the `ycc8` color format, the dictionary must consist of these three component keys. (The quantization table keys can be anything you want.)
 
-The `scans:` argument specifies the **scan progression** of the JPEG file, and takes an array of `JPEG.Header.Scan`s. Because we are using the `baseline` coding process, we can only use sequential scans, which we initialize using the `.sequential(_:...)` static constructor. Here, we have defined one single-component scan containing the luminance channel, and another two-component interleaved scan containing the two color channels.
+The `scans:` argument specifies the **scan progression** of the JPEG file, and takes an array of `JPEG.Header.Scan`s. Because we are using the `baseline` coding process, we can only use sequential scans, which we initialize using the `sequential(_:...)` static constructor. Here, we have defined one single-component scan containing the luminance channel, and another two-component interleaved scan containing the two color channels.
 
 The two [keypaths](https://developer.apple.com/documentation/swift/keypath) in each component tuple specify [huffman table](https://en.wikipedia.org/wiki/Huffman_coding) destinations (DC and AC, respectively); if the AC or DC selectors are the same for each component in a scan, then those components will share the same (AC or DC) huffman table. The interleaved color scan 
 
@@ -199,7 +199,7 @@ let image:JPEG.Data.Rectangular<JPEG.Common> =
     .pack(size: size, layout: layout, metadata: [.jfif(jfif)], pixels: rgb)
 ```
 
-The static `.pack(size:layout:metadata:pixels:)` method is generic and can also take an array of native `JPEG.YCbCr` pixels.
+The static `pack(size:layout:metadata:pixels:)` method is generic and can also take an array of native `JPEG.YCbCr` pixels.
 
 The next step is to specify the quantum values the encoder will use to compress each of the image components. JPEG has no concept of linear “quality”; the quantization table values are completely independent. Still, the framework provides the `JPEG.CompressionLevel` APIs to generate quantum values from a single “quality” parameter.
 
@@ -218,7 +218,7 @@ enum JPEG.CompressionLevel
 
 The only difference between the `luminance(_:)` and `chrominance(_:)` cases is that one produces quantum values optimized for the *Y* channel while the other produces values optimized for the *Cb* and *Cr* channels.
 
-We then loop through different compression levels and use the `.compress(path:quanta:)` method to encode the files. The keys in the dictionary for the `quanta:` argument must match the quantization table keys in the image layout.
+We then loop through different compression levels and use the `compress(path:quanta:)` method to encode the files. The keys in the dictionary for the `quanta:` argument must match the quantization table keys in the image layout.
 
 ```swift 
 for level:Double in [0.0, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0] 
@@ -295,7 +295,7 @@ This example program will generate 32 output images. For comparison, the PNG-enc
 > * *convert intra-data unit grid coordinates to zigzag indices*
 > * *access values from a quantization table*
 
-In the [basic decoding](#basic-decoding) tutorial, we used the single-stage `.decompress(path:)` function to inflate a JPEG file from disk directly to its `Data.Rectangular` representation. This time, we will decompress the file to an intermediate representation modeled by the `JPEG.Data.Spectral` type.
+In the [basic decoding](#basic-decoding) tutorial, we used the single-stage `decompress(path:)` function to inflate a JPEG file from disk directly to its `JPEG.Data.Rectangular` representation. This time, we will decompress the file to an intermediate representation modeled by the `JPEG.Data.Spectral` type.
 
 ```swift 
 import JPEG 
@@ -316,7 +316,7 @@ else
 
 The spectral representation is the native representation of a JPEG image. That means that the image can be re-encoded from a `JPEG.Data.Spectral` structure without any loss of information.
 
-We can access the image’s pixel dimensions through the `.size` property, which returns a `(x:Int, y:Int)` tuple, and its layout through the `.layout` property, which returns a `JPEG.Layout` structure, the same type that we used in the [basic encoding](#basic-encoding) tutorial.
+We can access the image’s pixel dimensions through the `size` property, which returns a `(x:Int, y:Int)` tuple, and its layout through the `layout` property, which returns a `JPEG.Layout` structure, the same type that we used in the [basic encoding](#basic-encoding) tutorial.
 
 The `JPEG.Layout` structure has the following members:
 
@@ -399,7 +399,7 @@ Here we can see that this image:
 * uses 4:2:0 chroma subsampling, and 
 * has one sequential, interleaved scan encoding all three color components.
 
-We can also read (and modify) the image metadata through the `.metadata` property, which stores an array of metadata records in the order in which they were encountered in the file. The metadata records are enumerations which come in four cases:
+We can also read (and modify) the image metadata through the `metadata` property, which stores an array of metadata records in the order in which they were encountered in the file. The metadata records are enumerations which come in four cases:
 
 ```swift 
 enum JPEG.Metadata 
@@ -448,7 +448,7 @@ metadata (application 2, 538 bytes)
 
 We can see that this image contains an EXIF segment which uses big-endian byte order. (JPEG data is always big-endian, but EXIF data can be big-endian or little-endian.) It also contains a [Flashpix EXIF extension](https://en.wikipedia.org/wiki/Exif#FlashPix_extensions) segment, which shows up here as an unparsed 538-byte APP2 segment.
 
-The `.size`, `.layout`, and `.metadata` properties are available on all image representations, including `JPEG.Data.Rectangular`, so you don’t need to go through this multistep decompression process to access them. However, the spectral representation is unique in that it also provides access to the quantization tables used by the image.
+The `size`, `layout`, and `metadata` properties are available on all image representations, including `JPEG.Data.Rectangular`, so you don’t need to go through this multistep decompression process to access them. However, the spectral representation is unique in that it also provides access to the quantization tables used by the image.
 
 First we uniquify the quanta keys used by the all the planes in the image, since some planes may reference the same quantization table.
 
@@ -456,7 +456,7 @@ First we uniquify the quanta keys used by the all the planes in the image, since
 let keys:Set<JPEG.Table.Quantization.Key> = .init(spectral.layout.planes.map(\.qi))
 ```
 
-Then, for each of the quanta keys, we use the `.index(forKey:)` method on the `.quanta` member of the `JPEG.Data.Spectral` structure to obtain an integer index we can subscript the quanta storage with to get the table. (Accessing quantization tables with an index is a little more efficient than doing a new key lookup each time.)
+Then, for each of the quanta keys, we use the `index(forKey:)` method on the `quanta` member of the `JPEG.Data.Spectral` structure to obtain an integer index we can subscript the quanta storage with to get the table. (Accessing quantization tables with an index is a little more efficient than doing a new key lookup each time.)
 
 ```swift
 let q:Int                           = spectral.quanta.index(forKey: qi) 
@@ -544,13 +544,13 @@ quantization table [1]:
 └                                  ┘
 ```
 
-We can convert the spectral representation into a planar spatial representation, modeled by the `JPEG.Data.Planar` structure, using the `.idct()` method. This function performs an **inverse frequency transform** (or **i**nverse **d**iscrete **c**osine **t**ransform) on the spectral data.
+We can convert the spectral representation into a planar spatial representation, modeled by the `JPEG.Data.Planar` structure, using the `idct()` method. This function performs an **inverse frequency transform** (or **i**nverse **d**iscrete **c**osine **t**ransform) on the spectral data.
 
 ```swift
 let planar:JPEG.Data.Planar<JPEG.Common> = spectral.idct()
 ```
 
-The size of the planes in a `JPEG.Data.Planar` structure (and a `JPEG.Data.Spectral` structure as well) always corresponds to a whole number of pixel blocks, which may not match the declared size of the image given by the `.size` property. In addition, if the image uses chroma subsampling, the planes will not all be the same size.
+The size of the planes in a `JPEG.Data.Planar` structure (and a `JPEG.Data.Spectral` structure as well) always corresponds to a whole number of pixel blocks, which may not match the declared size of the image given by the `size` property. In addition, if the image uses chroma subsampling, the planes will not all be the same size.
 
 Both `JPEG.Data.Spectral` and `JPEG.Data.Planar` structures are `RandomAccessCollection`s of their `Plane` types. The `Plane` types provide 2D index iterators which traverse their index spaces in row-major order.
 
@@ -587,7 +587,7 @@ for (p, plane):(Int, JPEG.Data.Planar<JPEG.Common>.Plane) in planar.enumerated()
 | 320x216 pixels        |
 |<img width=256 src="decode-advanced/karlie-2019.jpg-2.320x216.gray.png"/>|
 
-The last step is to convert the planar representation into rectangular representation using the `.interleaved(cosite:)` method. **Cositing** refers to the positioning of color samples relative to the pixel grid. If samples are not cosited, then they are **centered**. The default setting is centered, meaning `cosite:` is `false`.
+The last step is to convert the planar representation into rectangular representation using the `interleaved(cosite:)` method. **Cositing** refers to the positioning of color samples relative to the pixel grid. If samples are not cosited, then they are **centered**. The default setting is centered, meaning `cosite:` is `false`.
 
 ```
         centered                             cosited 
@@ -655,7 +655,7 @@ let path:String          = "examples/encode-advanced/karlie-cfdas-2011.png.rgb",
 > 
 > *(photo by John “hugo971”)*
 
-To make the code a little more readable, we will give names to the three YCbCr component keys in the `ycc8` format this image is going to use. The `.components` property of the color format returns an array containing the component keys in the format, in canonical order.
+To make the code a little more readable, we will give names to the three YCbCr component keys in the `ycc8` format this image is going to use. The `components` property of the color format returns an array containing the component keys in the format, in canonical order.
 
 ```swift 
 let format:JPEG.Common              = .ycc8
@@ -664,7 +664,7 @@ let Y:JPEG.Component.Key            = format.components[0],
     Cr:JPEG.Component.Key           = format.components[2]
 ```
 
-Note that if the format case was `y8`, then we would only be able to subscript up to index `0`. There is also no guarantee that `.components[0]` is the same in all cases, though for `y8` and `ycc8`, they are.
+Note that if the format case was `y8`, then we would only be able to subscript up to index `0`. There is also no guarantee that `components[0]` is the same in all cases, though for `y8` and `ycc8`, they are.
 
 We begin to initialize a `JPEG.Layout` structure just as we did in the [basic encoding](#basic-encoding) tutorial, only this time we specify the `progressive(coding:differential:)` coding process. The only supported values for the `coding:` and `differential:` parameters are `huffman` and `false`, respectively, but they are defined because other library APIs can still recognize images using arithmetic (`arithmetic`) coding and hierarchical (differential) modes of operation.
 
@@ -720,23 +720,23 @@ The following is an example of a valid scan progression, which we will be using 
 
 The library provides four progressive scan header constructors:
 
-1. `.progressive(_:... bits:)`
+1. `progressive(_:... bits:)`
 
  Returns an initial DC scan header. The variadic argument takes tuples of component keys and huffman table selectors; components with the same huffman table selector will share the same huffman table.
 
-2. `.progressive(_:... bit:)`
+2. `progressive(_:... bit:)`
 
  Returns a refining DC scan header. The variadic argument takes scalar component keys with no huffman table selectors, because refining DC scans do not use entropy coding.
 
-3. `.progressive(_:band:bits:)`
+3. `progressive(_:band:bits:)`
 
  Returns an initial AC scan header. For flexibility, you can specify the huffman table selector you want the scan in the encoded JPEG file to use, though this will have no discernable effect on image compression.
 
-4. `.progressive(_:band:bit:)`
+4. `progressive(_:band:bit:)`
 
  Returns a refining AC scan header. The huffman table selector has the same significance that it does in the initial AC scan headers.
 
-All the scan header constructors, including `.sequential(_:... )` return the same type, `JPEG.Header.Scan`, but using a sequential constructor to define a scan for a progressive image will always produce an error.
+All the scan header constructors, including `sequential(_:... )` return the same type, `JPEG.Header.Scan`, but using a sequential constructor to define a scan for a progressive image will always produce an error.
 
 When you initialize a layout, it will automatically assign quantization tables to table selectors and generate the sequence of JPEG declarations needed to associate the right table resources with the right scans. This can sometimes fail (with a fatal error) if the scan progression you provided requires more tables to be referenced at once than there are selectors for them to be attached to. The lifetime of a table extends from the first scan that contains a component using it, to the last scan containing such a component. (It does not have to be the same component.) 
 
@@ -811,15 +811,15 @@ let rectangular:JPEG.Data.Rectangular<JPEG.Common> =
 
 Here, we have stored a string encoded as [UTF-8](https://en.wikipedia.org/wiki/UTF-8) data into the comment body. The text encoding is irrelevant to JPEG, but many metadata viewers will display JPEG comments as UTF-8 text, so this is how we will store it.
 
-When we created the rectangular data structure, we used the `.pack(size:layout:metadata:pixels:)` constructor, but we could also have used the regular `.init(size:layout:metadata:values:)` initializer, which takes a `[UInt16]` array of (row-major) interleaved color samples. This initializer assumes you already have the image data stored in the right order and format, so it’s a somewhat lower-level API.
+When we created the rectangular data structure, we used the `pack(size:layout:metadata:pixels:)` constructor, but we could also have used the regular `init(size:layout:metadata:values:)` initializer, which takes a `[UInt16]` array of (row-major) interleaved color samples. This initializer assumes you already have the image data stored in the right order and format, so it’s a somewhat lower-level API.
 
-The next step is to convert the rectangular data into planar data. The method which returns the planar representation is the `.decomposed()` method.
+The next step is to convert the rectangular data into planar data. The method which returns the planar representation is the `decomposed()` method.
 
 ```swift 
 let planar:JPEG.Data.Planar<JPEG.Common> = rectangular.decomposed()
 ```
 
-If the image layout uses subsampling, this method will downsample the image data with a basic box filter for the appropriate image planes. There is no concept of cositing or centering when downsampling, so this method takes no arguments. The box filter the library applies is a pretty bad low-pass filter, so it may be beneficial for you to implement your own subsampling filter and construct the planar data structure “manually” if you are trying to squeeze some extra quality into a subsampled JPEG. The `.init(size:layout:metadata:initializingWith:)` initializer can be used for this. It has the following signature:
+If the image layout uses subsampling, this method will downsample the image data with a basic box filter for the appropriate image planes. There is no concept of cositing or centering when downsampling, so this method takes no arguments. The box filter the library applies is a pretty bad low-pass filter, so it may be beneficial for you to implement your own subsampling filter and construct the planar data structure “manually” if you are trying to squeeze some extra quality into a subsampled JPEG. The `init(size:layout:metadata:initializingWith:)` initializer can be used for this. It has the following signature:
 
 ```swift 
 init(size:(x:Int, y:Int), 
@@ -831,9 +831,9 @@ init(size:(x:Int, y:Int),
 
 The first closure argument is the component index (also the plane index), the second closure argument is the dimensions of the plane in 8x8 unit blocks, the third closure argument is the sampling factor of the plane, and the last closure argument is the uninitialized (row-major) plane buffer. It stores 64*XY* elements, where (*X*,&nbsp;*Y*) are the dimensions of the plane in unit blocks.
 
-The `JPEG.Data.Planar` type also has a plain `.init(size:layout:metadata:)` initializer with no data argument which initializes all planes to a neutral color. You can read and modify sample values through the 2D subscript `[x:y:]` available on the plane type. 
+The `JPEG.Data.Planar` type also has a plain `init(size:layout:metadata:)` initializer with no data argument which initializes all planes to a neutral color. You can read and modify sample values through the 2D subscript `[x:y:]` available on the plane type. 
 
-To convert the planar data to spectral representation, we have to do a **forward frequency transform** (or **f**orward **d**iscrete **c**osine **t**ransform) using the `.fdct(quanta:)` method. It is at this point where you have to provide the actual quantum values for each quantization table used in the image. In the [basic encoding](#basic-encoding) tutorial, we used the parameterized quality API to generate quantum values for us, but you can also specify the quanta yourself. Usually, it’s a good idea to pick smaller values for the earlier coefficients, and larger values for the later coefficients.
+To convert the planar data to spectral representation, we have to do a **forward frequency transform** (or **f**orward **d**iscrete **c**osine **t**ransform) using the `fdct(quanta:)` method. It is at this point where you have to provide the actual quantum values for each quantization table used in the image. In the [basic encoding](#basic-encoding) tutorial, we used the parameterized quality API to generate quantum values for us, but you can also specify the quanta yourself. Usually, it’s a good idea to pick smaller values for the earlier coefficients, and larger values for the later coefficients.
 
 ```swift 
 let spectral:JPEG.Data.Spectral<JPEG.Common> = planar.fdct(quanta:     
@@ -843,7 +843,7 @@ let spectral:JPEG.Data.Spectral<JPEG.Common> = planar.fdct(quanta:
     ])
 ```
 
-Like the `JPEG.Data.Planar` type, the `JPEG.Data.Spectral` type has a plain `.init(size:layout:metadata:quanta:)` initializer which initializes all AC coefficients to zero, and all DC coefficients to a neutral gray.
+Like the `JPEG.Data.Planar` type, the `JPEG.Data.Spectral` type has a plain `init(size:layout:metadata:quanta:)` initializer which initializes all AC coefficients to zero, and all DC coefficients to a neutral gray.
     
 We can use the file system-aware compression API to encode the image and write it to disk.
 
@@ -958,7 +958,7 @@ var blob:Common.Blob = .init(data)
 >
 > (photo by John “hugo971”)
 
-To decode using our `Common.Blob` type, we use the `.decompress(stream:)` functions, which are part of the core library, and do essentially the same things as the file system-aware `.decompress(path:)` functions.
+To decode using our `Common.Blob` type, we use the `decompress(stream:)` functions, which are part of the core library, and do essentially the same things as the file system-aware `decompress(path:)` functions.
 
 ```swift 
 let spectral:JPEG.Data.Spectral<JPEG.Common>    = try .decompress(stream: &blob)
@@ -972,7 +972,7 @@ Here, we have saved the intermediate `JPEG.Data.Spectral` representation, becaus
 
 > Decoded JPEG, saved in PNG format.
 
-Just as with the decompression APIs, the `.compress(path:)`/`.compress(path:quanta:)` functions have generic `.compress(stream:)`/`.compress(stream:quanta:)` versions. Here, we have cleared the blob storage, and written the spectral image we saved earlier to it:
+Just as with the decompression APIs, the `compress(path:)`/`compress(path:quanta:)` functions have generic `compress(stream:)`/`compress(stream:quanta:)` versions. Here, we have cleared the blob storage, and written the spectral image we saved earlier to it:
 
 ```swift 
 blob = .init([])
@@ -1019,7 +1019,7 @@ Some applications accomplish this by sending many copies of the same image at di
 > 
 > (photo by Walt Disney Television)
 
-To mock up a file being transferred over a network, we are going to modify the blob type from the [last tutorial](#using-in-memory-images) by adding an integer field `.available` representing the amount of the file we “have” at a given moment.
+To mock up a file being transferred over a network, we are going to modify the blob type from the [last tutorial](#using-in-memory-images) by adding an integer field `available` representing the amount of the file we “have” at a given moment.
 
 ```swift 
 import JPEG 
@@ -1100,7 +1100,7 @@ else
 var stream:Stream = .init(data)
 ```
 
-The key to making this work is understanding that, if the `.read(count:)` call on the data stream returns `nil` (due to there not being enough data available), then one of four library errors will get thrown:
+The key to making this work is understanding that, if the `read(count:)` call on the data stream returns `nil` (due to there not being enough data available), then one of four library errors will get thrown:
 
 * `JPEG.LexingError.truncatedMarkerSegmentType`
 * `JPEG.LexingError.truncatedMarkerSegmentHeader`
@@ -1129,7 +1129,7 @@ Entropy-Coded Segment   ::= data:[UInt8]
 Marker Segment          ::= type:JPEG.Marker data:[UInt8]
 ```
 
-The `.segment(prefix:)` method returns either a prefixed or regular marker segment; the `.segment()` method is a convenience method which always expects a regular marker segment with no prefixed entropy-coded segment.
+The `segment(prefix:)` method returns either a prefixed or regular marker segment; the `segment()` method is a convenience method which always expects a regular marker segment with no prefixed entropy-coded segment.
 
 To allow the lexing functions to recover on end-of-stream instead of crashing the application, we wrap them in the following `waitSegment(stream:)` and `waitSegmentPrefix(stream:)` functions, making sure to reset the file position if end-of-stream is encountered:
 
@@ -1369,7 +1369,7 @@ The scan parsing looks more complex than it is. After parsing the scan header, i
                 {
 ```
 
-The exit clause of the guard statement pushes the entropy-coded segments to the state manager, which invokes the decoder on them. The `extend:` argument of the `.push(scan:ecss:extend:)` method reflects the fact that the image height is not fully known at this point, which means that the image dimensions are flexible, and so can be *extend*ed.
+The exit clause of the guard statement pushes the entropy-coded segments to the state manager, which invokes the decoder on them. The `extend:` argument of the `push(scan:ecss:extend:)` method reflects the fact that the image height is not fully known at this point, which means that the image dimensions are flexible, and so can be *extend*ed.
 
 ```swift 
                     try context.push(scan: scan, ecss: ecss, extend: first)
@@ -1509,7 +1509,7 @@ let layout:JPEG.Layout<JPEG.Common> = .init(
     ])
 ```
 
-Next, we create an empty spectral image using the `.init(size:layout:metadata:quanta:)` initializer. For the quantum values, we use the quanta from the original image, multiplied by 3, reflecting an increase in quantization, and therefore compression. We don’t scale the quantum for the DC coefficient, since posterizing the base colors of an image is a lot more noticable than dropping a few AC coefficients. It is important that we clamp the scaled quantum values to the range `0 ... 255`, since the `ycc8` color format stores quantum values as 8-bit unsigned integers.
+Next, we create an empty spectral image using the `init(size:layout:metadata:quanta:)` initializer. For the quantum values, we use the quanta from the original image, multiplied by 3, reflecting an increase in quantization, and therefore compression. We don’t scale the quantum for the DC coefficient, since posterizing the base colors of an image is a lot more noticable than dropping a few AC coefficients. It is important that we clamp the scaled quantum values to the range `0 ... 255`, since the `ycc8` color format stores quantum values as 8-bit unsigned integers.
 
 ```swift 
 var recompressed:JPEG.Data.Spectral<JPEG.Common> = .init(
@@ -1525,7 +1525,7 @@ var recompressed:JPEG.Data.Spectral<JPEG.Common> = .init(
     })
 ```
 
-We can use the `.read(ci:_:)` method on the spectral image to access the spectral plane and its associated quantization table for its component key argument. The `.with(ci:_:)` method does the same thing, except it allows you to mutate the plane coefficients. (It does not allow you to change the quantization tables — editing quantization tables by plane is a bad idea because doing so would affect all of the other planes using that quantization table.) 
+We can use the `read(ci:_:)` method on the spectral image to access the spectral plane and its associated quantization table for its component key argument. The `with(ci:_:)` method does the same thing, except it allows you to mutate the plane coefficients. (It does not allow you to change the quantization tables — editing quantization tables by plane is a bad idea because doing so would affect all of the other planes using that quantization table.) 
 
 ```swift 
 for ci:JPEG.Component.Key in recompressed.layout.recognized 
@@ -1538,7 +1538,7 @@ for ci:JPEG.Component.Key in recompressed.layout.recognized
         {
 ```
 
-We *could* access the planes and quanta by performing index lookups for the component and quantization keys, and then using the integer subscripts on `self` and `.quanta`, but the `.read(ci:_:)` and `.with(ci:_:)` APIs provide a more convenient interface, with fewer spurious optionals. The `JPEG.Data.Planar` type also has `.read(ci:_:)` and `.with(ci:_:)` methods, but their closures don’t recieve quantization table arguments, since the coefficients have already been premultiplied in the planar representation.
+We *could* access the planes and quanta by performing index lookups for the component and quantization keys, and then using the integer subscripts on `self` and `quanta`, but the `read(ci:_:)` and `with(ci:_:)` APIs provide a more convenient interface, with fewer spurious optionals. The `JPEG.Data.Planar` type also has `read(ci:_:)` and `with(ci:_:)` methods, but their closures don’t recieve quantization table arguments, since the coefficients have already been premultiplied in the planar representation.
 
 Transferring the spectral data from the original image to the recompressed image is then a matter of iterating through the coefficient blocks, multiplying coefficients by the old quanta, and then dividing them by the new quanta.
 
@@ -1559,7 +1559,7 @@ When writing the coefficients back to the recompressed image, we use a trick to 
 
 This will also improve the compression ratio of the encoded image, since JPEGs encode zero coefficients very efficiently.
 
-Then, we encode and save the image using the `.compress(path:)` method:
+Then, we encode and save the image using the `compress(path:)` method:
 
 ```swift 
                 }
@@ -1580,3 +1580,274 @@ Compared with the output of an image editor used with quality settings chosen to
 <img src="recompress/recompressed-requantized.jpg"/>
 
 > JPEG image, 11.2&nbsp;KB, resaved using our requantization implementation.
+
+---
+
+## lossless rotations 
+[`sources`](rotate/)
+
+> ***by the end of this tutorial, you should be able to:***
+> * *use spectral identities to crop and rotate images losslessly*
+
+In this tutorial, we will use the spectral image representation to implement lossless JPEG crops and rotations. Rotations in the frequency domain are composed out of three fundamental operations:
+
+* transposition 
+* horizontal reflection 
+* vertical reflection 
+
+A 90° counterclockwise rotation (quadrant II) is a transposition followed by a vertical reflection, or alternatively, a horizontal reflection followed by a transposition. A 90° clockwise rotation (quadrant IV) is a transposition followed by a horizontal reflection, or alternatively, a vertical reflection followed by a transposition. A 180° rotation (quadrant III) is a horizontal reflection and a vertical reflection, in any order.
+
+In the frequency domain, a transposition is just that, a transposition. To do a horizontal reflection, you negate the odd columns of the coefficient matrix. To do a vertical reflection, you negate the odd rows of the coefficient matrix. (Reflections never affect the even frequencies, since they are [symmetric](https://en.wikipedia.org/wiki/Even_and_odd_functions).)
+
+The coefficient mappings are simple enough that they could be hardcoded into an array literal. However, we can also generate them procedurally. Since none of the operations we are going to use mix coefficients, we can model a coefficient mapping with an source coefficient identifier *z* and a multiplier *s*. Because each coefficient has a unique zigzag index, we can use the zigzag index as a coefficient identifier. We store the multiplier as an `Int16`, since this is the type the coefficients themselves are stored as in a `JPEG.Data.Spectral` image.
+
+```swift 
+import JPEG 
+
+enum Block 
+{
+    typealias Coefficient = (z:Int, multiplier:Int16)
+```
+
+It is straightforward to express the three basic operations on a row-major matrix of coefficient mappings:
+
+```swift 
+    static 
+    func transpose(_ input:[Coefficient]) -> [Coefficient]
+    {
+        (0 ..< 8).flatMap 
+        {
+            (y:Int) in 
+            (0 ..< 8).map 
+            {
+                (x:Int) in 
+                input[8 * x + y]
+            }
+        }
+    }
+    static 
+    func reflectVertical(_ input:[Coefficient]) -> [Coefficient]
+    {
+        (0 ..< 8).flatMap 
+        {
+            (y:Int) -> [Coefficient] in 
+            (0 ..< 8).map 
+            {
+                (x:Int) -> Coefficient in 
+                (
+                    input[8 * y + x].z, 
+                    input[8 * y + x].multiplier * (1 - 2 * (.init(y) & 1))
+                )
+            }
+        }
+    }
+    static 
+    func reflectHorizontal(_ input:[Coefficient]) -> [Coefficient]
+    {
+        (0 ..< 8).flatMap 
+        {
+            (y:Int) -> [Coefficient] in 
+            (0 ..< 8).map 
+            {
+                (x:Int) -> Coefficient in 
+                (
+                    input[8 * y + x].z, 
+                    input[8 * y + x].multiplier * (1 - 2 * (.init(x) & 1))
+                )
+            }
+        }
+    }
+```
+
+We can define a static function `transform(_:)` that flattens a sequence of coefficient transformations into a single source-to-destination mapping. This function generates an identity mapping using `JPEG.Table.Quantization.z(k:h:)`, invokes the closure argument on the blank mapping, and then rearranges it into zigzag order so that the *z*th mapping in the resulting array indicates the source coefficient and multiplier for the *z*th coefficient in zigzag order.
+
+```swift 
+    static 
+    func transform(_ body:([Coefficient]) -> [Coefficient]) -> [Coefficient]
+    {
+        let blank:[Coefficient] = (0 ..< 8).flatMap 
+        {
+            (y:Int) in 
+            (0 ..< 8).map 
+            {
+                (x:Int) in 
+                (JPEG.Table.Quantization.z(k: x, h: y), 1)
+            }
+        }
+        let result:[Coefficient] = body(blank)
+        let zigzag:[Coefficient] = .init(unsafeUninitializedCapacity: 64)
+        {
+            for h:Int in 0 ..< 8
+            {
+                for k:Int in 0 ..< 8 
+                {
+                    let z:Int   = JPEG.Table.Quantization.z(k: k, h: h)
+                    $0[z]       = result[8 * h + k]
+                }
+            }
+            $1 = 64
+        }
+        return zigzag
+    }
+```
+
+Our rotation function, `rotate(_:input:output:)` will take a quadrant and two file paths as arguments, and open the input JPEG as a `JPEG.Data.Spectral` image.
+
+
+```swift 
+enum Rotation:String
+{
+    case ii, iii, iv
+}
+
+func rotate(_ rotation:Rotation, input:String, output:String) throws 
+{
+    guard var original:JPEG.Data.Spectral<JPEG.Common> = try .decompress(path: input)
+    else 
+    {
+        fatalError("failed to open file '\(input)'")
+    } 
+```
+
+<img width=480 src="rotate/karlie-kwk-wwdc-2017.jpg"/>
+
+> Karlie Kloss with former *Teen Vogue* editor [Elaine Welteroth](https://en.wikipedia.org/wiki/Elaine_Welteroth), during [WWDC](https://en.wikipedia.org/wiki/Apple_Worldwide_Developers_Conference) 2017. Image is 89.8&nbsp;KB.
+> 
+> (photo from the Kode With Klossy official facebook)
+
+Depending on the target quadrant, this function needs to pick:
+
+* a coefficient mapping (*z*<sub>destination</sub>&nbsp;←&nbsp;*s*&nbsp;×&nbsp;*z*<sub>source</sub>), 
+* a transformation matrix ((*x*<sub>destination</sub>,&nbsp;*y*<sub>destination</sub>)&nbsp;←&nbsp;(*x*<sub>source</sub>,&nbsp;*y*<sub>source</sub>)), and
+* cropped image dimensions.
+
+The last one is important because JPEG images only allow partial blocks on their bottom and right edges. If either of those edges would become a top or left edge after rotating, then that edge must be cropped to an integer multiple of the image’s minimum coded unit. The size of the minimum coded unit is the value of the `scale` property of the image layout, multiplied by 8.
+
+```swift 
+    let scale:(x:Int, y:Int) = original.layout.scale 
+
+    let mapping:[Block.Coefficient]
+    let matrix:(x:(x:Int, y:Int), y:(x:Int, y:Int))
+    let size:(x:Int, y:Int)
+```
+
+To perform the crops, we use the mutating `set(width:)` and `set(height:)` methods on the spectral image. These methods can set the image dimensions to *any* value, but for the rotations to work correctly, we need to round the image dimensions down to a multiple of the minimum coded unit. Not all the rotations require both image dimensions to be cropped.
+
+```swift 
+    switch rotation 
+    {
+    case .ii:
+        original.set(width:  original.size.x - original.size.x % (8 * scale.x))
+        size = (original.size.y, original.size.x)
+        mapping = Block.transform 
+        {
+            Block.reflectVertical(Block.transpose($0))
+        }
+        matrix  = 
+        (
+            ( 0,  1), 
+            (-1,  0)
+        )
+        
+    case .iii:
+        original.set(width:  original.size.x - original.size.x % (8 * scale.x))
+        original.set(height: original.size.y - original.size.y % (8 * scale.y))
+        size = original.size 
+        mapping = Block.transform 
+        {
+            Block.reflectVertical(Block.reflectHorizontal($0))
+        }
+        matrix  = 
+        (
+            (-1,  0), 
+            ( 0, -1)
+        )
+    case .iv:
+        original.set(height: original.size.y - original.size.y % (8 * scale.y))
+        size = (original.size.y, original.size.x)
+        mapping = Block.transform 
+        {
+            Block.reflectHorizontal(Block.transpose($0))
+        }
+        matrix  = 
+        (
+            ( 0, -1), 
+            ( 1,  0)
+        )
+    }
+```
+
+We construct the output image, using the exact same layout as the original, but providing a new image size. We also rearrange the quantum values of the original quantization tables, to match the spectral rotation we are going to perform on the image data. (We cannot merge the multiplier values into the quantization tables, since quantum values are unsigned integers.)
+
+```swift 
+    var rotated:JPEG.Data.Spectral<JPEG.Common> = .init(
+        size:       size, 
+        layout:     original.layout, 
+        metadata:   original.metadata, 
+        quanta:     original.quanta.mapValues 
+        {
+            (old:[UInt16]) in 
+            .init(unsafeUninitializedCapacity: 64)
+            {
+                for z:Int in 0 ..< 64 
+                {
+                    $0[z] = old[mapping[z].z]
+                }
+                
+                $1 = 64
+            }
+        }) 
+```
+
+All of the coefficients in the output image were initialized to zero; to populate it with the transformed image data, we loop through every coefficient in every block of every plane. The index calculations are pretty straightforward to work out on paper, so we won’t go over them in detail.
+
+```swift 
+    // loop through planes 
+    for p:(Int, Int) in zip(original.indices, rotated.indices)
+    {
+        let period:(x:Int, y:Int) = original[p.0].units
+        let offset:(x:Int, y:Int) = 
+        (
+            (matrix.x.x < 0 ? period.x - 1 : 0) + (matrix.x.y < 0 ? period.y - 1 : 0),
+            (matrix.y.x < 0 ? period.x - 1 : 0) + (matrix.y.y < 0 ? period.y - 1 : 0)
+        )
+        // loop through blocks 
+        for s:(x:Int, y:Int) in original[p.0].indices 
+        {
+            let d:(x:Int, y:Int) = 
+            (
+                offset.x + matrix.x.x * s.x + matrix.x.y * s.y, 
+                offset.y + matrix.y.x * s.x + matrix.y.y * s.y
+            )
+            
+            // loop through coefficients 
+            for z:Int in 0 ..< 64 
+            {
+                rotated[p.1][x: d.x, y: d.y, z: z] = 
+                    original[p.0][x: s.x, y: s.y, z: mapping[z].z] * mapping[z].multiplier
+            }
+        }
+    }
+```
+
+We write the output to disk using the `compress(path:)` method. 
+
+```swift 
+    guard let _:Void = try rotated.compress(path: output)
+    else 
+    {
+        fatalError("failed to open file '\(output)'")
+    } 
+```
+
+<img width=386 src="rotate/karlie-kwk-wwdc-2017-ii.jpg"/>
+
+> Output JPEG, rotated 90°, 90.7&nbsp;KB.
+
+<img width=480 src="rotate/karlie-kwk-wwdc-2017-iii.jpg"/>
+
+> Output JPEG, rotated 180°, 88.2&nbsp;KB.
+
+<img width=386 src="rotate/karlie-kwk-wwdc-2017-iv.jpg"/>
+
+> Output JPEG, rotated 270°, 89.1&nbsp;KB.

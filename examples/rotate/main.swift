@@ -12,17 +12,6 @@ enum Rotation:String
 enum Block 
 {
     typealias Coefficient = (z:Int, multiplier:Int16)
-    static let zigzag:[Int] = 
-    [
-         0,  1,  5,  6, 14, 15, 27, 28,
-         2,  4,  7, 13, 16, 26, 29, 42,
-         3,  8, 12, 17, 25, 30, 41, 43,
-         9, 11, 18, 24, 31, 40, 44, 53,
-        10, 19, 23, 32, 39, 45, 52, 54, 
-        20, 22, 33, 38, 46, 51, 55, 60, 
-        21, 34, 37, 47, 50, 56, 59, 61, 
-        35, 36, 48, 49, 57, 58, 62, 63
-    ]
     
     static 
     func transpose(_ input:[Coefficient]) -> [Coefficient]
@@ -38,7 +27,7 @@ enum Block
         }
     }
     static 
-    func reflectHorizontal(_ input:[Coefficient]) -> [Coefficient]
+    func reflectVertical(_ input:[Coefficient]) -> [Coefficient]
     {
         (0 ..< 8).flatMap 
         {
@@ -54,7 +43,7 @@ enum Block
         }
     }
     static 
-    func reflectVertical(_ input:[Coefficient]) -> [Coefficient]
+    func reflectHorizontal(_ input:[Coefficient]) -> [Coefficient]
     {
         (0 ..< 8).flatMap 
         {
@@ -73,21 +62,29 @@ enum Block
     static 
     func transform(_ body:([Coefficient]) -> [Coefficient]) -> [Coefficient]
     {
-        .init(unsafeUninitializedCapacity: 64)
+        let blank:[Coefficient] = (0 ..< 8).flatMap 
         {
-            let zigzag:[Coefficient] = Self.zigzag.map{ ($0, 1) }
-            let square:[Coefficient] = body(zigzag)
+            (y:Int) in 
+            (0 ..< 8).map 
+            {
+                (x:Int) in 
+                (JPEG.Table.Quantization.z(k: x, h: y), 1)
+            }
+        }
+        let result:[Coefficient] = body(blank)
+        let zigzag:[Coefficient] = .init(unsafeUninitializedCapacity: 64)
+        {
             for h:Int in 0 ..< 8
             {
                 for k:Int in 0 ..< 8 
                 {
                     let z:Int   = JPEG.Table.Quantization.z(k: k, h: h)
-                    $0[z]       = square[8 * h + k]
+                    $0[z]       = result[8 * h + k]
                 }
             }
-            
             $1 = 64
         }
+        return zigzag
     }
 }
 
@@ -111,7 +108,7 @@ func rotate(_ rotation:Rotation, input:String, output:String) throws
         size = (original.size.y, original.size.x)
         mapping = Block.transform 
         {
-            Block.reflectHorizontal(Block.transpose($0))
+            Block.reflectVertical(Block.transpose($0))
         }
         matrix  = 
         (
@@ -137,7 +134,7 @@ func rotate(_ rotation:Rotation, input:String, output:String) throws
         size = (original.size.y, original.size.x)
         mapping = Block.transform 
         {
-            Block.reflectVertical(Block.transpose($0))
+            Block.reflectHorizontal(Block.transpose($0))
         }
         matrix  = 
         (
@@ -146,19 +143,11 @@ func rotate(_ rotation:Rotation, input:String, output:String) throws
         )
     }
     
-    let layout:JPEG.Layout<JPEG.Common> = .init(
-        format:     original.layout.format, 
-        process:    original.layout.process, 
-        components: original.layout.components.mapValues 
-        {
-            (($0.factor.y, $0.factor.x), $0.qi)
-        }, 
-        scans:      original.layout.scans)
     var rotated:JPEG.Data.Spectral<JPEG.Common> = .init(
-        size:   size, 
-        layout: layout, 
-        metadata: original.metadata, 
-        quanta: original.quanta.mapValues 
+        size:       size, 
+        layout:     original.layout, 
+        metadata:   original.metadata, 
+        quanta:     original.quanta.mapValues 
         {
             (old:[UInt16]) in 
             .init(unsafeUninitializedCapacity: 64)
@@ -172,6 +161,7 @@ func rotate(_ rotation:Rotation, input:String, output:String) throws
             }
         }) 
     
+    // loop through planes 
     for p:(Int, Int) in zip(original.indices, rotated.indices)
     {
         let period:(x:Int, y:Int) = original[p.0].units
@@ -180,6 +170,7 @@ func rotate(_ rotation:Rotation, input:String, output:String) throws
             (matrix.x.x < 0 ? period.x - 1 : 0) + (matrix.x.y < 0 ? period.y - 1 : 0),
             (matrix.y.x < 0 ? period.x - 1 : 0) + (matrix.y.y < 0 ? period.y - 1 : 0)
         )
+        // loop through blocks 
         for s:(x:Int, y:Int) in original[p.0].indices 
         {
             let d:(x:Int, y:Int) = 
@@ -188,6 +179,7 @@ func rotate(_ rotation:Rotation, input:String, output:String) throws
                 offset.y + matrix.y.x * s.x + matrix.y.y * s.y
             )
             
+            // loop through coefficients 
             for z:Int in 0 ..< 64 
             {
                 rotated[p.1][x: d.x, y: d.y, z: z] = 
