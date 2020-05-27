@@ -50,10 +50,6 @@ for metadata:JPEG.Metadata in spectral.metadata
 {
     switch metadata 
     {
-    case .jfif(let jfif):
-        Swift.print(jfif)
-    case .exif(let exif):
-        Swift.print(exif)
     case .application(let a, data: let data):
         Swift.print("metadata (application \(a), \(data.count) bytes)")
     case .comment(data: let data):
@@ -63,6 +59,19 @@ for metadata:JPEG.Metadata in spectral.metadata
             '\(String.init(decoding: data, as: Unicode.UTF8.self))'
         }
         """)
+    case .jfif(let jfif):
+        Swift.print(jfif)
+    case .exif(let exif):
+        Swift.print(exif)
+        if  let (type, count, box):(JPEG.EXIF.FieldType, Int, JPEG.EXIF.Box) = exif[tag: 315],
+            case .ascii = type
+        {
+            let artist:String = .init(decoding: (0 ..< count).map 
+            {
+                exif[box.asOffset + $0, as: UInt8.self]
+            }, as: Unicode.ASCII.self)
+            print("artist: \(artist)")
+        }
     }
 }
 

@@ -413,29 +413,46 @@ enum JPEG.Metadata
 
 It should be noted that both JFIF and EXIF metadata segments are special types of `application(_:data:)` segments, with JFIF being equivalent to `application(0, data: ... )`, and EXIF being equivalent to `application(1, data: ... )`. The framework will only parse them as `JPEG.JFIF` or `JPEG.EXIF` if it encounters them at the very beginning of the JPEG file, and it will only parse one instance of each per file. This means that if for some reason, a JPEG file contains multiple JFIF segments (for example, to store a thumbnail), the latter segments will get parsed as regular `application(_:data:)` segments.
 
-We can print out the metadata records like this: 
+We can print out the JFIF, application, and comment segments like this: 
 
 ```swift 
 for metadata:JPEG.Metadata in spectral.metadata
 {
     switch metadata 
     {
-    case .jfif(let jfif):
-        print(jfif)
-    case .exif(let exif):
-        print(exif)
     case .application(let a, data: let data):
-        print("metadata (application \(a), \(data.count) bytes)")
+        Swift.print("metadata (application \(a), \(data.count) bytes)")
     case .comment(data: let data):
-        print("""
+        Swift.print("""
         comment 
         {
             '\(String.init(decoding: data, as: Unicode.UTF8.self))'
         }
         """)
-    }
+    case .jfif(let jfif):
+        Swift.print(jfif)
+```
+
+EXIF records can be extremely complex. The library will index the fields in an EXIF segment for you, but it won’t parse them. Nevertheless, it provides a number of APIs to make it easier for you to extract information from it, so long as you know what to look for, and how to parse it. For example, if we want to read the *Artist* field from the EXIF record, we can consult the [EXIF standard](https://www.exif.org/Exif2-2.PDF), which tells us that the **tag number** for that field is **315**. We can plug this identifier into the `[tag:]` subscript on the EXIF structure, to get the type, arity, and payload of the field, if it exists. We also verify that the type is indeed ASCII, as the standard expects. The standard tells us the *Artist* field is stored indirectly, so we interpret the payload as an offset, and attempt to read an ASCII string from that offset in the EXIF structure, using the typed `[_:as:]` subscript.
+
+```swift 
+    case .exif(let exif):
+        print(exif)
+        if  let (type, count, box):(JPEG.EXIF.FieldType, Int, JPEG.EXIF.Box) = exif[tag: 315],
+            case .ascii = type
+        {
+            let artist:String = .init(decoding: (0 ..< count).map 
+            {
+                exif[box.asOffset + $0, as: UInt8.self]
+            }, as: Unicode.ASCII.self)
+            print("artist: \(artist)")
+        }
 }
 ```
+
+> Note: The library does not support constructing or editing EXIF records. Because EXIF relies extensively on internal file pointers, it is easy to accidentally corrupt an EXIF segment. To perform more sophisticated EXIF operations, use a dedicated EXIF library, such as [Carpaccio](https://github.com/mz2/Carpaccio).
+
+For our test image, this loop should produce the following output:
 
 ```
 metadata (EXIF)
@@ -443,10 +460,11 @@ metadata (EXIF)
     endianness  : bigEndian
     storage     : 126 bytes 
 }
+artist: Erik Drost
 metadata (application 2, 538 bytes)
 ```
 
-We can see that this image contains an EXIF segment which uses big-endian byte order. (JPEG data is always big-endian, but EXIF data can be big-endian or little-endian.) It also contains a [Flashpix EXIF extension](https://en.wikipedia.org/wiki/Exif#FlashPix_extensions) segment, which shows up here as an unparsed 538-byte APP2 segment.
+We can see that this image contains an EXIF segment which uses big-endian byte order. (JPEG data is always big-endian, but EXIF data can be big-endian or little-endian.) It also contains a [Flashpix EXIF extension](https://en.wikipedia.org/wiki/Exif#FlashPix_extensions) segment, which shows up here as an unparsed 538-byte APP2 segment. Within the EXIF segment, we were able to read the photographer’s name: `'Erik Drost'`.
 
 The `size`, `layout`, and `metadata` properties are available on all image representations, including `JPEG.Data.Rectangular`, so you don’t need to go through this multistep decompression process to access them. However, the spectral representation is unique in that it also provides access to the quantization tables used by the image.
 
@@ -1978,7 +1996,7 @@ The protocol supports a lot of flexibility, but the particular JPEG coding proce
 
 To implement a color target type for a particular color format type, we need to satisfy the following requirements:
 
-```
+```swift
 protocol JPEG.Color
 {
     associatedtype Format:JPEG.Format 

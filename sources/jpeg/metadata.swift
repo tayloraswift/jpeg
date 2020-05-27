@@ -31,14 +31,66 @@ extension JPEG
     public 
     struct EXIF 
     {
+        public 
         enum Endianness 
         {
             case bigEndian 
             case littleEndian 
         }
         
+        public 
+        enum FieldType 
+        {
+            case ascii 
+            case uint8
+            case uint16 
+            case uint32 
+            case int32 
+            case urational 
+            case rational
+            case raw
+            
+            case other(code:UInt16)
+        }
+        
+        public 
+        struct Box 
+        {
+            public
+            let contents:(UInt8, UInt8, UInt8, UInt8), 
+                endianness:Endianness
+            
+            public 
+            var asOffset:Int 
+            {
+                switch self.endianness
+                {
+                case .littleEndian:
+                    return  .init(contents.3) << 24 |
+                            .init(contents.2) << 24 |
+                            .init(contents.1) << 24 |
+                            .init(contents.0) 
+                case .bigEndian:
+                    return  .init(contents.0) << 24 |
+                            .init(contents.1) << 24 |
+                            .init(contents.2) << 24 |
+                            .init(contents.3) 
+                }
+            }
+            
+            public 
+            init(_ b0:UInt8, _ b1:UInt8, _ b2:UInt8, _ b3:UInt8, endianness:Endianness) 
+            {
+                self.contents   = (b0, b1, b2, b3)
+                self.endianness = endianness
+            }
+        }
+        
+        public 
         let endianness:Endianness 
-        var storage:[UInt8]
+        public private(set)
+        var tags:[UInt16: Int], 
+            storage:[UInt8] 
     }
 }
 
@@ -171,6 +223,34 @@ extension JPEG.JFIF
 }
 
 
+extension JPEG.EXIF.FieldType 
+{
+    static 
+    func parse(code:UInt16) -> Self
+    {
+        switch code 
+        {
+        case 1:
+            return .uint8 
+        case 2:
+            return .ascii  
+        case 3:
+            return .uint16
+        case 4:
+            return .uint32 
+        case 5:
+            return .urational 
+        case 7:
+            return .raw
+        case 9:
+            return .int32 
+        case 10:
+            return .rational 
+        default:
+            return .other(code: code) 
+        }
+    }
+}
 extension JPEG.EXIF 
 {
     static 
@@ -206,7 +286,104 @@ extension JPEG.EXIF
                 (data[6], data[7], data[8], data[9]))
         }
         
-        return .init(endianness: endianness, storage: .init(data.dropFirst(6)))
+        var exif:Self = .init(endianness: endianness, tags: [:], 
+            storage: .init(data.dropFirst(6)))
+        
+        exif.index(ifd: .init(exif[4, as: UInt32.self]))
+        // exif ifd 
+        if  let (type, count, box):(FieldType, Int, Box) = exif[tag: 34665], 
+            case .uint32 = type, count == 1
+        {
+            exif.index(ifd: box.asOffset)
+        }
+        // gps ifd 
+        if  let (type, count, box):(FieldType, Int, Box) = exif[tag: 34853], 
+            case .uint32 = type, count == 1
+        {
+            exif.index(ifd: box.asOffset)
+        }
+        
+        return exif
+    }
+    
+    private mutating 
+    func index(ifd:Int) 
+    {
+        guard ifd + 2 <= self.storage.count 
+        else 
+        {
+            return 
+        }
+        
+        let count:Int = .init(self[ifd, as: UInt16.self])
+        for i:Int in 0 ..< count 
+        {
+            let offset:Int = ifd + 2 + i * 12
+            guard offset + 12 <= self.storage.count 
+            else 
+            {
+                continue 
+            }
+            
+            self.tags[self[offset, as: UInt16.self]] = offset
+        }
+    }
+    
+    public 
+    subscript(tag tag:UInt16) -> (type:FieldType, count:Int, box:Box)?
+    {
+        guard let offset:Int = self.tags[tag] 
+        else 
+        {
+            return nil 
+        }
+        
+        let type:FieldType = .parse(code: self[offset + 2, as: UInt16.self])
+        
+        let count:Int = .init(self[offset + 4, as: UInt32.self])
+        let box:Box   = .init(
+            self[offset + 8 , as: UInt8.self], 
+            self[offset + 9 , as: UInt8.self], 
+            self[offset + 10, as: UInt8.self], 
+            self[offset + 11, as: UInt8.self], 
+            endianness: self.endianness)
+        return (type, count, box)
+    }
+    
+    public 
+    subscript(offset:Int, as _:UInt8.Type) -> UInt8 
+    {
+        self.storage[offset]
+    }
+    public 
+    subscript(offset:Int, as _:UInt16.Type) -> UInt16 
+    {
+        switch self.endianness 
+        {
+        case .littleEndian:
+            return  .init(self[offset + 1, as: UInt8.self]) << 8 | 
+                    .init(self[offset    , as: UInt8.self])
+        case .bigEndian:
+            return  .init(self[offset    , as: UInt8.self]) << 8 | 
+                    .init(self[offset + 1, as: UInt8.self])
+        }
+    }
+    public 
+    subscript(offset:Int, as _:UInt32.Type) -> UInt32 
+    {
+        switch self.endianness 
+        {
+        case .littleEndian:
+            return  .init(self[offset + 3, as: UInt8.self]) << 24 | 
+                    .init(self[offset + 2, as: UInt8.self]) << 16 |
+                    .init(self[offset + 1, as: UInt8.self]) <<  8 |
+                    .init(self[offset    , as: UInt8.self])
+        case .bigEndian:
+            return  .init(self[offset    , as: UInt8.self]) << 24 | 
+                    .init(self[offset + 1, as: UInt8.self]) << 16 |
+                    .init(self[offset + 2, as: UInt8.self]) <<  8 |
+                    .init(self[offset + 3, as: UInt8.self])
+        }
     }
 }
 
