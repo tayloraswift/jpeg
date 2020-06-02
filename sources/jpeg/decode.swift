@@ -1,30 +1,82 @@
+/// protocol JPEG.Format
+///     A JPEG color format, determined by the bit-depth and set of component keys in 
+///     a JPEG frame header. 
 public 
 protocol _JPEGFormat
 {
+    /// static func JPEG.Format.recognize(_:precision:)
+    ///     This function creates an instance of this type by detecting the given 
+    ///     bit-depth and set of component keys.
+    /// 
+    /// - components    : Swift.Set<JPEG.Component.Key>
+    ///     The set of given component keys.
+    /// - precision     : Swift.Int
+    ///     The given bit-depth.
+    /// - ->            : Self?
+    ///     A color format instance.
     static 
     func recognize(_ components:Set<JPEG.Component.Key>, precision:Int) -> Self?
     
-    // the ordering here is used to determine planar indices 
+    /// var JPEG.Format.components  : Swift.Array<JPEG.Component.Key> {get}
+    ///     The set of component keys for this color format. 
+    /// 
+    ///     The ordering is used to determine plane index assignments when initializing 
+    ///     an image layout.
     var components:[JPEG.Component.Key]
     {
         get 
     }
+    
+    /// var JPEG.Format.precision   : Swift.Int {get}
+    ///     The bit-depth of each component in this color format. 
+    /// 
+    ///     The baseline coding process can only be used with color formats with a 
+    ///     precision of 8.
+    ///     The extended and progressive coding processes can only be used with color 
+    ///     formats with a precision of 8 or 12.
     var precision:Int 
     {
         get 
     }
 }
+/// protocol JPEG.Color 
+///     A JPEG color target.
 public 
 protocol _JPEGColor
 {
+    /// associatedtype JPEG.Color.Format   
+    /// :   JPEG.Format
+    ///     The JPEG color format associated with this color target. A JPEG image using 
+    ///     any color format of this type will support rendering to this color target.
     associatedtype Format:JPEG.Format 
     
+    /// static func JPEG.Color.unpack(_:of:)
+    ///     Converts the given interleaved samples into an array of structured pixels.
+    /// 
+    /// - interleaved   : Swift.Array<Swift.UInt16>
+    ///     A flat array of interleaved component samples.
+    /// - format        : Self.Format
+    ///     The color format of the interleaved input.
+    /// - ->            : Swift.Array<Self>
+    ///     An array of pixels of this color target type.
     static 
     func unpack(_ interleaved:[UInt16], of format:Format) -> [Self]
+    
+    /// static func JPEG.Color.pack(_:as:)
+    ///     Converts the given array of structured pixels into an array of interleaved samples.
+    /// 
+    /// - pixels        : Swift.Array<Self>
+    ///     An array of pixels of this color target type.
+    /// - format        : Self.Format
+    ///     The color format of the interleaved output.
+    /// - ->            : Swift.Array<Swift.UInt16>
+    ///     A flat array of interleaved component samples.
     static 
     func pack(_ pixels:[Self], as format:Format) -> [UInt16]
 }
 
+/// enum JPEG 
+///     A library namespace containing all JPEG-related APIs.
 public 
 enum JPEG 
 {
@@ -33,36 +85,79 @@ enum JPEG
     public 
     typealias Color  = _JPEGColor
     
+    /// enum JPEG.Metadata
+    ///     A JPEG metadata record.
     public 
     enum Metadata 
     {
+        /// case JPEG.Metadata.jfif(_:)
+        ///     A JFIF metadata record.
+        /// - _     : JPEG.JFIF
         case jfif(JFIF)
+        /// case JPEG.Metadata.exif(_:)
+        ///     An EXIF metadata record.
+        /// - _     : JPEG.EXIF
         case exif(EXIF)
+        /// case JPEG.Metadata.application(_:data:)
+        ///     An unparsed JPEG application data segment.
+        /// - _     : Swift.Int
+        ///     The type code of this application segment.
+        /// - data  : Swift.Array<Swift.UInt8>
+        ///     The raw data of this application segment.
         case application(Int, data:[UInt8])
+        /// case JPEG.Metadata.comment(data:)
+        ///     A JPEG comment segment.
+        /// - data  : Swift.Array<Swift.UInt8>
+        ///     The raw contents of this comment segment. Often, but not always, 
+        ///     this data is UTF-8-encoded text.
         case comment(data:[UInt8])
     }
     
-    // sample types 
+    /// struct JPEG.YCbCr 
+    /// :   Swift.Hashable
+    /// :   JPEG.Color
+    /// @   frozen
+    ///     An 8-bit YCbCr color. 
+    /// 
+    ///     This type is a color target for the built-in [`JPEG.Common`] color format.
     @frozen 
     public 
     struct YCbCr:Hashable 
     {
-        /// The luminance component of this color. 
+        /// var JPEG.YCbCr.y    : Swift.UInt8
+        ///     The luminance component of this color. 
         public 
         var y:UInt8 
-        /// The blue component of this color. 
+        /// var JPEG.YCbCr.cb   : Swift.UInt8
+        ///     The blue component of this color. 
         public 
         var cb:UInt8 
-        /// The red component of this color. 
+        /// var JPEG.YCbCr.cr   : Swift.UInt8
+        ///     The red component of this color. 
         public 
         var cr:UInt8 
         
+        /// init JPEG.YCbCr.init(y:)
+        ///     Initializes this color to the given luminance level.
+        /// 
+        ///     The Cb and Cr channels will be initialized to 128.
+        /// - y : Swift.UInt8
+        ///     The given luminance level.
         public 
         init(y:UInt8) 
         {
             self.init(y: y, cb: 128, cr: 128)
         }
         
+        /// init JPEG.YCbCr.init(y:cb:cr:)
+        ///     Initializes this color to the given YCbCr triplet.
+        /// 
+        /// - y : Swift.UInt8
+        ///     The given luminance component.
+        /// - cb: Swift.UInt8
+        ///     The given blue component.
+        /// - cr: Swift.UInt8
+        ///     The given red component.
         public 
         init(y:UInt8, cb:UInt8, cr:UInt8) 
         {
@@ -71,37 +166,51 @@ enum JPEG
             self.cr = cr 
         }
     }
+    /// struct JPEG.RGB 
+    /// :   Swift.Hashable
+    /// :   JPEG.Color
+    /// @   frozen
+    ///     An 8-bit RGB color. 
+    /// 
+    ///     This type is a color target for the built-in [`JPEG.Common`] color format.
     @frozen
     public 
     struct RGB:Hashable 
     {
-        /// The red component of this color.
+        /// var JPEG.RGB.r      : Swift.UInt8
+        ///     The red component of this color. 
         public
         var r:UInt8
-        /// The green component of this color.
+        /// var JPEG.RGB.g      : Swift.UInt8
+        ///     The green component of this color. 
         public
         var g:UInt8
-        /// The blue component of this color.
+        /// var JPEG.RGB.b      : Swift.UInt8
+        ///     The blue component of this color. 
         public
         var b:UInt8
         
-        /// Creates an opaque grayscale color with all color components set to the given
-        /// value sample.
+        /// init JPEG.RGB.init(_:)
+        ///     Creates an opaque grayscale color with all color components set 
+        ///     to the given value sample.
         /// 
-        /// - Parameters:
-        ///     - value: The value to initialize all color components to.
+        /// - value : Swift.UInt8
+        ///     The value to initialize all color components to.
         public
         init(_ value:UInt8)
         {
             self.init(value, value, value)
         }
         
-        /// Creates an opaque color with the given color samples.
+        /// init JPEG.RGB.init(_:_:_:)
+        ///     Creates an opaque color with the given color samples.
         /// 
-        /// - Parameters:
-        ///     - red: The value to initialize the red component to.
-        ///     - green: The value to initialize the green component to.
-        ///     - blue: The value to initialize the blue component to.
+        /// - red   : Swift.UInt8
+        ///     The value to initialize the red component to.
+        /// - green : Swift.UInt8
+        ///     The value to initialize the green component to.
+        /// - blue  : Swift.UInt8
+        ///     The value to initialize the blue component to.
         public
         init(_ red:UInt8, _ green:UInt8, _ blue:UInt8)
         {
@@ -1938,7 +2047,7 @@ extension JPEG.Table.Huffman
                                                  |                   |
                                                  +———————————————————+
                                                  |                   |
-                                                 /////////////////////
+                 /                               /////////////////////
         
                  this is awesome because we don’t need to store anything in 
                  the table entries themselves to know if they are direct entries 
@@ -4777,8 +4886,8 @@ extension JPEG.Data.Planar
 }
 extension JPEG.Data.Rectangular 
 {
-    @_specialize(exported: true, where Color == JPEG.YCbCr, Format == JPEG.Common)
-    @_specialize(exported: true, where Color == JPEG.RGB, Format == JPEG.Common)
+    @_specialize(where Color == JPEG.YCbCr, Format == JPEG.Common)
+    @_specialize(where Color == JPEG.RGB, Format == JPEG.Common)
     public 
     func unpack<Color>(as _:Color.Type) -> [Color] 
         where Color:JPEG.Color, Color.Format == Format 

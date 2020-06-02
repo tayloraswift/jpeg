@@ -1,0 +1,8 @@
+<head>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital@0;1&family=Questrial&display=swap" rel="stylesheet"> 
+    <link href="style.css" rel="stylesheet"> 
+</head> 
+<body>
+    <main ><div class="eyebrow">Enumeration</div><h1 class="topic-heading">JPEG</h1><p class="topic-summary">A library namespace containing all JPEG-related APIs. </p><h2 >Declaration</h2><code class="declaration"><span class="syntax-keyword">enum</span><span class="syntax-whitespace"> </span><span class="syntax-identifier">JPEG</span></code></main>
+</body>

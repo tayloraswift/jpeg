@@ -21,6 +21,8 @@ let package = Package(
         .executable(name: "recompress",         targets: ["JPEGRecompress"]),
         .executable(name: "rotate",             targets: ["JPEGRotate"]),
         .executable(name: "custom-color",       targets: ["JPEGCustomColor"]),
+        
+        .executable(name: "docgen",       targets: ["DocumentationGenerator"]),
     ],
     targets: 
     [
@@ -40,6 +42,8 @@ let package = Package(
         .target(name: "JPEGRecompress",         dependencies: ["JPEG"], path: "examples/recompress"),
         .target(name: "JPEGRotate",             dependencies: ["JPEG"], path: "examples/rotate"),
         .target(name: "JPEGCustomColor",        dependencies: ["JPEG"], path: "examples/custom-color"),
+        
+        .target(name: "DocumentationGenerator", dependencies: [],       path: "docgen"),
     ], 
     swiftLanguageVersions: [.v4_2, .v5]
 )

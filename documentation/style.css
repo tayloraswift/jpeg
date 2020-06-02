@@ -1,0 +1,85 @@
+body 
+{
+    width: 50em;
+    margin-left: auto;
+    margin-right: auto;
+    font-size: 16px;
+    
+    font-family: 'EB Garamond';
+    font-weight: 400;
+}
+h1, h2
+{
+    font-family: 'Questrial';
+    font-weight: 400;
+}
+h1 
+{
+    font-size: 3em;
+    margin-top: 0.25em;
+}
+h2
+{
+    font-size: 1.75em;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+}
+.topic-summary 
+{
+    padding-bottom: 1.5em;
+    border-bottom: solid 1px #cccccc;
+}
+.eyebrow 
+{
+    margin-top: 1em;
+    font-size: 1.25em;
+    font-style: italic;
+    color: #555555;
+}
+p 
+{
+    font-size: 1.25em;
+}
+
+code span, code a
+{
+    font-family: 'EB Garamond';
+    font-size: 1.33em;
+}
+code .syntax-whitespace
+{
+    padding-left: 0.1em;
+}
+code .syntax-keyword 
+{
+    color: #ff0096;
+}
+code .syntax-identifier
+{
+    color: #333333;
+}
+code .syntax-punctuation
+{
+    color: #888888;
+    padding-left: 0.05em;
+    padding-right: 0.05em;
+}
+
+code a
+{
+    color: #ff9030;
+    text-decoration: none;
+}
+code a.syntax-type
+{
+    color: #ffa020;
+}
+code a.syntax-swift-type
+{
+    color: #ff5040;
+}
+code a:hover
+{
+    text-decoration: underline;
+    text-underline-offset: 25%;
+}

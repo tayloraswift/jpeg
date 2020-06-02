@@ -1,0 +1,8 @@
+<head>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital@0;1&family=Questrial&display=swap" rel="stylesheet"> 
+    <link href="style.css" rel="stylesheet"> 
+</head> 
+<body>
+    <main ><div class="eyebrow">Protocol</div><h1 class="topic-heading">JPEG.Color</h1><p class="topic-summary">A JPEG color target. </p><h2 >Declaration</h2><code class="declaration"><span class="syntax-keyword">protocol</span><span class="syntax-whitespace"> </span><span class="syntax-identifier">Color</span></code></main>
+</body>
