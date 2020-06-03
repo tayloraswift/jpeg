@@ -1,6 +1,8 @@
 /// protocol JPEG.Format
 ///     A JPEG color format, determined by the bit-depth and set of component keys in 
 ///     a JPEG frame header. 
+/// # [See also](color-protocols)
+/// ## (color-protocols)
 public 
 protocol _JPEGFormat
 {
@@ -17,7 +19,7 @@ protocol _JPEGFormat
     static 
     func recognize(_ components:Set<JPEG.Component.Key>, precision:Int) -> Self?
     
-    /// var JPEG.Format.components  : Swift.Array<JPEG.Component.Key> {get}
+    /// var JPEG.Format.components  : [JPEG.Component.Key] {get}
     ///     The set of component keys for this color format. 
     /// 
     ///     The ordering is used to determine plane index assignments when initializing 
@@ -41,6 +43,8 @@ protocol _JPEGFormat
 }
 /// protocol JPEG.Color 
 ///     A JPEG color target.
+/// # [See also](color-protocols)
+/// ## (color-protocols)
 public 
 protocol _JPEGColor
 {
@@ -53,11 +57,11 @@ protocol _JPEGColor
     /// static func JPEG.Color.unpack(_:of:)
     ///     Converts the given interleaved samples into an array of structured pixels.
     /// 
-    /// - interleaved   : Swift.Array<Swift.UInt16>
+    /// - interleaved   : [Swift.UInt16]
     ///     A flat array of interleaved component samples.
-    /// - format        : Self.Format
+    /// - format        : Format
     ///     The color format of the interleaved input.
-    /// - ->            : Swift.Array<Self>
+    /// - ->            : [Self]
     ///     An array of pixels of this color target type.
     static 
     func unpack(_ interleaved:[UInt16], of format:Format) -> [Self]
@@ -65,11 +69,11 @@ protocol _JPEGColor
     /// static func JPEG.Color.pack(_:as:)
     ///     Converts the given array of structured pixels into an array of interleaved samples.
     /// 
-    /// - pixels        : Swift.Array<Self>
+    /// - pixels        : [Self]
     ///     An array of pixels of this color target type.
-    /// - format        : Self.Format
+    /// - format        : Format
     ///     The color format of the interleaved output.
-    /// - ->            : Swift.Array<Swift.UInt16>
+    /// - ->            : [Swift.UInt16]
     ///     A flat array of interleaved component samples.
     static 
     func pack(_ pixels:[Self], as format:Format) -> [UInt16]
@@ -120,20 +124,26 @@ enum JPEG
     ///     An 8-bit YCbCr color. 
     /// 
     ///     This type is a color target for the built-in [`JPEG.Common`] color format.
+    /// # [Color channels](JPEG-YCbCr-color-channels)
+    /// # [See also](builtin-color-targets)
+    /// ## (builtin-color-targets)
     @frozen 
     public 
     struct YCbCr:Hashable 
     {
         /// var JPEG.YCbCr.y    : Swift.UInt8
         ///     The luminance component of this color. 
+        /// ## (0:JPEG-YCbCr-color-channels)
         public 
         var y:UInt8 
         /// var JPEG.YCbCr.cb   : Swift.UInt8
         ///     The blue component of this color. 
+        /// ## (1:JPEG-YCbCr-color-channels)
         public 
         var cb:UInt8 
         /// var JPEG.YCbCr.cr   : Swift.UInt8
         ///     The red component of this color. 
+        /// ## (2:JPEG-YCbCr-color-channels)
         public 
         var cr:UInt8 
         
@@ -173,20 +183,26 @@ enum JPEG
     ///     An 8-bit RGB color. 
     /// 
     ///     This type is a color target for the built-in [`JPEG.Common`] color format.
+    /// # [Color channels](JPEG-RGB-color-channels)
+    /// # [See also](builtin-color-targets)
+    /// ## (builtin-color-targets)
     @frozen
     public 
     struct RGB:Hashable 
     {
         /// var JPEG.RGB.r      : Swift.UInt8
         ///     The red component of this color. 
+        /// ## (JPEG-RGB-color-channels)
         public
         var r:UInt8
         /// var JPEG.RGB.g      : Swift.UInt8
         ///     The green component of this color. 
+        /// ## (JPEG-RGB-color-channels)
         public
         var g:UInt8
         /// var JPEG.RGB.b      : Swift.UInt8
         ///     The blue component of this color. 
+        /// ## (JPEG-RGB-color-channels)
         public
         var b:UInt8
         

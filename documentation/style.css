@@ -1,17 +1,25 @@
 body 
 {
-    width: 50em;
-    margin-left: auto;
-    margin-right: auto;
     font-size: 16px;
     
     font-family: 'EB Garamond';
     font-weight: 400;
+    font-kerning: normal;
+    font-variant-numeric: oldstyle-nums;
+    font-variant-numeric: tabular-nums;
+    margin: 0;
+    
+    background-color: #f4f4f4;
+    color: #222222;
 }
-h1, h2
+h1, h2, h3
 {
     font-family: 'Questrial';
     font-weight: 400;
+}
+h2, h3 
+{
+    text-transform: lowercase;
 }
 h1 
 {
@@ -20,55 +28,120 @@ h1
 }
 h2
 {
-    font-size: 1.75em;
+    font-size: 2em;
     margin-top: 1.5em;
     margin-bottom: 0.5em;
 }
-.topic-summary 
+h3
+{
+    font-size: 1.65em;
+}
+.topic-blurb 
 {
     padding-bottom: 1.5em;
     border-bottom: solid 1px #cccccc;
 }
 .eyebrow 
 {
-    margin-top: 1em;
     font-size: 1.25em;
     font-style: italic;
     color: #555555;
+}
+.declaration 
+{
+    margin-top: 1.5em;
+    display: block;
 }
 p 
 {
     font-size: 1.25em;
 }
 
-code span, code a
+code
 {
     font-family: 'EB Garamond';
+}
+code > *
+{
     font-size: 1.33em;
 }
-code .syntax-whitespace
+code span.signature-group, code span.syntax-group
 {
-    padding-left: 0.1em;
+    white-space: pre;
+    display: inline-block;
 }
-code .syntax-keyword 
+code span.signature-group:after
 {
-    color: #ff0096;
+    content: '\200b';
+    letter-spacing: 0.35em;
 }
+code span.signature-group:last-child:after
+{
+    letter-spacing: 0;
+}
+code.signature 
+{
+    margin-left: -2em;
+}
+
+/* raspberry pink */
+code .syntax-keyword, code .signature-highlight
+{
+    color: #ff4086;
+}
+code.signature a span
+{
+    text-decoration-color: #ff4086;
+}
+/* dark gray */
 code .syntax-identifier
 {
     color: #333333;
 }
+/* medium gray */
+code .signature-text, code .signature-punctuation
+{
+    color: #666666;
+}
+/* light gray */
 code .syntax-punctuation
 {
     color: #888888;
-    padding-left: 0.05em;
-    padding-right: 0.05em;
 }
 
-code a
+
+code span.syntax-group:after
 {
-    color: #ff9030;
+    content: '\200b';
+    letter-spacing: 0.35em;
+}
+code span.syntax-group:last-child:after
+{
+    letter-spacing: 0;
+}
+
+code .syntax-punctuation:before, code .signature-punctuation:before, 
+code .syntax-punctuation:after, code .signature-punctuation:after
+{
+    content: '\200b';
+}
+code .syntax-punctuation:before, code .signature-punctuation:before
+{
+    letter-spacing: 0.15em;
+}
+code .syntax-punctuation:after, code .signature-punctuation:after
+{
+    letter-spacing: 0.15em;
+}
+
+a
+{
     text-decoration: none;
+}
+a:hover, a:hover span
+{
+    text-decoration: underline;
+    text-underline-offset: 25%;
 }
 code a.syntax-type
 {
@@ -78,8 +151,69 @@ code a.syntax-swift-type
 {
     color: #ff5040;
 }
-code a:hover
+
+
+.section-container 
 {
-    text-decoration: underline;
-    text-underline-offset: 25%;
+    width: 50em;
+    margin-left: auto;
+    margin-right: auto;
+}
+.discussion 
+{
+    background-color: #f8f8f8;
+    padding-top: 2em;
+    padding-bottom: 2em;
+}
+.topics 
+{
+}
+.topics .section-container 
+{
+}
+.topic 
+{
+    border-top: solid 1px #cccccc;
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: flex-start;
+}
+.topic-container-right 
+{
+    width: 15em;
+    margin-right: 2em;
+}
+.topic-container-left 
+{
+    margin-top: 1.5em;
+    width: 100%;
+}
+.topic-container-symbol 
+{
+    margin-left: 2em;
+    margin-bottom: 2em;
+}
+.topic-container-symbol p 
+{
+    margin-top: 0.5em;
+}
+
+dl.parameter-list 
+{
+    margin-left: 2em;
+}
+dl.parameter-list dt 
+{
+    font-size: 1.33em;
+    font-weight: 600;
+    margin-bottom: 0.5em;
+}
+dl.parameter-list dd
+{
+    margin-left: 0;
+}
+dl.parameter-list dd p 
+{
+    margin-top: 0.5em;
 }

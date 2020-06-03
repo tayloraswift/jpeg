@@ -31,9 +31,14 @@ enum HTML
                     text.append(c)
                 }
             }
+            self.init(name, attributes, escaped: text)
+        }
+        
+        init(_ name:String, _ attributes:[String: String], escaped:String) 
+        {
             self.name       = name 
             self.attributes = attributes 
-            self.content    = .text(text)
+            self.content    = .text(escaped)
         }
         
         init(_ name:String, _ attributes:[String: String], _ content:[Self]) 
@@ -87,66 +92,201 @@ extension Page.Label
             text = "Static Method"
         case .instanceMethod:
             text = "Instance Method"
+        case .genericInitializer:
+            text = "Generic Initializer"
+        case .genericStaticMethod:
+            text = "Generic Static Method"
+        case .genericInstanceMethod:
+            text = "Generic Instance Method"
         case .staticProperty:
             text = "Static Property"
         case .instanceProperty:
             text = "Instance Property"
+        case .associatedtype:
+            text = "Associatedtype"
         case .subscript:
             text = "Subscript"
         }
         return .init("div", ["class": "eyebrow"], text)
     }
 }
-extension Page.Declaration.Token 
+extension Page.Declaration 
 {
-    var html:HTML.Tag 
+    static 
+    func html(_ tokens:[Token]) -> [HTML.Tag] 
     {
-        switch self 
+        var i:Int = tokens.startIndex
+        var grouped:[HTML.Tag] = []
+        while i < tokens.endIndex
         {
-        case .whitespace:
-            return .init("span", ["class": "syntax-whitespace"], " ")
-        case .keyword(let text):
-            return .init("span", ["class": "syntax-keyword"], text)
-        case .identifier(let text):
-            return .init("span", ["class": "syntax-identifier"], text)
-        case .type(_, .unresolved):
-            fatalError("attempted to render unresolved link")
-        case .type(let text, .resolved(url: let target)):
-            return .init("a", ["class": "syntax-type", "href": target], text)
-        case .type(let text, .apple(url: let target)):
-            return .init("a", ["class": "syntax-type syntax-swift-type", "href": target], text)
-        case .punctuation(let text):
-            return .init("span", ["class": "syntax-punctuation"], text)
+            var group:[HTML.Tag] = []
+            darkspace:
+            while i < tokens.endIndex
+            {
+                defer 
+                {
+                    i += 1
+                }
+                switch tokens[i] 
+                {
+                case .breakableWhitespace:
+                    break darkspace
+                case .whitespace:
+                    group.append(.init("span", ["class": "syntax-whitespace"], escaped: "&nbsp;"))
+                case .keyword(let text):
+                    group.append(.init("span", ["class": "syntax-keyword"], text))
+                case .identifier(let text):
+                    group.append(.init("span", ["class": "syntax-identifier"], text))
+                case .type(_, .unresolved), .typePunctuation(_, .unresolved):
+                    fatalError("attempted to render unresolved link")
+                case .type(let text, .resolved(url: let target)):
+                    group.append(.init("a", ["class": "syntax-type", "href": target], text))
+                case .type(let text, .apple(url: let target)):
+                    group.append(.init("a", ["class": "syntax-type syntax-swift-type", "href": target], text))
+                case .typePunctuation(let text, .resolved(url: let target)):
+                    group.append(.init("a", ["class": "syntax-type syntax-punctuation", "href": target], text))
+                case .typePunctuation(let text, .apple(url: let target)):
+                    group.append(.init("a", ["class": "syntax-type syntax-swift-type syntax-punctuation", "href": target], text))
+                case .punctuation(let text):
+                    group.append(.init("span", ["class": "syntax-punctuation"], text))
+                }
+            }
+            
+            grouped.append(.init("span", ["class": "syntax-group"], group))
+            
+            while i < tokens.endIndex, case .breakableWhitespace = tokens[i]
+            {
+                i += 1
+            }
         }
+        return grouped 
+    }
+}
+extension Page.Signature 
+{
+    static 
+    func html(_ tokens:[Token]) -> [HTML.Tag] 
+    {
+        var i:Int = tokens.startIndex
+        var grouped:[HTML.Tag] = []
+        while i < tokens.endIndex
+        {
+            var group:[HTML.Tag] = []
+            darkspace:
+            while i < tokens.endIndex
+            {
+                defer 
+                {
+                    i += 1
+                }
+                switch tokens[i] 
+                {
+                case .text(let text):
+                    group.append(.init("span", ["class": "signature-text"], text))
+                case .punctuation(let text):
+                    group.append(.init("span", ["class": "signature-punctuation"], text))
+                case .highlight(let text):
+                    group.append(.init("span", ["class": "signature-highlight"], text))
+                case .whitespace:
+                    break darkspace
+                }
+            }
+            
+            grouped.append(.init("span", ["class": "signature-group"], group))
+            
+            while i < tokens.endIndex, case .whitespace = tokens[i]
+            {
+                i += 1
+            }
+        }
+        return grouped 
     }
 }
 extension Page 
 {
     var html:HTML.Tag
     {
-        let label:HTML.Tag          = self.label.html
-        let name:HTML.Tag           = .init("h1", ["class": "topic-heading"], self.name)
-        let summary:HTML.Tag        = .init("p", ["class": "topic-summary"], self.overview ?? "No overview available")
-        let declaration:HTML.Tag    = .init("code", ["class": "declaration"], self.declaration.map(\.html))
-        let discussion:[HTML.Tag]   = self.discussion.map 
+        var sections:[HTML.Tag] = []
+        func create(class:String, section:[HTML.Tag]) 
         {
-            .init("p", ["class": "topic-discussion"], $0)
+            sections.append(
+                .init("section", ["class": `class`], 
+                [.init("div", ["class": "section-container"], section)]))
         }
         
-        var contents:[HTML.Tag] = 
+        var discussion:[HTML.Tag] = 
         [
-            label, 
-            name, 
-            summary, 
+            self.label.html, 
+            .init("h1", ["class": "topic-heading"], self.name), 
+            .init("p", ["class": "topic-blurb"], self.blurb ?? "No overview available"), 
             .init("h2", [:], "Declaration"),
-            declaration,
+            .init("code", ["class": "declaration"], Page.Declaration.html(self.declaration)),
         ]
-        if !discussion.isEmpty
+        
+        if !self.parameters.isEmpty
         {
-            contents.append(.init("h2", [:], "Overview"))
-            contents.append(contentsOf: discussion)
+            discussion.append(.init("h2", [:], "Parameters"))
+            var list:[HTML.Tag] = []
+            for (name, paragraphs):(String, [String]) in self.parameters 
+            {
+                list.append(.init("dt", [:], [.init("code", [:], name)]))
+                list.append(.init("dd", [:], paragraphs.map 
+                {
+                    .init("p", [:], $0)
+                }))
+            }
+            discussion.append(.init("dl", ["class": "parameter-list"], list))
+        }
+        if !self.returnValue.isEmpty
+        {
+            discussion.append(.init("h2", [:], "Return value"))
+            discussion.append(contentsOf: self.returnValue.map 
+            {
+                .init("p", [:], $0)
+            })
+        }
+        if !self.discussion.isEmpty
+        {
+            discussion.append(.init("h2", [:], "Overview"))
+            discussion.append(contentsOf: self.discussion.map 
+            {
+                .init("p", [:], $0)
+            })
+        }
+        create(class: "discussion", section: discussion)
+        
+        if !self.topics.isEmpty 
+        {
+            var topics:[HTML.Tag] = [.init("h2", [:], "Topics")]
+            for (topic, _, symbols):Page.Topic in self.topics 
+            {
+                let left:HTML.Tag    = .init("h3", [:], topic)
+                var right:[HTML.Tag] = []
+                
+                for (signature, url, blurb):Page.TopicSymbol in symbols 
+                {
+                    var container:[HTML.Tag] = 
+                    [
+                        .init("code", ["class": "signature"], 
+                            [.init("a", ["href": url], Page.Signature.html(signature))])
+                    ]
+                    if let blurb:String = blurb 
+                    {
+                        container.append(.init("p", ["class": "topic-symbol-blurb"], blurb))
+                    }
+                    right.append(.init("div", ["class": "topic-container-symbol"], container))
+                }
+                
+                topics.append(.init("div", ["class": "topic"], 
+                [
+                    .init("div", ["class": "topic-container-right"], [left]),
+                    .init("div", ["class": "topic-container-left"], right),
+                ]))
+            }
+            
+            create(class: "topics", section: topics)
         }
         
-        return .init("main", [:], contents)
+        return .init("main", [:], sections)
     }
 }
