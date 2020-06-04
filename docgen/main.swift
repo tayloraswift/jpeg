@@ -657,7 +657,7 @@ enum Symbol
         }
     }
     
-    // SubscriptField      ::= 'subscript' <Whitespace> '[' <FunctionLabels> ']' <Endline> 
+    // SubscriptField      ::= 'subscript' <Whitespace> <Identifiers> '[' <FunctionLabels> ']' <Endline> 
     struct SubscriptField:Parseable, CustomStringConvertible
     {
         struct Subscript:Parseable.Terminal 
@@ -666,18 +666,20 @@ enum Symbol
             let token:String = "subscript"
         }
         
-        let identifiers:[String]
+        let identifiers:[String],
+            labels:[String]
             
         static 
         func parse(_ tokens:[Character], position:inout Int) throws -> Self
         {
             let _:Subscript                     = try .parse(tokens, position: &position), 
                 _:Symbol.Whitespace             = try .parse(tokens, position: &position),
+                identifiers:Symbol.Identifiers  = try .parse(tokens, position: &position),
                 _:Token.Bracket.Left            = try .parse(tokens, position: &position),
                 labels:Symbol.FunctionLabels    = try .parse(tokens, position: &position),
                 _:Token.Bracket.Right           = try .parse(tokens, position: &position),
                 _:Symbol.Endline                = try .parse(tokens, position: &position)
-            return .init(identifiers: labels.identifiers)
+            return .init(identifiers: identifiers.identifiers, labels: labels.identifiers)
         }
         
         var description:String 
@@ -686,6 +688,7 @@ enum Symbol
             SubscriptField 
             {
                 identifiers     : \(self.identifiers)
+                labels          : \(self.labels)
             }
             """
         }
@@ -1240,7 +1243,7 @@ enum Symbol
             """
         }
     }
-    // AssociatedtypeField ::= 'associatedtype' <Whitespace> <Identifier> <Endline>
+    // AssociatedtypeField ::= 'associatedtype' <Whitespace> <Identifiers> <Endline>
     struct AssociatedtypeField:Parseable, CustomStringConvertible
     {
         struct Associatedtype:Parseable.Terminal 
@@ -1249,16 +1252,16 @@ enum Symbol
             let token:String = "associatedtype"
         }
         
-        let identifier:String
+        let identifiers:[String]
         
         static 
         func parse(_ tokens:[Character], position:inout Int) throws -> Self
         {
             let _:Associatedtype                = try .parse(tokens, position: &position), 
                 _:Symbol.Whitespace             = try .parse(tokens, position: &position), 
-                identifier:Symbol.Identifier    = try .parse(tokens, position: &position), 
+                identifiers:Symbol.Identifiers  = try .parse(tokens, position: &position), 
                 _:Symbol.Endline                = try .parse(tokens, position: &position)
-            return .init(identifier: identifier.string)
+            return .init(identifiers: identifiers.identifiers)
         }
         
         var description:String 
@@ -1266,7 +1269,7 @@ enum Symbol
             """
             AssociatedtypeField 
             {
-                identifier  : \(self.identifier)
+                identifiers  : \(self.identifiers)
             }
             """
         }
@@ -1468,7 +1471,7 @@ enum Symbol
     }
     enum ParameterName:Parseable
     {
-        case parameter(Symbol.Identifier) 
+        case parameter(String) 
         case `return`
         
         static 
@@ -1476,7 +1479,7 @@ enum Symbol
         {
             if      let identifier:Symbol.Identifier = .parse(tokens, position: &position)
             {
-                return .parameter(identifier)
+                return .parameter(identifier.string)
             }
             else if let _:Token.Arrow = .parse(tokens, position: &position)
             {
@@ -1630,12 +1633,13 @@ enum Symbol
     // Separator           ::= <Endline>
     enum Field:Parseable 
     {
-        case function(Symbol.FunctionField) 
         case `subscript`(Symbol.SubscriptField) 
+        case function(Symbol.FunctionField) 
         case member(Symbol.MemberField) 
         case type(Symbol.TypeField) 
         case `typealias`(Symbol.TypealiasField) 
         case `associatedtype`(Symbol.AssociatedtypeField) 
+        
         case annotation(Symbol.AnnotationField) 
         case attribute(Symbol.AttributeField) 
         case `where`(Symbol.WhereField) 
@@ -1768,9 +1772,11 @@ func main(_ paths:[String]) throws
             {
             case .function(let header)?:
                 pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i))
+            case .member(let header)?:
+                pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i))
             case .type(let header)?:
                 pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i))
-            case .member(let header)?:
+            case .associatedtype(let header)?:
                 pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i))
             default:
                 break 

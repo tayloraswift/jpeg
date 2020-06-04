@@ -223,11 +223,11 @@ extension Page
             .init("code", ["class": "declaration"], Page.Declaration.html(self.declaration)),
         ]
         
-        if !self.parameters.isEmpty
+        if !self.discussion.parameters.isEmpty
         {
             discussion.append(.init("h2", [:], "Parameters"))
             var list:[HTML.Tag] = []
-            for (name, paragraphs):(String, [String]) in self.parameters 
+            for (name, paragraphs):(String, [String]) in self.discussion.parameters 
             {
                 list.append(.init("dt", [:], [.init("code", [:], name)]))
                 list.append(.init("dd", [:], paragraphs.map 
@@ -237,18 +237,18 @@ extension Page
             }
             discussion.append(.init("dl", ["class": "parameter-list"], list))
         }
-        if !self.returnValue.isEmpty
+        if !self.discussion.return.isEmpty
         {
             discussion.append(.init("h2", [:], "Return value"))
-            discussion.append(contentsOf: self.returnValue.map 
+            discussion.append(contentsOf: self.discussion.return.map 
             {
                 .init("p", [:], $0)
             })
         }
-        if !self.discussion.isEmpty
+        if !self.discussion.overview.isEmpty
         {
             discussion.append(.init("h2", [:], "Overview"))
-            discussion.append(contentsOf: self.discussion.map 
+            discussion.append(contentsOf: self.discussion.overview.map 
             {
                 .init("p", [:], $0)
             })

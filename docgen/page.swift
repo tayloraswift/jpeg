@@ -261,21 +261,6 @@ class Page
                 }
             }
         }
-        
-        static 
-        func url(_ signature:[Token]) -> String 
-        {
-            signature.compactMap 
-            {
-                switch $0 
-                {
-                case    .whitespace, .punctuation:
-                    return nil
-                case    .text(let text), .highlight(let text):
-                    return text 
-                }
-            }.joined(separator: "-")
-        }
     }
     
     struct Binding 
@@ -298,6 +283,12 @@ class Page
         let locals:Set<String>, 
             keys:Set<Key>
         let page:Page 
+        
+        static 
+        func url(_ identifiers:[String]) -> String 
+        {
+            identifiers.joined(separator: "-")
+        }
     }
     
     typealias TopicSymbol   = (signature:[Signature.Token], url:String, blurb:String?)
@@ -308,28 +299,30 @@ class Page
     let signature:[Signature.Token]
     var declaration:[Declaration.Token] 
     let blurb:String?
-    let parameters:[(name:String, paragraphs:[String])], 
-        returnValue:[String]
-    let discussion:[String]
+    let discussion:
+    (
+        parameters:[(name:String, paragraphs:[String])], 
+        return:[String],
+        overview:[String]
+    )
     
     var topics:[Topic]
     
     init(label:Label, name:String, signature:[Signature.Token], declaration:[Declaration.Token], 
-        blurb:String?, 
-        parameters:[(name:String, paragraphs:[String])] = [], 
-        returnValue:[String] = [], 
-        discussion:[String], 
-        topics:[Topic]) 
+        fields:Fields)
     {
         self.label          = label 
         self.name           = name 
         self.signature      = signature 
         self.declaration    = declaration 
-        self.blurb          = blurb 
-        self.parameters     = parameters 
-        self.returnValue    = returnValue
-        self.discussion     = discussion
-        self.topics         = topics
+        self.blurb          = fields.blurb?.string 
+        self.discussion     = 
+        (
+            fields.parameters.map{ ($0.name, $0.paragraphs.map(\.string)) }, 
+            fields.return?.paragraphs.map(\.string) ?? [], 
+            fields.discussion.map(\.string)
+        )
+        self.topics         = fields.topics
     }
 }
 extension Page 
@@ -453,75 +446,272 @@ extension Page
             self.topics.append(seealso)
         }
     }
+    
+    static 
+    func print(function fields:Fields, labels:[String], delimiters:(Character, Character),
+        signature:inout [Signature.Token], declaration:inout [Declaration.Token]) -> [String]
+    {
+        guard labels.count == fields.parameters.count 
+        else 
+        {
+            fatalError("warning: function/subscript '\(signature)' has \(labels.count) labels, but \(fields.parameters.count) parameters")
+        }
+        
+        signature.append(.punctuation(.init(delimiters.0)))
+        declaration.append(.punctuation(.init(delimiters.0)))
+        
+        var mangled:[String] = []
+        
+        var interior:(signature:[[Page.Signature.Token]], declaration:[[Page.Declaration.Token]]) = 
+            ([], [])
+        for (label, (name, parameter, _)):(String, (String, Symbol.FunctionParameter, [Symbol.ParagraphField])) in 
+            zip(labels, fields.parameters)
+        {
+            var signature:[Page.Signature.Token]        = []
+            var declaration:[Page.Declaration.Token]    = []
+            
+            if label != "_" 
+            {
+                mangled.append(label)
+                signature.append(.highlight(label))
+                signature.append(.punctuation(":"))
+                declaration.append(.identifier(label))
+            }
+            else 
+            {
+                declaration.append(.keyword(label))
+            }
+            if label != name || delimiters == ("[", "]")
+            {
+                declaration.append(.whitespace)
+                declaration.append(.identifier(name))
+            }
+            declaration.append(.punctuation(":"))
+            for attribute:Symbol.Attribute in parameter.attributes
+            {
+                declaration.append(.keyword("\(attribute)"))
+                declaration.append(.whitespace)
+            }
+            if parameter.inout 
+            {
+                mangled.append("inout")
+                signature.append(.text("inout"))
+                signature.append(.whitespace)
+                declaration.append(.keyword("inout"))
+                declaration.append(.whitespace)
+            }
+            let type:(declaration:[Page.Declaration.Token], signature:[Page.Signature.Token]) 
+            type.declaration = Page.Declaration.tokenize(parameter.type)
+            type.signature   = Page.Signature.convert(type.declaration)
+            for token:Page.Signature.Token in type.signature 
+            {
+                switch token 
+                {
+                case    .whitespace, .punctuation:
+                    break
+                case    .text(let text), .highlight(let text):
+                    mangled.append(text)
+                }
+            }
+            signature.append(contentsOf: type.signature)
+            declaration.append(contentsOf: type.declaration)
+            
+            interior.signature.append(signature)
+            interior.declaration.append(declaration)
+        }
+        
+        signature.append(contentsOf: 
+            interior.signature.joined(separator: [.punctuation(","), .whitespace]))
+        declaration.append(contentsOf: 
+            interior.declaration.joined(separator: [.punctuation(","), .breakableWhitespace]))
+        
+        signature.append(.punctuation(.init(delimiters.1)))
+        declaration.append(.punctuation(.init(delimiters.1)))
+        
+        if let `throws`:Symbol.ThrowsField = fields.throws
+        {
+            signature.append(.whitespace)
+            signature.append(.text("\(`throws`)"))
+            declaration.append(.breakableWhitespace)
+            declaration.append(.keyword("\(`throws`)"))
+        }
+        
+        if let type:Symbol.SwiftType = fields.return?.type 
+        {
+            signature.append(.whitespace)
+            signature.append(.punctuation("->"))
+            signature.append(.whitespace)
+            declaration.append(.breakableWhitespace)
+            declaration.append(.punctuation("->"))
+            declaration.append(.whitespace)
+            
+            let tokens:[Page.Declaration.Token] = Page.Declaration.tokenize(type)
+            signature.append(contentsOf: Page.Signature.convert(tokens))
+            declaration.append(contentsOf: tokens)
+        }
+        
+        return mangled
+    }
+}
+extension Page 
+{
+    struct Fields
+    {
+        let annotations:[Symbol.AnnotationField], 
+            attributes:[Symbol.AttributeField], 
+            wheres:[Symbol.WhereField], 
+            paragraphs:[Symbol.ParagraphField],
+            `throws`:Symbol.ThrowsField?
+        let keys:Set<Page.Binding.Key>,
+            topics:[Page.Topic]
+        let parameters:[(name:String, type:Symbol.FunctionParameter, paragraphs:[Symbol.ParagraphField])], 
+            `return`:(type:Symbol.SwiftType, paragraphs:[Symbol.ParagraphField])?
+        
+        var blurb:Symbol.ParagraphField?
+        {
+            self.paragraphs.first
+        }
+        var discussion:ArraySlice<Symbol.ParagraphField> 
+        {
+            self.paragraphs.dropFirst()
+        }
+        
+        init<S>(_ fields:S, order:Int) where S:Sequence, S.Element == Symbol.Field 
+        {
+            var annotations:[Symbol.AnnotationField]    = [], 
+                attributes:[Symbol.AttributeField]      = [], 
+                wheres:[Symbol.WhereField]              = [], 
+                paragraphs:[Symbol.ParagraphField]      = [],
+                topics:[Symbol.TopicField]              = [], 
+                keys:[Symbol.TopicElementField]         = []
+            var `throws`:Symbol.ThrowsField?
+            var parameters:[(parameter:Symbol.ParameterField, paragraphs:[Symbol.ParagraphField])] = []
+            
+            for field:Symbol.Field in fields
+            {
+                switch field 
+                {
+                case .annotation    (let field):
+                    annotations.append(field)
+                case .attribute     (let field):
+                    attributes.append(field)
+                case .where         (let field):
+                    wheres.append(field)
+                case .paragraph     (let field):
+                    if parameters.isEmpty 
+                    {
+                        paragraphs.append(field)
+                    }
+                    else 
+                    {
+                        parameters[parameters.endIndex - 1].paragraphs.append(field)
+                    }
+                case .topic         (let field):
+                    topics.append(field)
+                case .topicElement  (let field):
+                    keys.append(field)
+                
+                case .parameter     (let field):
+                    parameters.append((field, []))
+                    
+                case .throws        (let field):
+                    guard `throws` == nil 
+                    else 
+                    {
+                        fatalError("only one throws field per doccomnent allowed")
+                    }
+                    `throws` = field 
+                
+                case .subscript, .function, .member, .type, .typealias, .associatedtype:
+                    fatalError("only one header field per doccomnent allowed")
+                    
+                case .separator:
+                    break
+                }
+            }
+            
+            self.annotations    = annotations
+            self.attributes     = attributes
+            self.wheres         = wheres
+            self.paragraphs     = paragraphs
+            self.throws         = `throws`
+            
+            self.keys           = .init(keys.map{ .init($0, order: order) })
+            self.topics         = topics.map{ ($0.display, $0.key, []) }
+            
+            if  let (last, paragraphs):(Symbol.ParameterField, [Symbol.ParagraphField]) = 
+                parameters.last, 
+                case .return = last.name
+            {
+                self.return = (last.parameter.type, paragraphs)
+                parameters.removeLast()
+            }
+            else 
+            {
+                self.return = nil
+            }
+            
+            self.parameters = parameters.map 
+            {
+                guard case .parameter(let name) = $0.parameter.name 
+                else 
+                {
+                    fatalError("return value must be the last parameter field")
+                }
+                return (name, $0.parameter.parameter, $0.paragraphs)
+            }
+        }
+    }
 }
 extension Page.Binding 
 {
     static 
+    func create(_ header:Symbol.SubscriptField, fields:ArraySlice<Symbol.Field>, order:Int) 
+        -> (page:Self, path:[String]) 
+    {
+        let fields:Page.Fields = .init(fields, order: order)
+        if !fields.annotations.isEmpty 
+        {
+            print("warning: annotation fields are ignored in a subscript doccoment")
+        }
+        if !fields.wheres.isEmpty 
+        {
+            print("warning: where fields are ignored in a subscript doccoment")
+        }
+        
+        let name:String = "[\(header.labels.map{ "\($0):" }.joined())]" 
+        
+        var declaration:[Page.Declaration.Token]    = 
+            Page.Declaration.tokenize(fields.attributes) + [.keyword("subscript")]
+        var signature:[Page.Signature.Token]        =      [   .text("subscript")]
+        
+        
+        let mangled:[String] = Page.print(function: fields, labels: header.labels, delimiters: ("[", "]"), 
+            signature: &signature, declaration: &declaration)
+        
+        let page:Page = .init(label: .subscript, name: name, 
+            signature:      signature, 
+            declaration:    declaration, 
+            fields:         fields)
+        let binding:Page.Binding    = .init(url: Self.url(header.identifiers + ["subscript"] + mangled), 
+            locals: [], keys: fields.keys, page: page)
+        return (page: binding, path: header.identifiers)
+    }
+    static 
     func create(_ header:Symbol.FunctionField, fields:ArraySlice<Symbol.Field>, order:Int) 
         -> (page:Self, path:[String]) 
     {
-        var //annotations:[Symbol.AnnotationField]    = [], 
-            attributes:[Symbol.AttributeField]      = [], 
-            wheres:[Symbol.WhereField]              = [], 
-            paragraphs:[Symbol.ParagraphField]      = [],
-            topics:[Symbol.TopicField]              = [], 
-            keys:[Symbol.TopicElementField]         = []
-        var `throws`:Symbol.ThrowsField?
-        var parameters:[(parameter:Symbol.ParameterField, paragraphs:[Symbol.ParagraphField])] = []
-        for field:Symbol.Field in fields
+        let fields:Page.Fields = .init(fields, order: order)
+        if !fields.annotations.isEmpty 
         {
-            switch field 
-            {
-            //case .annotation(let field):
-            //    annotations.append(field)
-            case .attribute     (let field):
-                attributes.append(field)
-            case .where         (let field):
-                wheres.append(field)
-            case .paragraph     (let field):
-                if parameters.isEmpty 
-                {
-                    paragraphs.append(field)
-                }
-                else 
-                {
-                    parameters[parameters.endIndex - 1].paragraphs.append(field)
-                }
-            case .topic         (let field):
-                topics.append(field)
-            case .topicElement  (let field):
-                keys.append(field)
-            
-            case .parameter     (let field):
-                parameters.append((field, []))
-                
-            case .throws(let field):
-                guard `throws` == nil 
-                else 
-                {
-                    fatalError("only one throws field per doccomnent allowed")
-                }
-                `throws` = field 
-            
-            default:
-                break
-            }
+            print("warning: annotation fields are ignored in a function doccoment")
+        }
+        if !fields.wheres.isEmpty 
+        {
+            print("warning: where fields are ignored in a function doccoment")
         }
         
-        let `return`:(type:Symbol.SwiftType, paragraphs:[Symbol.ParagraphField])?
-        if  let (last, paragraphs):(Symbol.ParameterField, [Symbol.ParagraphField]) = 
-            parameters.last, 
-            case .return = last.name
-        {
-            `return` = (last.parameter.type, paragraphs)
-            parameters.removeLast()
-        }
-        else 
-        {
-            `return` = nil
-        }
-        
-        var declaration:[Page.Declaration.Token] = Page.Declaration.tokenize(attributes)
+        var declaration:[Page.Declaration.Token] = Page.Declaration.tokenize(fields.attributes)
         
         let basename:String = header.identifiers[header.identifiers.endIndex - 1], 
             name:String     = "\(basename)(\(header.labels.map{ "\($0):" }.joined()))" 
@@ -596,114 +786,15 @@ extension Page.Binding
             declaration.append(contentsOf: tokens)
         }
         
-        guard header.labels.count == parameters.count 
-        else 
-        {
-            fatalError("warning: function '\(name)' has \(header.labels.count) labels, but \(parameters.count) parameters")
-        }
+        let mangled:[String] = Page.print(function: fields, labels: header.labels, delimiters: ("(", ")"), 
+            signature: &signature, declaration: &declaration)
         
-        signature.append(.punctuation("("))
-        declaration.append(.punctuation("("))
-        
-        var discussion: 
-        (
-            parameter:[(name:String, paragraphs:[String])], 
-            returnValue:[String]
-        )
-        discussion.parameter = []
-        var interior:(signature:[[Page.Signature.Token]], declaration:[[Page.Declaration.Token]]) = 
-            ([], [])
-        for (label, (parameter, paragraphs)):(String, (Symbol.ParameterField, [Symbol.ParagraphField])) in 
-            zip(header.labels, parameters)
-        {
-            var signature:[Page.Signature.Token]        = []
-            var declaration:[Page.Declaration.Token]    = []
-            guard case .parameter(let name) = parameter.name 
-            else 
-            {
-                fatalError("return value must be the last parameter field in a function doccoment")
-            }
-            
-            discussion.parameter.append((name.string, paragraphs.map(\.string)))
-            
-            signature.append(.highlight(label))
-            declaration.append(label == "_" ? .keyword(label) : .identifier(label))
-            if label != name.string 
-            {
-                declaration.append(.whitespace)
-                declaration.append(.identifier(name.string))
-            }
-            signature.append(.punctuation(":"))
-            declaration.append(.punctuation(":"))
-            for attribute:Symbol.Attribute in parameter.parameter.attributes
-            {
-                declaration.append(.keyword("\(attribute)"))
-                declaration.append(.whitespace)
-            }
-            if parameter.parameter.inout 
-            {
-                signature.append(.text("inout"))
-                signature.append(.whitespace)
-                declaration.append(.keyword("inout"))
-                declaration.append(.whitespace)
-            }
-            let type:[Page.Declaration.Token] = Page.Declaration.tokenize(parameter.parameter.type)
-            signature.append(contentsOf: Page.Signature.convert(type))
-            declaration.append(contentsOf: type)
-            
-            interior.signature.append(signature)
-            interior.declaration.append(declaration)
-        }
-        
-        signature.append(contentsOf: 
-            interior.signature.joined(separator: [.punctuation(","), .whitespace]))
-        declaration.append(contentsOf: 
-            interior.declaration.joined(separator: [.punctuation(","), .breakableWhitespace]))
-        
-        signature.append(.punctuation(")"))
-        declaration.append(.punctuation(")"))
-        
-        if let `throws`:Symbol.ThrowsField = `throws`
-        {
-            signature.append(.whitespace)
-            signature.append(.text("\(`throws`)"))
-            declaration.append(.breakableWhitespace)
-            declaration.append(.keyword("\(`throws`)"))
-        }
-        
-        if let (type, paragraphs):(Symbol.SwiftType, [Symbol.ParagraphField]) = `return` 
-        {
-            discussion.returnValue = paragraphs.map(\.string)
-            
-            signature.append(.whitespace)
-            signature.append(.punctuation("->"))
-            signature.append(.whitespace)
-            declaration.append(.breakableWhitespace)
-            declaration.append(.punctuation("->"))
-            declaration.append(.whitespace)
-            
-            let tokens:[Page.Declaration.Token] = Page.Declaration.tokenize(type)
-            signature.append(contentsOf: Page.Signature.convert(tokens))
-            declaration.append(contentsOf: tokens)
-        }
-        else 
-        {
-            discussion.returnValue = []
-        }
-        
-        let page:Page = .init(
-            label:          label, 
-            name:           name, 
+        let page:Page = .init(label: label, name: name, 
             signature:      signature, 
             declaration:    declaration, 
-            blurb:          paragraphs.first?.string, 
-            parameters:     discussion.parameter, 
-            returnValue:    discussion.returnValue,
-            discussion:     paragraphs.dropFirst().map(\.string), 
-            topics:         topics.map{ ($0.display, $0.key, []) })
-        let url:String              = Page.Signature.url(signature), 
-            binding:Page.Binding    = 
-            .init(url: url, locals: [], keys: .init(keys.map{ .init($0, order: order) }), page: page)
+            fields:         fields)
+        let binding:Page.Binding    = .init(url: Self.url(header.identifiers + mangled), 
+            locals: [], keys: fields.keys, page: page)
         return (page: binding, path: header.identifiers)
     }
     
@@ -711,34 +802,25 @@ extension Page.Binding
     func create(_ header:Symbol.MemberField, fields:ArraySlice<Symbol.Field>, order:Int) 
         -> (page:Self, path:[String]) 
     {
-        var //annotations:[Symbol.AnnotationField]    = [], 
-            attributes:[Symbol.AttributeField]      = [], 
-            //wheres:[Symbol.WhereField]              = [], 
-            paragraphs:[Symbol.ParagraphField]      = [],
-            topics:[Symbol.TopicField]              = [], 
-            keys:[Symbol.TopicElementField]         = []
-        for field:Symbol.Field in fields
+        let fields:Page.Fields = .init(fields, order: order)
+        if !fields.annotations.isEmpty 
         {
-            switch field 
-            {
-            //case .annotation(let field):
-            //    annotations.append(field)
-            case .attribute     (let field):
-                attributes.append(field)
-            //case .where     (let field):
-            //    wheres.append(field)
-            case .paragraph     (let field):
-                paragraphs.append(field)
-            case .topic         (let field):
-                topics.append(field)
-            case .topicElement  (let field):
-                keys.append(field)
-            default:
-                break
-            }
+            print("warning: annotation fields are ignored in a member doccoment")
+        }
+        if !fields.wheres.isEmpty 
+        {
+            print("warning: where fields are ignored in a member doccoment")
+        }
+        if !fields.parameters.isEmpty || fields.return != nil
+        {
+            print("warning: parameter/return fields are ignored in a member doccoment")
+        }
+        if fields.throws != nil
+        {
+            print("warning: throws fields are ignored in a member doccoment")
         }
         
-        var declaration:[Page.Declaration.Token] = Page.Declaration.tokenize(attributes)
+        var declaration:[Page.Declaration.Token] = Page.Declaration.tokenize(fields.attributes)
         
         let name:String = header.identifiers[header.identifiers.endIndex - 1] 
         let label:Page.Label, 
@@ -796,17 +878,12 @@ extension Page.Binding
             declaration.append(.punctuation("}"))
         }
         
-        let page:Page = .init(
-            label:          label, 
-            name:           name, 
+        let page:Page = .init(label: label, name: name, 
             signature:      signature, 
             declaration:    declaration, 
-            blurb:          paragraphs.first?.string, 
-            discussion:     paragraphs.dropFirst().map(\.string), 
-            topics:         topics.map{ ($0.display, $0.key, []) })
-        let url:String              = Page.Signature.url(signature), 
-            binding:Page.Binding    = 
-            .init(url: url, locals: [], keys: .init(keys.map{ .init($0, order: order) }), page: page)
+            fields:         fields)
+        let binding:Page.Binding = .init(url: Self.url(header.identifiers), 
+            locals: [], keys: fields.keys, page: page)
         return (page: binding, path: header.identifiers)
     }
     
@@ -814,34 +891,17 @@ extension Page.Binding
     func create(_ header:Symbol.TypeField, fields:ArraySlice<Symbol.Field>, order:Int) 
         -> (page:Self, path:[String]) 
     {
-        var annotations:[Symbol.AnnotationField]    = [], 
-            attributes:[Symbol.AttributeField]      = [], 
-            wheres:[Symbol.WhereField]              = [], 
-            paragraphs:[Symbol.ParagraphField]      = [], 
-            topics:[Symbol.TopicField]              = [], 
-            keys:[Symbol.TopicElementField]         = []
-        for field:Symbol.Field in fields
+        let fields:Page.Fields = .init(fields, order: order)
+        if !fields.parameters.isEmpty || fields.return != nil
         {
-            switch field 
-            {
-            case .annotation    (let field):
-                annotations.append(field)
-            case .attribute     (let field):
-                attributes.append(field)
-            case .where         (let field):
-                wheres.append(field)
-            case .paragraph     (let field):
-                paragraphs.append(field)
-            case .topic         (let field):
-                topics.append(field)
-            case .topicElement  (let field):
-                keys.append(field)
-            default:
-                break
-            }
+            print("warning: parameter/return fields are ignored in a type doccoment")
+        }
+        if fields.throws != nil
+        {
+            print("warning: throws fields are ignored in a type doccoment")
         }
         
-        var declaration:[Page.Declaration.Token] = Page.Declaration.tokenize(attributes)
+        var declaration:[Page.Declaration.Token] = Page.Declaration.tokenize(fields.attributes)
         
         let name:String = header.identifiers.joined(separator: ".")
         let label:Page.Label, 
@@ -889,21 +949,21 @@ extension Page.Binding
             }.joined(separator: [.punctuation(","), .breakableWhitespace]))
             declaration.append(.punctuation(">"))
         }
-        if !annotations.isEmpty 
+        if !fields.annotations.isEmpty 
         {
             declaration.append(.punctuation(":"))
-            declaration.append(contentsOf: annotations.map 
+            declaration.append(contentsOf: fields.annotations.map 
             {
                 $0.annotations.map(Page.Declaration.tokenize(_:))
                 .joined(separator: [.punctuation("&")])
             }.joined(separator: [.punctuation(","), .breakableWhitespace]))
         }
-        if !wheres.isEmpty 
+        if !fields.wheres.isEmpty 
         {
             declaration.append(.breakableWhitespace)
             declaration.append(.keyword("where"))
             declaration.append(.whitespace)
-            declaration.append(contentsOf: wheres.map 
+            declaration.append(contentsOf: fields.wheres.map 
             {
                 (where:Symbol.WhereField) -> [Page.Declaration.Token] in 
                 var tokens:[Page.Declaration.Token] = []
@@ -920,18 +980,65 @@ extension Page.Binding
             }.joined(separator: [.punctuation(","), .breakableWhitespace]))
         }
         
-        let page:Page = .init(
-            label:          label, 
-            name:           name, 
+        let page:Page = .init(label: label, name: name, 
             signature:      signature, 
             declaration:    declaration, 
-            blurb:          paragraphs.first?.string, 
-            discussion:     paragraphs.dropFirst().map(\.string), 
-            topics:         topics.map{ ($0.display, $0.key, []) })
+            fields:         fields)
         let locals:Set<String>      = .init(header.generics + ["Self"])
-        let url:String              = Page.Signature.url(signature), 
-            binding:Page.Binding    = 
-            .init(url: url, locals: locals, keys: .init(keys.map{ .init($0, order: order) }), page: page)
+        let binding:Page.Binding    = .init(url: Self.url(header.identifiers), 
+            locals: locals, keys: fields.keys, page: page)
+        return (page: binding, path: header.identifiers)
+    }
+    
+    static 
+    func create(_ header:Symbol.AssociatedtypeField, fields:ArraySlice<Symbol.Field>, order:Int) 
+        -> (page:Self, path:[String]) 
+    {
+        let fields:Page.Fields = .init(fields, order: order)
+        if !fields.attributes.isEmpty 
+        {
+            print("warning: attribute fields are ignored in an associatedtype doccoment")
+        }
+        if !fields.wheres.isEmpty 
+        {
+            print("warning: where fields are ignored in an associatedtype doccoment")
+        }
+        if !fields.parameters.isEmpty || fields.return != nil
+        {
+            print("warning: parameter/return fields are ignored in an associatedtype doccoment")
+        }
+        if fields.throws != nil
+        {
+            print("warning: throws fields are ignored in an associatedtype doccoment")
+        }
+        
+        let name:String = header.identifiers[header.identifiers.endIndex - 1]
+        
+        var signature:[Page.Signature.Token]        = 
+            [.text("associatedtype"), .whitespace, .highlight(name)] 
+        var declaration:[Page.Declaration.Token]    = 
+            [.keyword("associatedtype"), .breakableWhitespace, .identifier(name)]
+        
+        if !fields.annotations.isEmpty 
+        {
+            signature.append(.punctuation(":"))
+            declaration.append(.punctuation(":"))
+            let annotations:[Page.Declaration.Token] = .init(fields.annotations.map 
+            {
+                $0.annotations.map(Page.Declaration.tokenize(_:))
+                .joined(separator: [.punctuation("&")])
+            }.joined(separator: [.punctuation(","), .breakableWhitespace]))
+            
+            signature.append(contentsOf: Page.Signature.convert(annotations))
+            declaration.append(contentsOf: annotations)
+        }
+        
+        let page:Page = .init(label: .associatedtype, name: name, 
+            signature:      signature, 
+            declaration:    declaration, 
+            fields:         fields)
+        let binding:Page.Binding    = .init(url: Self.url(header.identifiers), 
+            locals: [], keys: fields.keys, page: page)
         return (page: binding, path: header.identifiers)
     }
 }

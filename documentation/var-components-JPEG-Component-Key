@@ -1,8 +1,0 @@
-<head>
-    <meta charset="UTF-8">
-    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Questrial&display=swap" rel="stylesheet"> 
-    <link href="style.css" rel="stylesheet"> 
-</head> 
-<body>
-    <main ><section class="discussion"><div class="section-container"><div class="eyebrow">Instance Property</div><h1 class="topic-heading">components</h1><p class="topic-blurb">The set of component keys for this color format. </p><h2 >Declaration</h2><code class="declaration"><span class="syntax-group"><span class="syntax-keyword">var</span></span><span class="syntax-group"><span class="syntax-identifier">components</span><span class="syntax-punctuation">:</span><a href="https://developer.apple.com/documentation/swift/array" class="syntax-type syntax-swift-type syntax-punctuation">[</a><a href="enum-JPEG" class="syntax-type">JPEG</a><span class="syntax-punctuation">.</span><span class="syntax-identifier">Component</span><span class="syntax-punctuation">.</span><span class="syntax-identifier">Key</span><a href="https://developer.apple.com/documentation/swift/array" class="syntax-type syntax-swift-type syntax-punctuation">]</a></span><span class="syntax-group"><span class="syntax-punctuation">{</span><span class="syntax-whitespace">&nbsp;</span><span class="syntax-keyword">get</span><span class="syntax-whitespace">&nbsp;</span><span class="syntax-punctuation">}</span></span></code><h2 >Overview</h2><p >The ordering is used to determine plane index assignments when initializing an image layout. </p></div></section></main>
-</body>
