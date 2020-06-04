@@ -61,7 +61,7 @@ code
 {
     font-family: 'EB Garamond';
 }
-code > *
+code.declaration > * , code.signature > *
 {
     font-size: 1.33em;
 }
@@ -260,4 +260,17 @@ dl.parameter-list dd
 dl.parameter-list dd p 
 {
     margin-top: 0.5em;
+}
+
+p code 
+{
+    wrap: pre;
+    padding: 0.05em 0.4em 0.15em;
+    letter-spacing: 0.025em;
+    background-color: rgba(255, 88, 0, 0.05);
+    border-radius: 0.5em;
+}
+p strong 
+{
+    font-weight: 600;
 }

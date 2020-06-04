@@ -4,60 +4,75 @@ enum HTML
     {
         enum Content 
         {
-            case text(String)
-            case children([HTML.Tag])
+            case character(Character)
+            case child(HTML.Tag)
+            
+            static 
+            func escape(_ content:[Self]) -> [Self] 
+            {
+                var escaped:[Self] = []
+                for content:Self in content 
+                {
+                    switch content 
+                    {
+                    case .character("<"):
+                        escaped.append(contentsOf: "&lt;".map(Content.character(_:)))
+                    case .character(">"):
+                        escaped.append(contentsOf: "&gt;".map(Content.character(_:)))
+                    case .character("&"):
+                        escaped.append(contentsOf: "&amp;".map(Content.character(_:)))
+                    case .character("\""):
+                        escaped.append(contentsOf: "&quot;".map(Content.character(_:)))
+                    default:
+                        escaped.append(content)
+                    }
+                }
+                return escaped
+            }
         }
         
         let name:String, 
-            attributes:[String: String],
-            content:Content 
+            attributes:[String: String]
+        var content:[Content] 
         
-        init(_ name:String, _ attributes:[String: String], _ content:String) 
+        init(_ name:String, _ attributes:[String: String], _ text:String) 
         {
-            var text:String = ""
-            for c:Character in content 
-            {
-                switch c 
-                {
-                case "<":
-                    text += "&lt;"
-                case ">":
-                    text += "&gt;"
-                case "&":
-                    text += "&amp;"
-                case "\"":
-                    text += "&quot;"
-                default:
-                    text.append(c)
-                }
-            }
-            self.init(name, attributes, escaped: text)
+            self.init(name, attributes, content: text.map(Content.character(_:)))
         }
         
         init(_ name:String, _ attributes:[String: String], escaped:String) 
         {
             self.name       = name 
             self.attributes = attributes 
-            self.content    = .text(escaped)
+            self.content    = escaped.map(Content.character(_:))
         }
         
-        init(_ name:String, _ attributes:[String: String], _ content:[Self]) 
+        init(_ name:String, _ attributes:[String: String], content:[Content]) 
         {
             self.name       = name 
             self.attributes = attributes 
-            self.content    = .children(content)
+            self.content    = Content.escape(content)
         }
         
-        func rendered() -> String 
+        init(_ name:String, _ attributes:[String: String], _ children:[Self]) 
         {
-            let content:String 
-            switch self.content 
+            self.name       = name 
+            self.attributes = attributes 
+            self.content    = children.map(Content.child(_:))
+        }
+        
+        var string:String 
+        {
+            let content:String = self.content.map 
             {
-            case .text(let text):
-                content = text 
-            case .children(let children):
-                content = children.map{ $0.rendered() }.joined()
-            }
+                switch $0 
+                {
+                case .character(let c):
+                    return "\(c)"
+                case .child(let tag):
+                    return tag.string 
+                }
+            }.joined()
             return "<\(self.name) \(self.attributes.map{ "\($0.key)=\"\($0.value)\"" }.joined(separator: " "))>\(content)</\(self.name)>"
         }
     }
@@ -233,7 +248,9 @@ extension Page
         [
             self.label.html, 
             .init("h1", ["class": "topic-heading"], self.name), 
-            .init("p", ["class": "topic-blurb"], self.blurb ?? "No overview available"), 
+            self.blurb.isEmpty ? 
+                .init("p", ["class": "topic-blurb"], "No overview available") :
+                Markdown.html(tag: .p, attributes: ["class": "topic-blurb"], elements: self.blurb),
             .init("h2", [:], "Declaration"),
             .init("code", ["class": "declaration"], Page.Declaration.html(self.declaration)),
         ]
@@ -242,12 +259,12 @@ extension Page
         {
             discussion.append(.init("h2", [:], "Parameters"))
             var list:[HTML.Tag] = []
-            for (name, paragraphs):(String, [String]) in self.discussion.parameters 
+            for (name, paragraphs):(String, [[Markdown.Element]]) in self.discussion.parameters 
             {
                 list.append(.init("dt", [:], [.init("code", [:], name)]))
                 list.append(.init("dd", [:], paragraphs.map 
                 {
-                    .init("p", [:], $0)
+                    Markdown.html(tag: .p, attributes: [:], elements: $0)
                 }))
             }
             discussion.append(.init("dl", ["class": "parameter-list"], list))
@@ -257,7 +274,7 @@ extension Page
             discussion.append(.init("h2", [:], "Return value"))
             discussion.append(contentsOf: self.discussion.return.map 
             {
-                .init("p", [:], $0)
+                Markdown.html(tag: .p, attributes: [:], elements: $0)
             })
         }
         if !self.discussion.overview.isEmpty
@@ -265,7 +282,7 @@ extension Page
             discussion.append(.init("h2", [:], "Overview"))
             discussion.append(contentsOf: self.discussion.overview.map 
             {
-                .init("p", [:], $0)
+                Markdown.html(tag: .p, attributes: [:], elements: $0)
             })
         }
         create(class: "discussion", section: discussion)
@@ -285,9 +302,10 @@ extension Page
                         .init("code", ["class": "signature"], 
                             [.init("a", ["href": url], Page.Signature.html(signature))])
                     ]
-                    if let blurb:String = blurb 
+                    if !blurb.isEmpty
                     {
-                        container.append(.init("p", ["class": "topic-symbol-blurb"], blurb))
+                        container.append(
+                            Markdown.html(tag: .p, attributes: ["class": "topic-symbol-blurb"], elements: blurb))
                     }
                     right.append(.init("div", ["class": "topic-container-symbol"], container))
                 }

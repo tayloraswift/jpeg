@@ -320,7 +320,7 @@ extension JPEG
         /// 
         ///     This property specifies a range of bit indices, where bit zero is 
         ///     the least significant bit. The upper range bound must be either 
-        ///     infinity ([`Swift.Int.max`]) or one greater than the lower bound.
+        ///     infinity ([`Swift.Int`max`]) or one greater than the lower bound.
         ///     If the image coding process is not progressive, this property 
         ///     must be set to `0 ..< .max`.
         

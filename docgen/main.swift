@@ -1565,7 +1565,7 @@ enum Symbol
     // ParagraphLine       ::= '    ' ' ' * [^\s] . * '\n'
     struct ParagraphField:Parseable, CustomStringConvertible
     {
-        let string:String
+        let elements:[Markdown.Element]
         
         static 
         func parse(_ tokens:[Character], position:inout Int) throws -> Self
@@ -1573,7 +1573,7 @@ enum Symbol
             let head:Symbol.ParagraphLine   = try .parse(tokens, position: &position), 
                 body:[Symbol.ParagraphLine] =     .parse(tokens, position: &position)
             
-            var string:String = ""
+            var characters:[Character] = []
             for line:Symbol.ParagraphLine in [head] + body 
             {
                 let trimmed:String = 
@@ -1585,15 +1585,17 @@ enum Symbol
                     }
                     return .init(substring)
                 }()
-                string.append(contentsOf: trimmed)
-                string.append(" ")
+                characters.append(contentsOf: trimmed)
+                characters.append(" ")
             }
-            return .init(string: string)
+            var c:Int = characters.startIndex
+            let elements:[Markdown.Element] = .parse(characters, position: &c)
+            return .init(elements: elements)
         }
         
         var description:String 
         {
-            self.string
+            "\(self.elements)"
         }
     }
     struct ParagraphLine:Parseable 
@@ -1798,7 +1800,7 @@ func main(_ paths:[String]) throws
                 <link href="style.css" rel="stylesheet"> 
             </head> 
             <body>
-                \(page.page.html.rendered())
+                \(page.page.html.string)
             </body>
             """
             File.save(.init(document.utf8), path: "documentation/\(page.url)")

@@ -291,19 +291,19 @@ class Page
         }
     }
     
-    typealias TopicSymbol   = (signature:[Signature.Token], url:String, blurb:String?)
+    typealias TopicSymbol   = (signature:[Signature.Token], url:String, blurb:[Markdown.Element])
     typealias Topic         = (topic:String, key:String, symbols:[TopicSymbol])
     
     let label:Label 
     let name:String 
     let signature:[Signature.Token]
     var declaration:[Declaration.Token] 
-    let blurb:String?
-    let discussion:
+    var blurb:[Markdown.Element]
+    var discussion:
     (
-        parameters:[(name:String, paragraphs:[String])], 
-        return:[String],
-        overview:[String]
+        parameters:[(name:String, paragraphs:[[Markdown.Element]])], 
+        return:[[Markdown.Element]],
+        overview:[[Markdown.Element]]
     )
     
     var topics:[Topic]
@@ -317,12 +317,12 @@ class Page
         self.name           = name 
         self.signature      = signature 
         self.declaration    = declaration 
-        self.blurb          = fields.blurb?.string 
+        self.blurb          = fields.blurb?.elements ?? [] 
         self.discussion     = 
         (
-            fields.parameters.map{ ($0.name, $0.paragraphs.map(\.string)) }, 
-            fields.return?.paragraphs.map(\.string) ?? [], 
-            fields.discussion.map(\.string)
+            fields.parameters.map{ ($0.name, $0.paragraphs.map(\.elements)) }, 
+            fields.return?.paragraphs.map(\.elements) ?? [], 
+            fields.discussion.map(\.elements)
         )
         self.topics         = fields.topics
         self.breadcrumbs    = Link.link(path.dropLast().map{ ($0, ()) }).map 
@@ -343,6 +343,61 @@ class Page
 }
 extension Page 
 {
+    private static 
+    func crosslink(_ unlinked:[Markdown.Element], scopes:[PageTree]) -> [Markdown.Element]
+    {
+        var elements:[Markdown.Element] = []
+        for element:Markdown.Element in unlinked
+        {
+            outer:
+            switch element 
+            {
+            case .symbol(let link):
+                elements.append(.text(.backtick(count: 1)))
+                elements.append(contentsOf: Link.link(link.identifiers.map{ ($0, ()) }).map 
+                {
+                    (element:(component:(String, Void), link:Link)) -> [Markdown.Element] in
+                    let target:String, 
+                        `class`:String
+                    switch element.link 
+                    {
+                    case .apple(url: let url):
+                        target  = url 
+                        `class` = "syntax-swift-type"
+                    case .resolved(url: let url):
+                        target  = url 
+                        `class` = "syntax-type"
+                    case .unresolved(path: let path):
+                        guard let binding:Binding = PageTree.resolve(path[...], in: scopes)
+                        else 
+                        {
+                            return element.component.0.map{ .text(.wildcard($0)) }
+                        }
+                        target = binding.url
+                        `class` = "syntax-type"
+                    }
+                    
+                    return 
+                        [
+                        .link(.init(text: element.component.0.map(Markdown.Element.Text.wildcard(_:)), url: target, classes: [`class`])), 
+                        ]
+                }.joined(separator: [.text(.wildcard("."))]))
+                for component:String in link.suffix 
+                {
+                    elements.append(.text(.wildcard(".")))
+                    elements.append(contentsOf: component.map{ .text(.wildcard($0)) })
+                }
+                elements.append(.text(.backtick(count: 1)))
+                
+                continue 
+            default:
+                break 
+            }
+            elements.append(element)
+        }
+        return elements
+    }
+    
     func crosslink(scopes:[PageTree]) 
     {
         self.declaration = self.declaration.map 
@@ -360,6 +415,14 @@ extension Page
                 return $0
             }
         }
+        
+        self.blurb                  = Self.crosslink(self.blurb, scopes: scopes)
+        self.discussion.parameters  = self.discussion.parameters.map 
+        {
+            ($0.name, $0.paragraphs.map{ Self.crosslink($0, scopes: scopes) })
+        }
+        self.discussion.return      = self.discussion.return.map{   Self.crosslink($0, scopes: scopes) }
+        self.discussion.overview    = self.discussion.overview.map{ Self.crosslink($0, scopes: scopes) }
         
         self.breadcrumbs = self.breadcrumbs.map 
         {
