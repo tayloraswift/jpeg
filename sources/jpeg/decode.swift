@@ -240,14 +240,23 @@ enum JPEG
 // layout 
 extension JPEG 
 {
+    /// struct JPEG.Component 
+    ///     A type modeling one channel of a JPEG image.
     public 
     struct Component
     {
+        /// let JPEG.Component.factor   : (x:Swift.Int, y:Swift.Int)
+        ///     The horizontal and vertical sampling factors for this component.
         public 
         let factor:(x:Int, y:Int)
+        /// let JPEG.Component.selector : JPEG.Table.Quantization.Selector 
+        ///     The table selector of the quantization table associated with this component.
         public 
         let selector:Table.Quantization.Selector 
-        
+        /// struct JPEG.Component.Key 
+        /// :   Swift.Hashable 
+        /// :   Swift.Comparable 
+        ///     A unique identifier assigned to each color component in a JPEG image.
         public 
         struct Key:Hashable, Comparable 
         {
@@ -266,18 +275,62 @@ extension JPEG
         }
     }
     
+    /// struct JPEG.Scan 
+    ///     A type modeling one scan of a JPEG image. 
+    /// 
+    ///     Depending on the coding process used by the image, a scan may encode 
+    ///     a select frequency band, range of bits, and subset of color components.
     public 
     struct Scan
     {
+        /// struct JPEG.Scan.Component 
+        ///     A descriptor for a component encoded within a JPEG scan. 
         public 
         struct Component 
         {
+            /// let JPEG.Scan.Component.ci          : JPEG.Component.Key 
+            ///     The key specifying the image component referenced by this descriptor.
             public 
             let ci:JPEG.Component.Key
+            /// let JPEG.Scan.Component.selector    : (dc:JPEG.Table.HuffmanDC.Selector, ac:JPEG.Table.HuffmanAC.Selector)
+            ///     The table selectors for the huffman tables associated with this 
+            ///     component in the context of this scan.
+            ///
+            ///     A single component of a JPEG image may use different huffman 
+            ///     tables in different image scans. (In contrast, quantization 
+            ///     table assignments are global to the file.) The DC table is 
+            ///     used to encode or decode coefficient zero; the AC table is used 
+            ///     for all other frequency coefficients. Depending on the band 
+            ///     and bit range encoded by the image scan, one or both of the 
+            ///     huffman table selectors may be unused, and therefore may not 
+            ///     need to reference valid JPEG tables.
             public 
             let selector:(dc:Table.HuffmanDC.Selector, ac:Table.HuffmanAC.Selector)
         }
         
+        /// let JPEG.Scan.band  : Swift.Range<Swift.Int> 
+        ///     The frequency band encoded by this image scan. 
+        /// 
+        ///     This property specifies a range of zigzag-indexed frequency coefficients.
+        ///     It must be within the interval of 0 to 64. If the image coding process 
+        ///     is not progressive, this property must be set to `0 ..< 64`.
+        
+        /// let JPEG.Scan.bits  : Swift.Range<Swift.Int> 
+        ///     The bit range encoded by this image scan. 
+        /// 
+        ///     This property specifies a range of bit indices, where bit zero is 
+        ///     the least significant bit. The upper range bound must be either 
+        ///     infinity ([`Swift.Int.max`]) or one greater than the lower bound.
+        ///     If the image coding process is not progressive, this property 
+        ///     must be set to `0 ..< .max`.
+        
+        /// let JPEG.Scan.components    : [(c:Swift.Int, component:Component)] 
+        ///     The descriptors for the components encoded by this scan, in the 
+        ///     order in which they are interleaved within the scan. 
+        /// 
+        ///     The component descriptors are paired with resolved component indices 
+        ///     which are equivalent to the index of the image plane storing that 
+        ///     color channel.
         public 
         let band:Range<Int>, 
             bits:Range<Int>, 

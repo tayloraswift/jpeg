@@ -307,9 +307,11 @@ class Page
     )
     
     var topics:[Topic]
+    var breadcrumbs:[(text:String, link:Link)], 
+        breadcrumb:String 
     
     init(label:Label, name:String, signature:[Signature.Token], declaration:[Declaration.Token], 
-        fields:Fields)
+        fields:Fields, path:[String])
     {
         self.label          = label 
         self.name           = name 
@@ -323,6 +325,20 @@ class Page
             fields.discussion.map(\.string)
         )
         self.topics         = fields.topics
+        self.breadcrumbs    = Link.link(path.dropLast().map{ ($0, ()) }).map 
+        {
+            ($0.component.0, $0.link)
+        }
+        switch label 
+        {
+        case    .enumerationCase, .initializer, .genericInitializer, 
+                .staticMethod, .genericStaticMethod, 
+                .instanceMethod, .genericInstanceMethod, .
+                subscript:
+            self.breadcrumb     = name
+        default:
+            self.breadcrumb     = path[path.endIndex - 1]
+        }
     }
 }
 extension Page 
@@ -343,6 +359,23 @@ extension Page
             default:
                 return $0
             }
+        }
+        
+        self.breadcrumbs = self.breadcrumbs.map 
+        {
+            switch $0.link 
+            {
+            case .unresolved(path: let path):
+                guard let binding:Binding = PageTree.resolve(path[...], in: scopes)
+                else 
+                {
+                    break 
+                }
+                return ($0.text, .resolved(url: binding.url))
+            default:
+                break 
+            }
+            return $0
         }
     }
     
@@ -689,13 +722,15 @@ extension Page.Binding
         let mangled:[String] = Page.print(function: fields, labels: header.labels, delimiters: ("[", "]"), 
             signature: &signature, declaration: &declaration)
         
+        let path:[String] = header.identifiers + ["subscript"]
         let page:Page = .init(label: .subscript, name: name, 
             signature:      signature, 
             declaration:    declaration, 
-            fields:         fields)
-        let binding:Page.Binding    = .init(url: Self.url(header.identifiers + ["subscript"] + mangled), 
+            fields:         fields, 
+            path:           path)
+        let binding:Page.Binding    = .init(url: Self.url(path + mangled), 
             locals: [], keys: fields.keys, page: page)
-        return (page: binding, path: header.identifiers)
+        return (page: binding, path: path)
     }
     static 
     func create(_ header:Symbol.FunctionField, fields:ArraySlice<Symbol.Field>, order:Int) 
@@ -792,7 +827,8 @@ extension Page.Binding
         let page:Page = .init(label: label, name: name, 
             signature:      signature, 
             declaration:    declaration, 
-            fields:         fields)
+            fields:         fields, 
+            path:           header.identifiers)
         let binding:Page.Binding    = .init(url: Self.url(header.identifiers + mangled), 
             locals: [], keys: fields.keys, page: page)
         return (page: binding, path: header.identifiers)
@@ -881,7 +917,8 @@ extension Page.Binding
         let page:Page = .init(label: label, name: name, 
             signature:      signature, 
             declaration:    declaration, 
-            fields:         fields)
+            fields:         fields, 
+            path:           header.identifiers)
         let binding:Page.Binding = .init(url: Self.url(header.identifiers), 
             locals: [], keys: fields.keys, page: page)
         return (page: binding, path: header.identifiers)
@@ -983,7 +1020,8 @@ extension Page.Binding
         let page:Page = .init(label: label, name: name, 
             signature:      signature, 
             declaration:    declaration, 
-            fields:         fields)
+            fields:         fields, 
+            path:           header.identifiers)
         let locals:Set<String>      = .init(header.generics + ["Self"])
         let binding:Page.Binding    = .init(url: Self.url(header.identifiers), 
             locals: locals, keys: fields.keys, page: page)
@@ -1036,7 +1074,8 @@ extension Page.Binding
         let page:Page = .init(label: .associatedtype, name: name, 
             signature:      signature, 
             declaration:    declaration, 
-            fields:         fields)
+            fields:         fields, 
+            path:           header.identifiers)
         let binding:Page.Binding    = .init(url: Self.url(header.identifiers), 
             locals: [], keys: fields.keys, page: page)
         return (page: binding, path: header.identifiers)

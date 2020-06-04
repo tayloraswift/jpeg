@@ -1740,7 +1740,7 @@ func main(_ paths:[String]) throws
             let line:[Character] = .init(line.drop{ $0.isWhitespace && !$0.isNewline })
             if line.starts(with: ["/", "/", "/"]) 
             {
-                if line[3] == " " 
+                if line.count > 3, line[3] == " " 
                 {
                     doccomment.append(contentsOf: line.dropFirst(4))
                 }

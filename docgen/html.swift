@@ -204,9 +204,24 @@ extension Page.Signature
 }
 extension Page 
 {
+    var htmlBreadcrumbs:HTML.Tag 
+    {
+        var breadcrumbs:[HTML.Tag] = self.breadcrumbs.map 
+        {
+            switch $0.link 
+            {
+            case .resolved(url: let target), .apple(url: let target):
+                return .init("li", [:], [.init("a", ["href": target], $0.text)])
+            default:
+                fatalError("attempted to render unresolved link")
+            }
+        }
+        breadcrumbs.append(.init("li", [:], [.init("span", [:], self.breadcrumb)]))
+        return .init("div", ["class": "navigation-container"], [.init("ul", [:], breadcrumbs)])
+    }
     var html:HTML.Tag
     {
-        var sections:[HTML.Tag] = []
+        var sections:[HTML.Tag] = [.init("nav", [:], [self.htmlBreadcrumbs])]
         func create(class:String, section:[HTML.Tag]) 
         {
             sections.append(
