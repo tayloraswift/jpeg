@@ -357,7 +357,7 @@ extension Page
                 elements.append(contentsOf: link.paths.map 
                 {
                     (sublink:Markdown.Element.SymbolLink.Path) in 
-                    Link.link(sublink.identifiers.map{ ($0, ()) }).map 
+                    Link.link(sublink.path.map{ ($0, ()) }).map 
                     {
                         (element:(component:(String, Void), link:Link)) -> [Markdown.Element] in
                         let target:String, 
@@ -912,7 +912,7 @@ extension Page.Binding
             path:           header.identifiers)
         let binding:Page.Binding    = .init(url: Self.url(header.identifiers + mangled), 
             locals: [], keys: fields.keys, page: page)
-        return (page: binding, path: header.identifiers)
+        return (page: binding, path: header.identifiers.dropLast() + [name])
     }
     
     static 

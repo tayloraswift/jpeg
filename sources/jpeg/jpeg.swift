@@ -34,7 +34,7 @@ protocol _JPEGFormat
     /// 
     ///     The [`(Process).baseline`] coding process can only be used with color formats with a 
     ///     precision of 8.
-    ///     The [`(Process).extended`] and [`(Process).progressive`] coding processes can only be used with color 
+    ///     The [`(Process).extended(coding:differential:)`] and [`(Process).progressive(coding:differential:)`] coding processes can only be used with color 
     ///     formats with a precision of 8 or 12.
     var precision:Int 
     {
@@ -240,13 +240,65 @@ enum JPEG
 // pixel accessors 
 extension JPEG  
 {
+    /// enum JPEG.Common 
+    /// :   JPEG.Format 
+    ///     A built-in color format which covers the JFIF/EXIF subset of the 
+    ///     JPEG standard.
+    /// 
+    ///     This color format is able to recognize conforming JFIF and EXIF images,
+    ///     which use the component key assignments *Y*\ =\ **1**, *Cb*\ =\ **2**, *Cr*\ =\ **3**.
+    ///     It is also able to recognize non-standard component schema as long as 
+    ///     they have the correct arity and form a contiguously increasing sequence.
+    /// # [Standardized formats](common-standard-formats)
+    /// # [Other formats](common-nonstandard-formats)
     public 
     enum Common 
     {
+        /// case JPEG.Common.y8 
+        ///     The standard JFIF 8-bit grayscale format.
+        /// 
+        ///     This color format uses the component key assignment *Y*\ =\ **1**. 
+        ///     Note that images using this format are compliant JFIF images, but 
+        ///     are *not* compliant EXIF images.
+        /// # [See also](common-standard-formats)
+        /// ## (common-standard-formats)
         case y8
+        /// case JPEG.Common.ycc8 
+        ///     The standard JFIF/EXIF 8-bit YCbCr format.
+        /// 
+        ///     This color format uses the component key assignments *Y*\ =\ **1**, 
+        ///     *Cb*\ =\ **2**, *Cr*\ =\ **3**.
+        /// # [See also](common-standard-formats)
+        /// ## (common-standard-formats)
         case ycc8
-        
+        /// case JPEG.Common.nonconforming1x8(_:)
+        ///     A non-standard 8-bit grayscale format.
+        /// 
+        ///     This color format can use any component key assignment of arity 1. 
+        ///     Note that images using this format are valid JPEG images, but are 
+        ///     not compliant JFIF or EXIF images, and some viewers may not support them.
+        /// - _     : JPEG.Component.Key 
+        ///     The component key interpreted as the luminance component.
+        /// # [See also](common-nonstandard-formats)
+        /// ## (common-nonstandard-formats)
         case nonconforming1x8(JPEG.Component.Key)
+        /// case JPEG.Common.nonconforming3x8(_:_:_:)
+        ///     A non-standard 8-bit YCbCr format.
+        /// 
+        ///     This color format can use any contiguously increasing sequence of 
+        ///     component key assignments of arity 3. For example, it can use the 
+        ///     assignments *Y*\ =\ **0**, *Cb*\ =\ **1**, *Cr*\ =\ **2**, or the assignments 
+        ///     *Y*\ =\ **2**, *Cb*\ =\ **3**, *Cr*\ =\ **4**.
+        ///     Note that images using this format are valid JPEG images, but are 
+        ///     not compliant JFIF or EXIF images, and some viewers may not support them.
+        /// - _     : JPEG.Component.Key 
+        ///     The component key interpreted as the luminance component.
+        /// - _     : JPEG.Component.Key 
+        ///     The component key interpreted as the blue component.
+        /// - _     : JPEG.Component.Key 
+        ///     The component key interpreted as the red component.
+        /// # [See also](common-nonstandard-formats)
+        /// ## (common-nonstandard-formats)
         case nonconforming3x8(JPEG.Component.Key, JPEG.Component.Key, JPEG.Component.Key)
     }
 }
@@ -450,7 +502,7 @@ extension JPEG
     ///     specifies several subformats of the JPEG format known as *coding processes*.
     ///     The library can recognize images using any coding process, but 
     ///     only supports encoding and decoding images using the [`(Process).baseline`], 
-    ///     [`(Process).extended`], or [`(Process).progressive`] processes with 
+    ///     [`(Process).extended(coding:differential:)`], or [`(Process).progressive(coding:differential:)`] processes with 
     ///     [`(Process.Coding).huffman`] entropy coding and the `differential` flag 
     ///     set to `false`.
     /// # [Coding processes](coding-processes)
@@ -535,12 +587,12 @@ extension JPEG
         case huffman 
         
         /// case JPEG.Marker.application(_:)
-        ///     An application data (APP*n*) segment.
+        ///     An application data (APP~*n*~) segment.
         /// - _     : Swift.Int 
         ///     The application segment type code. This value can be from 0 to 15.
         case application(Int)
         /// case JPEG.Marker.restart(_:)
-        ///     A restart (RST*m*) marker.
+        ///     A restart (RST~*m*~) marker.
         /// - _     : Swift.Int 
         ///     The restart phase. It cycles through the values 0 through 7.
         case restart(Int)
@@ -555,7 +607,7 @@ extension JPEG
         case comment 
         
         /// case JPEG.Marker.frame(_:)
-        ///     A frame header (SOF*) segment. 
+        ///     A frame header (SOF\*) segment. 
         /// - _     : JPEG.Process
         ///     The coding process used by the image frame.
         case frame(Process)
@@ -667,7 +719,12 @@ extension JPEG
         /// struct JPEG.Component.Key 
         /// :   Swift.Hashable 
         /// :   Swift.Comparable 
+        /// :   Swift.ExpressibleByIntegerLiteral
         ///     A unique identifier assigned to each color component in a JPEG image.
+        /// 
+        ///     JPEG component keys are numeric values ranging from 0 to 255. In 
+        ///     these documentation pages, component keys in their numerical 
+        ///     representation are written in **boldface**.
         public 
         struct Key:Hashable, Comparable 
         {
@@ -724,7 +781,7 @@ extension JPEG
         /// 
         ///     This property specifies a range of zigzag-indexed frequency coefficients.
         ///     It must be within the interval of 0 to 64. If the image coding [`Process`] 
-        ///     is not [`(Process).progressive`], this property must be set to `0 ..< 64`.
+        ///     is not [`(Process).progressive(coding:differential:)`], this property must be set to `0 ..< 64`.
         
         /// let JPEG.Scan.bits  : Swift.Range<Swift.Int> 
         ///     The bit range encoded by this image scan. 
@@ -732,7 +789,7 @@ extension JPEG
         ///     This property specifies a range of bit indices, where bit zero is 
         ///     the least significant bit. The upper range bound must be either 
         ///     infinity ([`Swift.Int`max`]) or one greater than the lower bound.
-        ///     If the image coding [`Process`] is not [`(Process).progressive`], this property 
+        ///     If the image coding [`Process`] is not [`(Process).progressive(coding:differential:)`], this property 
         ///     must be set to `0 ..< .max`.
         
         /// let JPEG.Scan.components    : [(c:Swift.Int, component:Component)] 

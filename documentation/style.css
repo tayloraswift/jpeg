@@ -12,6 +12,8 @@ body
     background-color: #f4f4f4;
     color: #222222;
     padding-bottom: 8em;
+    
+    text-underline-offset: 0.3em;
 }
 nav 
 {
@@ -166,7 +168,6 @@ a:focus
 a:hover, a:hover span
 {
     text-decoration: underline;
-    text-underline-offset: 25%;
 }
 code a.syntax-type
 {
@@ -277,12 +278,20 @@ dl.parameter-list dd p
 p code 
 {
     wrap: pre;
-    padding: 0.05em 0.4em 0.15em;
+    margin: 0 0.15em;
+    /* padding: 0.05em 0.4em 0.15em; */
     letter-spacing: 0.025em;
-    background-color: rgba(255, 88, 0, 0.03);
-    border-radius: 0.5em;
+    /* background-color: rgba(255, 88, 0, 0.03); */
+    /* border-radius: 0.5em; */
+    text-decoration: underline;
+    text-decoration-style: dashed;
     
-    color: #664444;
+    color: #444444;
+}
+p code a 
+{
+    text-decoration: underline;
+    text-decoration-style: dashed;
 }
 p strong 
 {

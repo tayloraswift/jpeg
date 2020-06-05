@@ -10,14 +10,35 @@ struct Markdown
         static 
         let token:String = "`"
     } 
+    struct Tilde:Parseable.Terminal
+    {
+        static 
+        let token:String = "~"
+    } 
+    struct Ditto:Parseable.Terminal
+    {
+        static 
+        let token:String = "^"
+    } 
+    struct Backslash:Parseable.Terminal
+    {
+        static 
+        let token:String = "\\"
+    } 
     //  ParagraphToken          ::= <ParagraphLink> 
     //                            | <ParagraphSymbolLink>
+    //                            | <ParagraphSubscript>
+    //                            | <ParagraphSuperscript>
     //                            | '***'
     //                            | '**'
     //                            | '*'
     //                            | .
+    //  ParagraphSubscript      ::= '~' [^~] * '~'
+    //  ParagraphSuperscript    ::= '^' [^\^] * '^'
     //  ParagraphSymbolLink     ::= '[' <SymbolPath> <SymbolPath> * ( <Identifier> '`' ) * ']'
-    //  SymbolPath              ::= '`' ( '(' <Identifiers> ').' ) ? <Identifiers> '`'
+    //  SymbolPath              ::= '`' ( '(' <Identifiers> ').' ) ? <SymbolTail> '`'
+    //  SymbolTail              ::= <SymbolName> ( '.' <SymbolName> ) * 
+    //  SymbolName              ::= <Identifier> ( '(' ( <Identifier> ':' ) * ')' ) ?
     //  ParagraphLink           ::= '[' [^\]] * '](' [^\)] ')'
     struct NotClosingBracket:Parseable.TerminalClass
     {
@@ -37,6 +58,26 @@ struct Markdown
         func test(_ character:Character) -> Bool 
         {
             return !character.isNewline && character != ")"
+        }
+    } 
+    struct NotClosingTilde:Parseable.TerminalClass
+    {
+        let character:Character 
+        
+        static 
+        func test(_ character:Character) -> Bool 
+        {
+            return !character.isNewline && character != "~"
+        }
+    } 
+    struct NotClosingDitto:Parseable.TerminalClass
+    {
+        let character:Character 
+        
+        static 
+        func test(_ character:Character) -> Bool 
+        {
+            return !character.isNewline && character != "^"
         }
     } 
     
@@ -73,6 +114,27 @@ struct Markdown
                 {
                     return .backtick(count: 1 + backticks.body.count)
                 }
+                // escape sequences 
+                else if let _:List<Backslash, Asterisk> = 
+                    .parse(tokens, position: &position) 
+                {
+                    return .wildcard("*")
+                }
+                else if let _:List<Backslash, Backtick> = 
+                    .parse(tokens, position: &position) 
+                {
+                    return .wildcard("`")
+                }
+                else if let _:List<Backslash, Backslash> = 
+                    .parse(tokens, position: &position) 
+                {
+                    return .wildcard("\\")
+                }
+                else if let _:List<Backslash, Token.Space> = 
+                    .parse(tokens, position: &position) 
+                {
+                    return .wildcard("\u{A0}")
+                }
                 else if position < tokens.endIndex
                 {
                     defer 
@@ -92,8 +154,28 @@ struct Markdown
         {
             struct Path:Parseable
             {
+                struct Name:Parseable 
+                {
+                    let string:String 
+                    
+                    static 
+                    func parse(_ tokens:[Character], position:inout Int) throws -> Self
+                    {
+                        let identifier:Symbol.Identifier    = try .parse(tokens, position: &position)
+                        if let labels:List<Token.Parenthesis.Left, List<[List<Symbol.Identifier, Token.Colon>], Token.Parenthesis.Right>> = 
+                            .parse(tokens, position: &position)
+                        {
+                            return .init(string: "\(identifier.string)(\(labels.body.head.map{"\($0.head.string):" }.joined()))")
+                        }
+                        else 
+                        {
+                            return .init(string: identifier.string)
+                        }
+                    }
+                }
+                
                 let prefix:[String], 
-                    identifiers:[String]
+                    path:[String]
                     
                 static 
                 func parse(_ tokens:[Character], position:inout Int) throws -> Self
@@ -101,10 +183,11 @@ struct Markdown
                     let _:Backtick                      = try .parse(tokens, position: &position), 
                         prefix:List<Token.Parenthesis.Left, List<Symbol.Identifiers, List<Token.Parenthesis.Right, Token.Period>>>? = 
                                                               .parse(tokens, position: &position),
-                        identifiers:Symbol.Identifiers  = try .parse(tokens, position: &position),
+                        head:Name                       = try .parse(tokens, position: &position),
+                        body:[List<Token.Period, Name>] =     .parse(tokens, position: &position),
                         _:Backtick                      = try .parse(tokens, position: &position)
                     return .init(prefix: prefix?.body.head.identifiers ?? [], 
-                        identifiers: identifiers.identifiers)
+                        path: [head.string] + body.map(\.body.string))
                 }
             }
             
@@ -152,6 +235,8 @@ struct Markdown
         
         case symbol(SymbolLink)
         case link(Link)
+        case sub([Text])
+        case sup([Text])
         case text(Text)
         
         static 
@@ -164,6 +249,20 @@ struct Markdown
             else if let link:Link = .parse(tokens, position: &position) 
             {
                 return .link(link)
+            }
+            else if let sub:List<Tilde, List<[NotClosingTilde], Tilde>> = 
+                .parse(tokens, position: &position) 
+            {
+                let characters:[Character] = sub.body.head.map(\.character)
+                var c:Int = characters.startIndex
+                return .sub(.parse(characters, position: &c))
+            }
+            else if let sup:List<Ditto, List<[NotClosingDitto], Ditto>> = 
+                .parse(tokens, position: &position) 
+            {
+                let characters:[Character] = sup.body.head.map(\.character)
+                var c:Int = characters.startIndex
+                return .sub(.parse(characters, position: &c))
             }
             else if let text:Text = .parse(tokens, position: &position) 
             {
@@ -182,8 +281,11 @@ struct Markdown
         case strong 
         case em 
         case code(count:Int) 
+        
         case a 
         case p
+        case sub 
+        case sup 
     }
     static 
     func html(tag:Tag, attributes:[String: String], elements:[Element]) -> HTML.Tag
@@ -196,7 +298,7 @@ struct Markdown
             {
             case .symbol(let link):
                 stack[stack.endIndex - 1].content.append(.child(
-                    .init("code", [:], (link.paths.map(\.identifiers).flatMap{ $0 } + link.suffix).joined(separator: "."))))
+                    .init("code", [:], (link.paths.map(\.path).flatMap{ $0 } + link.suffix).joined(separator: "."))))
             
             case .link(let link):
                 var attributes:[String: String] = ["href": link.url, "target": "_blank"]
@@ -206,6 +308,13 @@ struct Markdown
                 }
                 stack[stack.endIndex - 1].content.append(.child(
                     Self.html(tag: .a, attributes: attributes, elements: link.text.map(Element.text(_:)))))
+            
+            case .sub(let text):
+                stack[stack.endIndex - 1].content.append(.child(
+                    Self.html(tag: .sub, attributes: [:], elements: text.map(Element.text(_:)))))
+            case .sup(let text):
+                stack[stack.endIndex - 1].content.append(.child(
+                    Self.html(tag: .sup, attributes: [:], elements: text.map(Element.text(_:)))))
             
             case .text(.wildcard(let c)):
                 stack[stack.endIndex - 1].content.append(.character(c))
@@ -315,6 +424,10 @@ struct Markdown
             return .init("p", attributes, content: stack[stack.endIndex - 1].content)
         case .a:
             return .init("a", attributes, content: stack[stack.endIndex - 1].content)
+        case .sub:
+            return .init("sub", attributes, content: stack[stack.endIndex - 1].content)
+        case .sup:
+            return .init("sup", attributes, content: stack[stack.endIndex - 1].content)
         default:
             fatalError("unreachable")
         }
