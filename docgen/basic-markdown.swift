@@ -253,16 +253,12 @@ struct Markdown
             else if let sub:List<Tilde, List<[NotClosingTilde], Tilde>> = 
                 .parse(tokens, position: &position) 
             {
-                let characters:[Character] = sub.body.head.map(\.character)
-                var c:Int = characters.startIndex
-                return .sub(.parse(characters, position: &c))
+                return .sub(.parse(sub.body.head.map(\.character)))
             }
             else if let sup:List<Ditto, List<[NotClosingDitto], Ditto>> = 
                 .parse(tokens, position: &position) 
             {
-                let characters:[Character] = sup.body.head.map(\.character)
-                var c:Int = characters.startIndex
-                return .sub(.parse(characters, position: &c))
+                return .sub(.parse(sup.body.head.map(\.character)))
             }
             else if let text:Text = .parse(tokens, position: &position) 
             {

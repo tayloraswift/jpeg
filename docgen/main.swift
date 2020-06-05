@@ -406,6 +406,20 @@ extension Optional:Parseable where Wrapped:Parseable
             return nil 
         }
     }
+    
+    // can’t be declared as protocol extension because then it would have to 
+    // be marked `throws`
+    static 
+    func parse(_ string:String) -> Self 
+    {
+        Self.parse([Character].init(string))
+    }
+    static 
+    func parse(_ tokens:[Character]) -> Self 
+    {
+        var c:Int = tokens.startIndex
+        return Self.parse(tokens, position: &c)
+    }
 }
 extension Array:Parseable where Element:Parseable
 {
@@ -419,6 +433,18 @@ extension Array:Parseable where Element:Parseable
         }
         
         return array
+    }
+    
+    static 
+    func parse(_ string:String) -> Self 
+    {
+        Self.parse([Character].init(string))
+    }
+    static 
+    func parse(_ tokens:[Character]) -> Self 
+    {
+        var c:Int = tokens.startIndex
+        return Self.parse(tokens, position: &c)
     }
 }
 struct List<Head, Body>:Parseable where Head:Parseable, Body:Parseable
@@ -1560,6 +1586,42 @@ enum Symbol
         }
     }
     
+    // RequirementField    ::= 'required' <Endline>
+    //                       | 'defaulted' <Endline>
+    enum RequirementField:Parseable 
+    {
+        struct Required:Parseable.Terminal 
+        {
+            static 
+            let token:String = "required"
+        }
+        struct Defaulted:Parseable.Terminal 
+        {
+            static 
+            let token:String = "defaulted"
+        }
+        
+        case required
+        case defaulted
+        
+        static 
+        func parse(_ tokens:[Character], position:inout Int) throws -> Self
+        {
+            if      let _:Required = .parse(tokens, position: &position)
+            {
+                return .required
+            }
+            else if let _:Defaulted = .parse(tokens, position: &position)
+            {
+                return .defaulted
+            }
+            else 
+            {
+                throw ParsingError.unexpected(tokens, position, expected: Self.self)
+            }
+        }
+    }
+    
     // TopicField          ::= '#' <Whitespace>? '[' <BalancedContent> * ']' <Whitespace>? '(' <BalancedContent> * ')' <Endline>
     // TopicElementField   ::= '##' <Whitespace>? '(' ( <ASCIIDigit> * <Whitespace> ? ':' <Whitespace> ? ) ? <BalancedContent> * ')' <Endline>
     struct TopicField:Parseable 
@@ -1670,6 +1732,7 @@ enum Symbol
     //                       | <AttributeField>
     //                       | <WhereField>
     //                       | <ThrowsField>
+    //                       | <RequirementField>
     //                       | <ParameterField>
     //                       | <TopicField>
     //                       | <TopicElementField>
@@ -1689,6 +1752,7 @@ enum Symbol
         case attribute(Symbol.AttributeField) 
         case `where`(Symbol.WhereField) 
         case `throws`(Symbol.ThrowsField) 
+        case requirement(Symbol.RequirementField) 
         case parameter(Symbol.ParameterField) 
         
         case topic(Symbol.TopicField)
@@ -1739,6 +1803,10 @@ enum Symbol
             else if let field:Symbol.ThrowsField = .parse(tokens, position: &position)
             {
                 return .throws(field)
+            }
+            else if let field:Symbol.RequirementField = .parse(tokens, position: &position)
+            {
+                return .requirement(field)
             }
             else if let field:Symbol.ParameterField = .parse(tokens, position: &position)
             {
@@ -1811,8 +1879,7 @@ func main(_ paths:[String]) throws
         var pages:[(page:Page.Binding, path:[String])] = []
         for (i, doccomment):(Int, [Character]) in doccomments.enumerated()
         {
-            var c:Int = 0
-            let fields:[Symbol.Field] = [Symbol.Field].parse(doccomment, position: &c) 
+            let fields:[Symbol.Field] = [Symbol.Field].parse(doccomment) 
             switch fields.first 
             {
             case .function(let header)?:

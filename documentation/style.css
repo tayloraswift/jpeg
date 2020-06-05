@@ -13,7 +13,7 @@ body
     color: #222222;
     padding-bottom: 8em;
     
-    text-underline-offset: 0.3em;
+    text-underline-offset: 0.4em;
 }
 nav 
 {
@@ -44,17 +44,22 @@ h3
 {
     font-size: 1.65em;
 }
-.topic-blurb 
-{
-    padding-bottom: 1.5em;
-    border-bottom: solid 1px #cccccc;
-}
+
 .eyebrow 
 {
-    font-size: 1.25em;
     font-style: italic;
     color: #555555;
 }
+.topic-blurb 
+{
+}
+.topic-required, .topic-symbol-required
+{
+    font-size: 1.05em;
+    text-underline-offset: 0.3em;
+    color: #555555;
+}
+
 .declaration-container  
 {
     margin-top: 1.5em;
@@ -73,6 +78,8 @@ code
 code.declaration > * , code.signature > *
 {
     font-size: 1.33em;
+    line-height: 1.33em;
+    text-underline-offset: 0.3em;
 }
 code span.signature-group, code span.syntax-group
 {
@@ -217,13 +224,29 @@ nav ul li a
     margin-left: auto;
     margin-right: auto;
 }
-.discussion 
+.discussion, .introduction 
 {
     background-color: #f8f8f8;
-    padding-top: 5em;
-    padding-bottom: 2em;
 }
-.discussion p 
+.introduction 
+{
+    padding-top: 5em;
+}
+.introduction .section-container 
+{
+    padding-bottom: 1em;
+    border-bottom: solid 1px #cccccc;
+}
+.discussion 
+{
+    padding-bottom: 2em;
+    padding-top: 2.5em;
+}
+.discussion .section-container > *:first-child
+{
+    margin-top: 0;
+}
+.discussion p, .introduction p
 {
     padding-right: 5em;
 }
@@ -254,6 +277,7 @@ nav ul li a
 .topic-container-symbol p 
 {
     margin-top: 0.5em;
+    margin-bottom: 0.5em;
 }
 
 dl.parameter-list 

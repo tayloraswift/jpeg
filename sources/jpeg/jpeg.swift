@@ -7,8 +7,8 @@ public
 protocol _JPEGFormat
 {
     /// static func JPEG.Format.recognize(_:precision:)
-    ///     This function creates an instance of this type by detecting the given 
-    ///     bit-depth and set of component keys.
+    /// required 
+    ///     Detects this color format, given a set of component keys and a bit-depth.
     /// 
     /// - components    : Swift.Set<JPEG.Component.Key>
     ///     The set of given component keys.
@@ -20,6 +20,7 @@ protocol _JPEGFormat
     func recognize(_ components:Set<JPEG.Component.Key>, precision:Int) -> Self?
     
     /// var JPEG.Format.components  : [JPEG.Component.Key] {get}
+    /// required 
     ///     The set of component keys for this color format. 
     /// 
     ///     The ordering is used to determine plane index assignments when initializing 
@@ -30,6 +31,7 @@ protocol _JPEGFormat
     }
     
     /// var JPEG.Format.precision   : Swift.Int {get}
+    /// required 
     ///     The bit-depth of each component in this color format. 
     /// 
     ///     The [`(Process).baseline`] coding process can only be used with color formats with a 
@@ -55,6 +57,7 @@ protocol _JPEGColor
     associatedtype Format:JPEG.Format 
     
     /// static func JPEG.Color.unpack(_:of:)
+    /// required
     ///     Converts the given interleaved samples into an array of structured pixels.
     /// 
     /// - interleaved   : [Swift.UInt16]
@@ -67,6 +70,7 @@ protocol _JPEGColor
     func unpack(_ interleaved:[UInt16], of format:Format) -> [Self]
     
     /// static func JPEG.Color.pack(_:as:)
+    /// required
     ///     Converts the given array of structured pixels into an array of interleaved samples.
     /// 
     /// - pixels        : [Self]
@@ -247,10 +251,13 @@ extension JPEG
     /// 
     ///     This color format is able to recognize conforming JFIF and EXIF images,
     ///     which use the component key assignments *Y*\ =\ **1**, *Cb*\ =\ **2**, *Cr*\ =\ **3**.
-    ///     It is also able to recognize non-standard component schema as long as 
+    ///     To provide compatibility with older, faulty JPEG codecs, it is also  
+    ///     able to recognize non-standard component schemes as long as 
     ///     they have the correct arity and form a contiguously increasing sequence.
     /// # [Standardized formats](common-standard-formats)
-    /// # [Other formats](common-nonstandard-formats)
+    /// # [Compatibility formats](common-nonstandard-formats)
+    /// # [See also](color-protocols)
+    /// ## (color-protocols)
     public 
     enum Common 
     {
@@ -317,6 +324,19 @@ extension JPEG.Common:JPEG.Format
             upperBound: .init(repeating: .init(T.max))))
     }
     
+    /// static func JPEG.Common.recognize(_:precision:)
+    /// :   JPEG.Format 
+    ///     Detects this color format, given a set of component keys and a bit-depth.
+    ///     
+    ///     If this constructor detects a [`(Common).nonconforming3x8(_:_:_:)`] 
+    ///     color format, it will populate the associated values with the keys in 
+    ///     ascending order.
+    /// - components    : Swift.Set<JPEG.Component.Key>
+    ///     Must be a numerically-contiguous set with one or three elements, or 
+    ///     this constructor will return `nil`.
+    /// - precision     : Swift.Int 
+    ///     Must be 8, or this constructor will return `nil`.
+    /// - ->            : Self?
     public static 
     func recognize(_ components:Set<JPEG.Component.Key>, precision:Int) -> Self? 
     {
@@ -349,7 +369,13 @@ extension JPEG.Common:JPEG.Format
             return nil
         }
     }
-    
+    /// var JPEG.Common.components  : [JPEG.Component.Key] {get}
+    /// :   JPEG.Format 
+    ///     The set of component keys for this color format. 
+    /// 
+    ///     If this instance is a [`(Common).nonconforming3x8(_:_:_:)`] color format,
+    ///     the array contains the component keys in the order they appear 
+    ///     in the instance’s associated values.
     public 
     var components:[JPEG.Component.Key] 
     {
@@ -365,6 +391,11 @@ extension JPEG.Common:JPEG.Format
             return [c0, c1, c2]
         }
     }
+    /// var JPEG.Common.precision   : Swift.Int {get}
+    /// :   JPEG.Format 
+    ///     The bit-depth of each component in this color format. 
+    /// 
+    ///     This value is always 8.
     public 
     var precision:Int 
     {

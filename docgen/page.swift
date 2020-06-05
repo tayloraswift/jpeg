@@ -291,7 +291,7 @@ class Page
         }
     }
     
-    typealias TopicSymbol   = (signature:[Signature.Token], url:String, blurb:[Markdown.Element])
+    typealias TopicSymbol   = (signature:[Signature.Token], url:String, blurb:[Markdown.Element], required:[Markdown.Element])
     typealias Topic         = (topic:String, key:String, symbols:[TopicSymbol])
     
     let label:Label 
@@ -303,7 +303,8 @@ class Page
     (
         parameters:[(name:String, paragraphs:[[Markdown.Element]])], 
         return:[[Markdown.Element]],
-        overview:[[Markdown.Element]]
+        overview:[[Markdown.Element]], 
+        required:[Markdown.Element]
     )
     
     var topics:[Topic]
@@ -318,11 +319,59 @@ class Page
         self.signature      = signature 
         self.declaration    = declaration 
         self.blurb          = fields.blurb?.elements ?? [] 
+        
+        let required:[Markdown.Element] 
+        switch fields.requirement 
+        {
+        case nil:
+            switch label 
+            {
+            case .initializer, .genericInitializer, .staticMethod, .genericStaticMethod, 
+                .instanceMethod, .genericInstanceMethod, .staticProperty, .instanceProperty, 
+                .subscript:
+                let conformances:[String] = fields.annotations.map 
+                {
+                    if $0.annotations.count != 1 
+                    {
+                        Swift.print("warning: annotation for \(path) cannot conform to protocol conjunctions")
+                    }
+                    return "[`\($0.annotations[0].joined(separator: "."))`]"
+                }
+                
+                guard let first:String = conformances.first 
+                else 
+                {
+                    fallthrough 
+                }
+                guard let second:String = conformances.dropFirst().first 
+                else 
+                {
+                    required = .parse("Implements requirement in \(first)")
+                    break 
+                }
+                guard let last:String = conformances.dropFirst(2).last 
+                else 
+                {
+                    required = .parse("Implements requirement in \(first) and \(second)")
+                    break 
+                }
+                required = .parse("Implements requirement in \(conformances.dropLast().joined(separator: ", ")), and \(last)")
+                
+            default:
+                required = []
+            }
+        
+        case .required?:
+            required = .parse("**Required.**")
+        case .defaulted?:
+            required = .parse("**Required.** Default implementation provided.")
+        }
         self.discussion     = 
         (
             fields.parameters.map{ ($0.name, $0.paragraphs.map(\.elements)) }, 
             fields.return?.paragraphs.map(\.elements) ?? [], 
-            fields.discussion.map(\.elements)
+            fields.discussion.map(\.elements), 
+            required
         )
         self.topics         = fields.topics
         self.breadcrumbs    = Link.link(path.dropLast().map{ ($0, ()) }).map 
@@ -428,6 +477,7 @@ extension Page
         }
         self.discussion.return      = self.discussion.return.map{   Self.crosslink($0, scopes: scopes) }
         self.discussion.overview    = self.discussion.overview.map{ Self.crosslink($0, scopes: scopes) }
+        self.discussion.required    = Self.crosslink(self.discussion.required, scopes: scopes) 
         
         self.breadcrumbs = self.breadcrumbs.map 
         {
@@ -488,7 +538,8 @@ extension Page
             (
                 binding.page.signature, 
                 binding.url, 
-                binding.page.blurb
+                binding.page.blurb, 
+                binding.page.discussion.required
             )
             switch binding.page.label 
             {
@@ -662,7 +713,8 @@ extension Page
             attributes:[Symbol.AttributeField], 
             wheres:[Symbol.WhereField], 
             paragraphs:[Symbol.ParagraphField],
-            `throws`:Symbol.ThrowsField?
+            `throws`:Symbol.ThrowsField?, 
+            requirement:Symbol.RequirementField?
         let keys:Set<Page.Binding.Key>,
             topics:[Page.Topic]
         let parameters:[(name:String, type:Symbol.FunctionParameter, paragraphs:[Symbol.ParagraphField])], 
@@ -685,7 +737,8 @@ extension Page
                 paragraphs:[Symbol.ParagraphField]      = [],
                 topics:[Symbol.TopicField]              = [], 
                 keys:[Symbol.TopicElementField]         = []
-            var `throws`:Symbol.ThrowsField?
+            var `throws`:Symbol.ThrowsField?, 
+                requirement:Symbol.RequirementField?
             var parameters:[(parameter:Symbol.ParameterField, paragraphs:[Symbol.ParagraphField])] = []
             
             for field:Symbol.Field in fields
@@ -722,6 +775,14 @@ extension Page
                         fatalError("only one throws field per doccomnent allowed")
                     }
                     `throws` = field 
+                    
+                case .requirement   (let field):
+                    guard requirement == nil 
+                    else 
+                    {
+                        fatalError("only one requirement field per doccomnent allowed")
+                    }
+                    requirement = field 
                 
                 case .subscript, .function, .member, .type, .typealias, .associatedtype:
                     fatalError("only one header field per doccomnent allowed")
@@ -736,6 +797,7 @@ extension Page
             self.wheres         = wheres
             self.paragraphs     = paragraphs
             self.throws         = `throws`
+            self.requirement    = requirement
             
             self.keys           = .init(keys.map{ .init($0, order: order) })
             self.topics         = topics.map{ ($0.display, $0.key, []) }
@@ -771,10 +833,6 @@ extension Page.Binding
         -> (page:Self, path:[String]) 
     {
         let fields:Page.Fields = .init(fields, order: order)
-        if !fields.annotations.isEmpty 
-        {
-            print("warning: annotation fields are ignored in a subscript doccoment")
-        }
         if !fields.wheres.isEmpty 
         {
             print("warning: where fields are ignored in a subscript doccoment")
@@ -805,10 +863,6 @@ extension Page.Binding
         -> (page:Self, path:[String]) 
     {
         let fields:Page.Fields = .init(fields, order: order)
-        if !fields.annotations.isEmpty 
-        {
-            print("warning: annotation fields are ignored in a function doccoment")
-        }
         if !fields.wheres.isEmpty 
         {
             print("warning: where fields are ignored in a function doccoment")
@@ -856,9 +910,6 @@ extension Page.Binding
             label    = .enumerationCase
             keywords = ["indirect", "case"]
         }
-        
-        
-        
         
         var signature:[Page.Signature.Token] = keywords.flatMap 
         {
@@ -920,10 +971,6 @@ extension Page.Binding
         -> (page:Self, path:[String]) 
     {
         let fields:Page.Fields = .init(fields, order: order)
-        if !fields.annotations.isEmpty 
-        {
-            print("warning: annotation fields are ignored in a member doccoment")
-        }
         if !fields.wheres.isEmpty 
         {
             print("warning: where fields are ignored in a member doccoment")
@@ -1201,7 +1248,8 @@ struct PageTree
             (
                 page.page.signature, 
                 page.url, 
-                page.page.blurb
+                page.page.blurb,
+                page.page.discussion.required
             )
             for key:Page.Binding.Key in page.keys 
             {

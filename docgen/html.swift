@@ -244,16 +244,27 @@ extension Page
                 [.init("div", ["class": "section-container"], section)]))
         }
         
-        var discussion:[HTML.Tag] = 
+        // intro 
+        var introduction:[HTML.Tag] = 
         [
             self.label.html, 
             .init("h1", ["class": "topic-heading"], self.name), 
             self.blurb.isEmpty ? 
                 .init("p", ["class": "topic-blurb"], "No overview available") :
                 Markdown.html(tag: .p, attributes: ["class": "topic-blurb"], elements: self.blurb),
+        ]
+        if !self.discussion.required.isEmpty 
+        {
+            introduction.append(Markdown.html(tag: .p, attributes: ["class": "topic-required"], elements: self.discussion.required))
+        }
+        create(class: "introduction", section: introduction)
+        
+        // discussion 
+        var discussion:[HTML.Tag] = 
+        [
             .init("h2", [:], "Declaration"),
             .init("div", ["class": "declaration-container"], 
-                [.init("code", ["class": "declaration"], Page.Declaration.html(self.declaration))]),
+                [.init("code", ["class": "declaration"], Page.Declaration.html(self.declaration))])
         ]
         
         if !self.discussion.parameters.isEmpty
@@ -287,7 +298,7 @@ extension Page
             })
         }
         create(class: "discussion", section: discussion)
-        
+        // topics 
         if !self.topics.isEmpty 
         {
             var topics:[HTML.Tag] = [.init("h2", [:], "Topics")]
@@ -296,7 +307,7 @@ extension Page
                 let left:HTML.Tag    = .init("h3", [:], topic)
                 var right:[HTML.Tag] = []
                 
-                for (signature, url, blurb):Page.TopicSymbol in symbols 
+                for (signature, url, blurb, required):Page.TopicSymbol in symbols 
                 {
                     var container:[HTML.Tag] = 
                     [
@@ -307,6 +318,11 @@ extension Page
                     {
                         container.append(
                             Markdown.html(tag: .p, attributes: ["class": "topic-symbol-blurb"], elements: blurb))
+                    }
+                    if !required.isEmpty
+                    {
+                        container.append(
+                            Markdown.html(tag: .p, attributes: ["class": "topic-symbol-required"], elements: required))
                     }
                     right.append(.init("div", ["class": "topic-container-symbol"], container))
                 }
