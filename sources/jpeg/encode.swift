@@ -452,8 +452,8 @@ extension JPEG.Data.Rectangular
 }
 extension JPEG.Data.Rectangular 
 {
-    @_specialize(exported: true, where Color == JPEG.YCbCr, Format == JPEG.Common)
-    @_specialize(exported: true, where Color == JPEG.RGB, Format == JPEG.Common)
+    @_specialize(where Color == JPEG.YCbCr, Format == JPEG.Common)
+    @_specialize(where Color == JPEG.RGB, Format == JPEG.Common)
     public static 
     func pack<Color>(size:(x:Int, y:Int), 
         layout:JPEG.Layout<Format>, 
