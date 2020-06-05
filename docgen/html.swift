@@ -167,7 +167,7 @@ extension Page.Declaration
                 }
             }
             
-            grouped.append(.init("span", ["class": "syntax-group"], group))
+            grouped.append(.init("span", ["class": "syntax-group"], content: group.map(HTML.Tag.Content.child(_:)) + [.character(" ")]))
             
             while i < tokens.endIndex, case .breakableWhitespace = tokens[i]
             {
@@ -207,7 +207,7 @@ extension Page.Signature
                 }
             }
             
-            grouped.append(.init("span", ["class": "signature-group"], group))
+            grouped.append(.init("span", ["class": "signature-group"], content: group.map(HTML.Tag.Content.child(_:)) + [.character(" ")]))
             
             while i < tokens.endIndex, case .whitespace = tokens[i]
             {
@@ -252,12 +252,13 @@ extension Page
                 .init("p", ["class": "topic-blurb"], "No overview available") :
                 Markdown.html(tag: .p, attributes: ["class": "topic-blurb"], elements: self.blurb),
             .init("h2", [:], "Declaration"),
-            .init("code", ["class": "declaration"], Page.Declaration.html(self.declaration)),
+            .init("div", ["class": "declaration-container"], 
+                [.init("code", ["class": "declaration"], Page.Declaration.html(self.declaration))]),
         ]
         
         if !self.discussion.parameters.isEmpty
         {
-            discussion.append(.init("h2", [:], "Parameters"))
+            discussion.append(.init("h2", [:], self.label == .enumerationCase ? "Associated values" : "Parameters"))
             var list:[HTML.Tag] = []
             for (name, paragraphs):(String, [[Markdown.Element]]) in self.discussion.parameters 
             {

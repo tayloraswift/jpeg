@@ -11,6 +11,12 @@ body
     
     background-color: #f4f4f4;
     color: #222222;
+    padding-bottom: 8em;
+}
+nav 
+{
+    width: 100%;
+    position: fixed;
 }
 h1, h2, h3, nav
 {
@@ -47,9 +53,10 @@ h3
     font-style: italic;
     color: #555555;
 }
-.declaration 
+.declaration-container  
 {
     margin-top: 1.5em;
+    margin-left: 2em;
     display: block;
 }
 p 
@@ -73,19 +80,20 @@ code span.signature-group, code span.syntax-group
 code span.signature-group:after
 {
     content: '\200b';
-    letter-spacing: 0.35em;
+    letter-spacing: 0.2em;
 }
 code span.signature-group:last-child:after
 {
+    content: '';
     letter-spacing: 0;
 }
-code.signature 
+code.signature, code.declaration 
 {
     margin-left: -2em;
 }
 
 /* raspberry pink */
-code .syntax-keyword, code .signature-highlight
+code .syntax-keyword, code .signature-highlight, p a
 {
     color: #ff4086;
 }
@@ -117,27 +125,32 @@ code .syntax-punctuation
 code span.syntax-group:after
 {
     content: '\200b';
-    letter-spacing: 0.35em;
+    letter-spacing: 0.175em;
 }
 code span.syntax-group:last-child:after
 {
+    content: '';
     letter-spacing: 0;
 }
-code span.syntax-whitespace 
+
+code .syntax-whitespace 
 {
-    letter-spacing: 0.1em;
+    margin: 0 0.05em;
+}
+code .syntax-punctuation 
+{
+    margin: 0 0.1em;
+}
+.syntax-punctuation + .syntax-punctuation
+{
+    margin-left: 0;
 }
 
-code .syntax-punctuation:before, code .signature-punctuation:before, 
-code .syntax-punctuation:after, code .signature-punctuation:after
+code .signature-punctuation:before, code .signature-punctuation:after
 {
     content: '\200b';
 }
-code .syntax-punctuation:before, code .signature-punctuation:before
-{
-    letter-spacing: 0.15em;
-}
-code .syntax-punctuation:after, code .signature-punctuation:after
+code .signature-punctuation:before, code .signature-punctuation:after
 {
     letter-spacing: 0.15em;
 }
@@ -157,7 +170,7 @@ a:hover, a:hover span
 }
 code a.syntax-type
 {
-    color: #ffa020;
+    color: #ffa010;
 }
 code a.syntax-swift-type
 {
@@ -206,15 +219,14 @@ nav ul li a
 .discussion 
 {
     background-color: #f8f8f8;
-    padding-top: 2em;
+    padding-top: 5em;
     padding-bottom: 2em;
 }
-.topics 
+.discussion p 
 {
+    padding-right: 5em;
 }
-.topics .section-container 
-{
-}
+
 .topic 
 {
     border-top: solid 1px #cccccc;
@@ -267,8 +279,10 @@ p code
     wrap: pre;
     padding: 0.05em 0.4em 0.15em;
     letter-spacing: 0.025em;
-    background-color: rgba(255, 88, 0, 0.05);
+    background-color: rgba(255, 88, 0, 0.03);
     border-radius: 0.5em;
+    
+    color: #664444;
 }
 p strong 
 {

@@ -312,8 +312,8 @@ extension JPEG
         ///     The frequency band encoded by this image scan. 
         /// 
         ///     This property specifies a range of zigzag-indexed frequency coefficients.
-        ///     It must be within the interval of 0 to 64. If the image coding process 
-        ///     is not progressive, this property must be set to `0 ..< 64`.
+        ///     It must be within the interval of 0 to 64. If the image coding [`Process`] 
+        ///     is not [`(Process).progressive`], this property must be set to `0 ..< 64`.
         
         /// let JPEG.Scan.bits  : Swift.Range<Swift.Int> 
         ///     The bit range encoded by this image scan. 
@@ -321,7 +321,7 @@ extension JPEG
         ///     This property specifies a range of bit indices, where bit zero is 
         ///     the least significant bit. The upper range bound must be either 
         ///     infinity ([`Swift.Int`max`]) or one greater than the lower bound.
-        ///     If the image coding process is not progressive, this property 
+        ///     If the image coding [`Process`] is not [`(Process).progressive`], this property 
         ///     must be set to `0 ..< .max`.
         
         /// let JPEG.Scan.components    : [(c:Swift.Int, component:Component)] 
@@ -337,34 +337,89 @@ extension JPEG
             components:[(c:Int, component:Component)] 
     }
     
+    /// struct JPEG.Layout<Format> 
+    /// where Format:JPEG.Format 
+    ///     A specification of the components, coding process, table assignments, 
+    ///     and scan progression of a JPEG file.
+    ///
+    ///     This structure records both the *recognized components* and 
+    ///     the *resident components* in an image. We draw this distinction because 
+    ///     the [`(Layout).planes`] property is allowed to include definitions for components 
+    ///     that are not part of [`(Layout).format``(Format).components`].
+    ///     Such components will not recieve a plane in the [`JPEG.Data`] types, 
+    ///     but will be ignored by the scan decoder without errors. 
+    ///
+    ///     Non-recognized 
+    ///     components can only occur in images decoded from JPEG files, and only 
+    ///     when using a custom [`JPEG.Format`] type, as the built-in [`JPEG.Common`]
+    ///     color format will never accept any component declaration in a frame 
+    ///     header that it does not also recognize. When encoding images to JPEG 
+    ///     files, all declared resident components must also be recognized components.
+    /// # [Image format](layout-image-format)
+    /// # [Component membership](layout-component-membership)
+    /// # [File structure](layout-image-structure)
+    
+    // note: `self.format.components` is a subset of `self.components.keys`
+    // note: all components referenced by the scan headers in `self.scans`
+    // must be recognized components.
     public 
     struct Layout<Format> where Format:JPEG.Format 
     {
-        // note: we draw a distinction between *recognized* components and 
-        // *resident* components. it is allowed for `self.components` to include 
-        // definitions for components that are not part of `self.format.components`.
-        // these components do not recieve a plane in the `Data` types, but will 
-        // be ignored by the scan decoder without errors. 
-        // note: `self.format.components` is a subset of `self.components.keys`
-        // note: all components referenced by the scan headers in `self.scans`
-        // must be recognized components.
+        /// let JPEG.Layout.format      : Format 
+        ///     The color format of the image.
+        /// ## (layout-image-format)
         public 
         let format:Format  
-        
+        /// let JPEG.Layout.process     : JPEG.Process 
+        ///     The JPEG coding process used by the image.
+        /// ## (layout-image-format)
         public 
         let process:Process
         
+        /// let JPEG.Layout.residents   : [JPEG.Component.Key: Swift.Int]
+        ///     The set of color components declared (or to-be-declared) in the 
+        ///     image frame header.
+        /// 
+        ///     The dictionary values are indices to be used with the [`planes`] property 
+        ///     on this type.
+        /// # [See also](layout-component-membership)
+        /// ## (layout-component-membership)
         public 
         let residents:[Component.Key: Int]
+        /// var JPEG.Layout.recognized   : [JPEG.Component.Key] { get }
+        ///     The set of color components in the color format of this image. 
+        ///     This set is always a subset of the resident components in the image.
+        /// # [See also](layout-component-membership)
+        /// ## (layout-component-membership)
         public 
         var recognized:[Component.Key] 
         {
             self.format.components 
         }
-        
+        /// var JPEG.Layout.planes      : [(component:JPEG.Component, qi:JPEG.Table.Quantization.Key)] { get }
+        ///     The descriptor array for the planes in the image. 
+        ///
+        ///     Each descriptor consists of a [`JPEG.Component`] instance and a 
+        ///     quantization table key. On layout initialization, the library will 
+        ///     automatically assign table keys to table selectors.
+        ///
+        ///     The ordering of the first *k* array elements follows the order that 
+        ///     the component keys appear in the [`recognized`] property, where 
+        ///     *k* is the number of components in the image. Any 
+        ///     non-recognized resident components will occur at the end of this 
+        ///     array, can can be indexed using the values of the [`residents`] 
+        ///     dictionary.
+        /// ## (layout-image-structure)
         public internal(set)
         var planes:[(component:Component, qi:Table.Quantization.Key)]
-        
+        /// var JPEG.Layout.definitions : [(quanta:[JPEG.Table.Quantization.Key], scans:[JPEG.Scan])] { get }
+        ///     The sequence of scan and table definitions in the image file.
+        ///
+        ///     The definitions in this property are given as alternating runs 
+        ///     of quantization tables and image scans. (Image layouts do not specify 
+        ///     huffman table definitions, as the library encodes them on a per-scan 
+        ///     basis.)
+        /// ## (layout-image-structure)
         public private(set)
         var definitions:[(quanta:[Table.Quantization.Key], scans:[Scan])]
     }
@@ -373,42 +428,131 @@ extension JPEG
 // compound types 
 extension JPEG 
 {
+    /// enum JPEG.Process 
+    ///     A JPEG coding process.
+    /// 
+    ///     The [**JPEG standard**](https://www.w3.org/Graphics/JPEG/itu-t81.pdf)
+    ///     specifies several subformats of the JPEG format known as *coding processes*.
+    ///     The library can recognize images using any coding process, but 
+    ///     only supports encoding and decoding images using the [`(Process).baseline`], 
+    ///     [`(Process).extended`], or [`(Process).progressive`] processes with 
+    ///     [`(Process.Coding).huffman`] entropy coding and the `differential` flag 
+    ///     set to `false`.
+    /// # [Coding processes](coding-processes)
     public 
     enum Process 
     {
+        /// enum JPEG.Process.Coding 
+        ///     A JPEG entropy coding method.
         public 
         enum Coding 
         {
+            /// case JPEG.Process.Coding.huffman
+            ///     Huffman entropy coding.
             case huffman 
+            /// case JPEG.Process.Coding.arithmetic
+            ///     Arithmetic entropy coding.
             case arithmetic 
         }
         
+        /// case JPEG.Process.baseline
+        ///     The baseline JPEG coding process. 
+        /// 
+        ///     This is a sequential coding process. It allows up to two simultaneously 
+        ///     referenced tables of each type. It can only be used with color formats 
+        ///     with a bit [`(JPEG.Format).precision`] of 8.
+        /// ## (coding-processes)
         case baseline 
+        /// case JPEG.Process.extended(coding:differential:)
+        ///     The extended JPEG coding process. 
+        /// 
+        ///     This is a sequential coding process. It allows up to four simultaneously 
+        ///     referenced tables of each type. It can only be used with color formats 
+        ///     with a bit [`(JPEG.Format).precision`] of 8 or 12.
+        /// - coding        : Coding 
+        ///     The entropy coding used by this coding process.
+        /// - differential  : Swift.Bool 
+        ///     Indicates whether the image frame using this coding process is a 
+        ///     differential frame under the hierarchical mode of operations.
+        /// ## (coding-processes)
         case extended(coding:Coding, differential:Bool)
+        /// case JPEG.Process.progressive(coding:differential:)
+        ///     The progressive JPEG coding process. 
+        /// 
+        ///     This is a progressive coding process. It allows up to four simultaneously 
+        ///     referenced tables of each type. It can only be used with color formats 
+        ///     with a bit [`(JPEG.Format).precision`] of 8 or 12, and no more than 
+        ///     four components.
+        /// - coding        : Coding 
+        ///     The entropy coding used by this coding process.
+        /// - differential  : Swift.Bool 
+        ///     Indicates whether the image frame using this coding process is a 
+        ///     differential frame under the hierarchical mode of operations.
+        /// ## (coding-processes)
         case progressive(coding:Coding, differential:Bool)
+        /// case JPEG.Process.lossless(coding:differential:)
+        ///     The lossless JPEG coding process.
+        /// - coding        : Coding 
+        ///     The entropy coding used by this coding process.
+        /// - differential  : Swift.Bool 
+        ///     Indicates whether the image frame using this coding process is a 
+        ///     differential frame under the hierarchical mode of operations.
+        /// ## (coding-processes)
         case lossless(coding:Coding, differential:Bool)
     }
     
+    /// enum JPEG.Marker 
+    ///     A JPEG marker type indicator.
     public 
     enum Marker
     {
+        /// case JPEG.Marker.start 
+        ///     A start-of-image (SOI) marker.
         case start
+        /// case JPEG.Marker.end 
+        ///     An end-of-image (EOI) marker.
         case end
-        
+        /// case JPEG.Marker.quantization 
+        ///     A quantization table definition (DQT) segment.
         case quantization 
+        /// case JPEG.Marker.huffman
+        ///     A huffman table definition (DHT) segment.
         case huffman 
         
+        /// case JPEG.Marker.application(_:)
+        ///     An application data (APP*n*) segment.
+        /// - _     : Swift.Int 
+        ///     The application segment type code. This value can be from 0 to 15.
         case application(Int)
+        /// case JPEG.Marker.restart(_:)
+        ///     A restart (RST*m*) marker.
+        /// - _     : Swift.Int 
+        ///     The restart phase. It cycles through the values 0 through 7.
         case restart(Int)
+        /// case JPEG.Marker.height
+        ///     A height redefinition (DNL) segment.
         case height 
+        /// case JPEG.Marker.interval
+        ///     A restart interval definition (DRI) segment. 
         case interval  
+        /// case JPEG.Marker.comment
+        ///     A comment (COM) segment. 
         case comment 
         
+        /// case JPEG.Marker.frame(_:)
+        ///     A frame header (SOF*) segment. 
+        /// - _     : JPEG.Process
+        ///     The coding process used by the image frame.
         case frame(Process)
+        /// case JPEG.Marker.scan
+        ///     A scan header (SOS) segment. 
         case scan 
         
+        /// case JPEG.Marker.arithmeticCodingCondition
         case arithmeticCodingCondition
+        /// case JPEG.Marker.hierarchical
         case hierarchical 
+        /// case JPEG.Marker.expandReferenceComponents
         case expandReferenceComponents
         
         init?(code:UInt8) 

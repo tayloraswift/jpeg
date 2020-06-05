@@ -16,7 +16,8 @@ struct Markdown
     //                            | '**'
     //                            | '*'
     //                            | .
-    //  ParagraphSymbolLink     ::= '[`' <Identifiers> '`' ( <Identifier> '`' ) * ']'
+    //  ParagraphSymbolLink     ::= '[' <SymbolPath> <SymbolPath> * ( <Identifier> '`' ) * ']'
+    //  SymbolPath              ::= '`' ( '(' <Identifiers> ').' ) ? <Identifiers> '`'
     //  ParagraphLink           ::= '[' [^\]] * '](' [^\)] ')'
     struct NotClosingBracket:Parseable.TerminalClass
     {
@@ -89,19 +90,36 @@ struct Markdown
         
         struct SymbolLink:Parseable
         {
-            let identifiers:[String], 
+            struct Path:Parseable
+            {
+                let prefix:[String], 
+                    identifiers:[String]
+                    
+                static 
+                func parse(_ tokens:[Character], position:inout Int) throws -> Self
+                {
+                    let _:Backtick                      = try .parse(tokens, position: &position), 
+                        prefix:List<Token.Parenthesis.Left, List<Symbol.Identifiers, List<Token.Parenthesis.Right, Token.Period>>>? = 
+                                                              .parse(tokens, position: &position),
+                        identifiers:Symbol.Identifiers  = try .parse(tokens, position: &position),
+                        _:Backtick                      = try .parse(tokens, position: &position)
+                    return .init(prefix: prefix?.body.head.identifiers ?? [], 
+                        identifiers: identifiers.identifiers)
+                }
+            }
+            
+            let paths:[Path], 
                 suffix:[String]
             
             static 
             func parse(_ tokens:[Character], position:inout Int) throws -> Self
             {
                 let _:Token.Bracket.Left            = try .parse(tokens, position: &position),
-                    _:Backtick                      = try .parse(tokens, position: &position), 
-                    identifiers:Symbol.Identifiers  = try .parse(tokens, position: &position),
-                    _:Backtick                      = try .parse(tokens, position: &position), 
+                    head:Path                       = try .parse(tokens, position: &position), 
+                    body:[Path]                     =     .parse(tokens, position: &position),
                     suffix:[List<Symbol.Identifier, Backtick>] = .parse(tokens, position: &position), 
                     _:Token.Bracket.Right           = try .parse(tokens, position: &position) 
-                return .init(identifiers: identifiers.identifiers, suffix: suffix.map(\.head.string))
+                return .init(paths: [head] + body, suffix: suffix.map(\.head.string))
             }
         }
         struct Link:Parseable
@@ -178,10 +196,10 @@ struct Markdown
             {
             case .symbol(let link):
                 stack[stack.endIndex - 1].content.append(.child(
-                    .init("code", [:], link.identifiers.joined(separator: "."))))
+                    .init("code", [:], (link.paths.map(\.identifiers).flatMap{ $0 } + link.suffix).joined(separator: "."))))
             
             case .link(let link):
-                var attributes:[String: String] = ["href": link.url]
+                var attributes:[String: String] = ["href": link.url, "target": "_blank"]
                 if !link.classes.isEmpty 
                 {
                     attributes["class"] = link.classes.joined(separator: " ")

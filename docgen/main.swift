@@ -479,6 +479,7 @@ enum Symbol
     }
     
     // FunctionField       ::= <FunctionKeyword> <Whitespace> <Identifiers> <TypeParameters> ? '?' ? '(' <FunctionLabels> ')' <Endline>
+    //                       | 'case' <Whitespace> <Identifiers> <Endline>
     // FunctionKeyword     ::= 'init'
     //                       | 'func'
     //                       | 'mutating' <Whitespace> 'func'
@@ -490,6 +491,48 @@ enum Symbol
     // TypeParameters      ::= '<' <Whitespace> ? <Identifier> <Whitespace> ? ( ',' <Whitespace> ? <Identifier> <Whitespace> ? ) * '>'
     struct FunctionField:Parseable, CustomStringConvertible
     {
+        struct FunctionFieldNormal:Parseable
+        {
+            let keyword:Symbol.FunctionKeyword
+            let identifiers:[String]
+            let generics:[String] 
+            let failable:Bool
+            let labels:[String]
+            
+            static 
+            func parse(_ tokens:[Character], position:inout Int) throws -> Self
+            {
+                let keyword:Symbol.FunctionKeyword          = try .parse(tokens, position: &position), 
+                    _:Symbol.Whitespace                     = try .parse(tokens, position: &position),
+                    identifiers:Symbol.Identifiers          = try .parse(tokens, position: &position),
+                    generics:Symbol.TypeParameters?         =     .parse(tokens, position: &position),
+                    failable:Token.Question?                =     .parse(tokens, position: &position),
+                    _:Token.Parenthesis.Left                = try .parse(tokens, position: &position),
+                    labels:Symbol.FunctionLabels            = try .parse(tokens, position: &position),
+                    _:Token.Parenthesis.Right               = try .parse(tokens, position: &position),
+                    _:Symbol.Endline                        = try .parse(tokens, position: &position)
+                return .init(keyword: keyword, 
+                    identifiers:    identifiers.identifiers, 
+                    generics:       generics?.identifiers ?? [], 
+                    failable:       failable != nil, 
+                    labels:         labels.identifiers)
+            }
+        }
+        struct FunctionFieldUninhabitedCase:Parseable
+        {
+            let identifiers:[String]
+            
+            static 
+            func parse(_ tokens:[Character], position:inout Int) throws -> Self
+            {
+                let _:Symbol.FunctionKeyword.Case           = try .parse(tokens, position: &position), 
+                    _:Symbol.Whitespace                     = try .parse(tokens, position: &position),
+                    identifiers:Symbol.Identifiers          = try .parse(tokens, position: &position),
+                    _:Symbol.Endline                        = try .parse(tokens, position: &position)
+                return .init(identifiers: identifiers.identifiers)
+            }
+        }
+        
         let keyword:Symbol.FunctionKeyword
         let identifiers:[String]
         let generics:[String] 
@@ -499,20 +542,20 @@ enum Symbol
         static 
         func parse(_ tokens:[Character], position:inout Int) throws -> Self
         {
-            let keyword:Symbol.FunctionKeyword          = try .parse(tokens, position: &position), 
-                _:Symbol.Whitespace                     = try .parse(tokens, position: &position),
-                identifiers:Symbol.Identifiers          = try .parse(tokens, position: &position),
-                generics:Symbol.TypeParameters?         =     .parse(tokens, position: &position),
-                failable:Token.Question?                =     .parse(tokens, position: &position),
-                _:Token.Parenthesis.Left                = try .parse(tokens, position: &position),
-                labels:Symbol.FunctionLabels            = try .parse(tokens, position: &position),
-                _:Token.Parenthesis.Right               = try .parse(tokens, position: &position),
-                _:Symbol.Endline                        = try .parse(tokens, position: &position)
-            return .init(keyword: keyword, 
-                identifiers:    identifiers.identifiers, 
-                generics:       generics?.identifiers ?? [], 
-                failable:       failable != nil, 
-                labels:         labels.identifiers)
+            if let normal:FunctionFieldNormal = .parse(tokens, position: &position) 
+            {
+                return .init(keyword: normal.keyword, identifiers: normal.identifiers, 
+                    generics: normal.generics, failable: normal.failable, labels: normal.labels)
+            }
+            else if let `case`:FunctionFieldUninhabitedCase = .parse(tokens, position: &position) 
+            {
+                return .init(keyword: .case, identifiers: `case`.identifiers, 
+                    generics: [], failable: false, labels: [])
+            }
+            else 
+            {
+                throw ParsingError.unexpected(tokens, position, expected: Self.self)
+            }
         }
         
         var description:String 

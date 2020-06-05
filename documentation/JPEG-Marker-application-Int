@@ -1,0 +1,8 @@
+<head>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Questrial&display=swap" rel="stylesheet"> 
+    <link href="style.css" rel="stylesheet"> 
+</head> 
+<body>
+    <main ><nav ><div class="navigation-container"><ul ><li ><a href="JPEG">JPEG</a></li><li ><a href="JPEG-Marker">Marker</a></li><li ><span >application(_:)</span></li></ul></div></nav><section class="discussion"><div class="section-container"><div class="eyebrow">Enumeration Case</div><h1 class="topic-heading">application(_:)</h1><p class="topic-blurb">An application data (APP<em >n</em>) segment. </p><h2 >Declaration</h2><div class="declaration-container"><code class="declaration"><span class="syntax-group"><span class="syntax-keyword">case</span> </span><span class="syntax-group"><span class="syntax-identifier">application</span><span class="syntax-punctuation">(</span><span class="syntax-keyword">_</span><span class="syntax-punctuation">:</span><a href="https://developer.apple.com/documentation/swift/int" class="syntax-type syntax-swift-type">Int</a><span class="syntax-punctuation">)</span> </span></code></div><h2 >Associated values</h2><dl class="parameter-list"><dt ><code >_</code></dt><dd ><p >The application segment type code. This value can be from 0 to 15. </p></dd></dl></div></section></main>
+</body>

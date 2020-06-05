@@ -354,33 +354,38 @@ extension Page
             {
             case .symbol(let link):
                 elements.append(.text(.backtick(count: 1)))
-                elements.append(contentsOf: Link.link(link.identifiers.map{ ($0, ()) }).map 
+                elements.append(contentsOf: link.paths.map 
                 {
-                    (element:(component:(String, Void), link:Link)) -> [Markdown.Element] in
-                    let target:String, 
-                        `class`:String
-                    switch element.link 
+                    (sublink:Markdown.Element.SymbolLink.Path) in 
+                    Link.link(sublink.identifiers.map{ ($0, ()) }).map 
                     {
-                    case .apple(url: let url):
-                        target  = url 
-                        `class` = "syntax-swift-type"
-                    case .resolved(url: let url):
-                        target  = url 
-                        `class` = "syntax-type"
-                    case .unresolved(path: let path):
-                        guard let binding:Binding = PageTree.resolve(path[...], in: scopes)
-                        else 
+                        (element:(component:(String, Void), link:Link)) -> [Markdown.Element] in
+                        let target:String, 
+                            `class`:String
+                        switch element.link 
                         {
-                            return element.component.0.map{ .text(.wildcard($0)) }
+                        case .apple(url: let url):
+                            target  = url 
+                            `class` = "syntax-swift-type"
+                        case .resolved(url: let url):
+                            target  = url 
+                            `class` = "syntax-type"
+                        case .unresolved(path: let path):
+                            let full:[String] = sublink.prefix + path 
+                            guard let binding:Binding = PageTree.resolve(full[...], in: scopes)
+                            else 
+                            {
+                                return element.component.0.map{ .text(.wildcard($0)) }
+                            }
+                            target = binding.url
+                            `class` = "syntax-type"
                         }
-                        target = binding.url
-                        `class` = "syntax-type"
-                    }
-                    
-                    return 
-                        [
-                        .link(.init(text: element.component.0.map(Markdown.Element.Text.wildcard(_:)), url: target, classes: [`class`])), 
-                        ]
+                        
+                        return 
+                            [
+                            .link(.init(text: element.component.0.map(Markdown.Element.Text.wildcard(_:)), url: target, classes: [`class`])), 
+                            ]
+                    }.joined(separator: [.text(.wildcard("."))])
                 }.joined(separator: [.text(.wildcard("."))]))
                 for component:String in link.suffix 
                 {
@@ -811,8 +816,7 @@ extension Page.Binding
         
         var declaration:[Page.Declaration.Token] = Page.Declaration.tokenize(fields.attributes)
         
-        let basename:String = header.identifiers[header.identifiers.endIndex - 1], 
-            name:String     = "\(basename)(\(header.labels.map{ "\($0):" }.joined()))" 
+        let basename:String = header.identifiers[header.identifiers.endIndex - 1]
         let label:Page.Label, 
             keywords:[String] 
         switch (header.keyword, header.generics)
@@ -853,6 +857,9 @@ extension Page.Binding
             keywords = ["indirect", "case"]
         }
         
+        
+        
+        
         var signature:[Page.Signature.Token] = keywords.flatMap 
         {
             [.text($0), .whitespace]
@@ -884,8 +891,19 @@ extension Page.Binding
             declaration.append(contentsOf: tokens)
         }
         
-        let mangled:[String] = Page.print(function: fields, labels: header.labels, delimiters: ("(", ")"), 
-            signature: &signature, declaration: &declaration)
+        let name:String, 
+            mangled:[String]
+        if case .enumerationCase = label, header.labels.isEmpty, fields.parameters.isEmpty 
+        {
+            mangled = []
+            name    = basename
+        }
+        else 
+        {
+            mangled = Page.print(function: fields, labels: header.labels, delimiters: ("(", ")"), 
+                signature: &signature, declaration: &declaration)
+            name    = "\(basename)(\(header.labels.map{ "\($0):" }.joined()))" 
+        }
         
         let page:Page = .init(label: label, name: name, 
             signature:      signature, 
@@ -1034,7 +1052,7 @@ extension Page.Binding
             label   = .genericEnumeration
             keyword = "enum"
         }
-        let signature:[Page.Signature.Token] = [.text(keyword), .whitespace] + 
+        var signature:[Page.Signature.Token] = [.text(keyword), .whitespace] + 
             header.identifiers.map{ [.highlight($0)] }.joined(separator: [.punctuation(".")])
         
         declaration.append(.keyword(keyword))
@@ -1042,11 +1060,17 @@ extension Page.Binding
         declaration.append(.identifier(header.identifiers[header.identifiers.endIndex - 1]))
         if !header.generics.isEmpty
         {
+            signature.append(.punctuation("<"))
             declaration.append(.punctuation("<"))
+            signature.append(contentsOf: header.generics.map
+            { 
+                [.text($0)] 
+            }.joined(separator: [.punctuation(","), .whitespace]))
             declaration.append(contentsOf: header.generics.map
             { 
                 [.identifier($0)] 
             }.joined(separator: [.punctuation(","), .breakableWhitespace]))
+            signature.append(.punctuation(">"))
             declaration.append(.punctuation(">"))
         }
         if !fields.annotations.isEmpty 
@@ -1067,7 +1091,18 @@ extension Page.Binding
             {
                 (where:Symbol.WhereField) -> [Page.Declaration.Token] in 
                 var tokens:[Page.Declaration.Token] = []
-                tokens.append(contentsOf: Page.Declaration.tokenize(`where`.lhs))
+                // strip links from lhs
+                tokens.append(contentsOf: Page.Declaration.tokenize(`where`.lhs).map 
+                {
+                    if case .type(let string, _) = $0 
+                    {
+                        return .identifier(string)
+                    }
+                    else 
+                    {
+                        return $0
+                    }
+                })
                 switch `where`.relation
                 {
                 case .conforms:
