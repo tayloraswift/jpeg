@@ -38,7 +38,7 @@ struct Markdown
     //  ParagraphSymbolLink     ::= '[' <SymbolPath> <SymbolPath> * ( <Identifier> '`' ) * ']'
     //  SymbolPath              ::= '`' ( '(' <Identifiers> ').' ) ? <SymbolTail> '`'
     //  SymbolTail              ::= <SymbolName> ( '.' <SymbolName> ) * 
-    //  SymbolName              ::= <Identifier> ( '(' ( <Identifier> ':' ) * ')' ) ?
+    //  SymbolName              ::= <Identifier> ( '(' ( <FunctionLabel> ':' ) * ')' ) ?
     //  ParagraphLink           ::= '[' [^\]] * '](' [^\)] ')'
     struct NotClosingBracket:Parseable.TerminalClass
     {
@@ -162,10 +162,10 @@ struct Markdown
                     func parse(_ tokens:[Character], position:inout Int) throws -> Self
                     {
                         let identifier:Symbol.Identifier    = try .parse(tokens, position: &position)
-                        if let labels:List<Token.Parenthesis.Left, List<[List<Symbol.Identifier, Token.Colon>], Token.Parenthesis.Right>> = 
+                        if let labels:List<Token.Parenthesis.Left, List<[List<Symbol.FunctionLabel, Token.Colon>], Token.Parenthesis.Right>> = 
                             .parse(tokens, position: &position)
                         {
-                            return .init(string: "\(identifier.string)(\(labels.body.head.map{"\($0.head.string):" }.joined()))")
+                            return .init(string: "\(identifier.string)(\(labels.body.head.map(\.head.description).joined()))")
                         }
                         else 
                         {

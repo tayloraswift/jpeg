@@ -247,6 +247,7 @@ extension JPEG
         }
     }
     
+    /// enum JPEG.Header 
     public 
     enum Header 
     {
@@ -286,7 +287,7 @@ extension JPEG
             public 
             let components:[Component.Key: Component]
         }
-        
+        /// struct JPEG.Header.Scan 
         public 
         struct Scan
         {

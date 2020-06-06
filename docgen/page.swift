@@ -600,8 +600,11 @@ extension Page
     }
     
     static 
-    func print(function fields:Fields, labels:[String], delimiters:(Character, Character),
-        signature:inout [Signature.Token], declaration:inout [Declaration.Token]) -> [String]
+    func print(function fields:Fields, labels:[(name:String, variadic:Bool)], 
+        delimiters:(Character, Character),
+        signature:inout [Signature.Token], 
+        declaration:inout [Declaration.Token]) 
+        -> [String]
     {
         guard labels.count == fields.parameters.count 
         else 
@@ -616,8 +619,11 @@ extension Page
         
         var interior:(signature:[[Page.Signature.Token]], declaration:[[Page.Declaration.Token]]) = 
             ([], [])
-        for (label, (name, parameter, _)):(String, (String, Symbol.FunctionParameter, [Symbol.ParagraphField])) in 
-            zip(labels, fields.parameters)
+        for ((label, variadic), (name, parameter, _)):
+        (
+            (String, Bool), 
+            (String, Symbol.FunctionParameter, [Symbol.ParagraphField])
+        ) in zip(labels, fields.parameters)
         {
             var signature:[Page.Signature.Token]        = []
             var declaration:[Page.Declaration.Token]    = []
@@ -667,6 +673,12 @@ extension Page
             }
             signature.append(contentsOf: type.signature)
             declaration.append(contentsOf: type.declaration)
+            
+            if variadic 
+            {
+                signature.append(contentsOf: repeatElement(.punctuation("."), count: 3))
+                declaration.append(contentsOf: repeatElement(.punctuation("."), count: 3))
+            }
             
             interior.signature.append(signature)
             interior.declaration.append(declaration)
@@ -845,7 +857,8 @@ extension Page.Binding
         var signature:[Page.Signature.Token]        =      [   .text("subscript")]
         
         
-        let mangled:[String] = Page.print(function: fields, labels: header.labels, delimiters: ("[", "]"), 
+        let mangled:[String] = Page.print(function: fields, 
+            labels: header.labels.map{ ($0, false) }, delimiters: ("[", "]"), 
             signature: &signature, declaration: &declaration)
         
         let path:[String] = header.identifiers + ["subscript"]
@@ -921,7 +934,7 @@ extension Page.Binding
         })
         
         signature.append(.highlight(basename))
-        declaration.append(.identifier(basename))
+        declaration.append(header.keyword == .`init` ? .keyword(basename) : .identifier(basename))
         
         if header.failable 
         {
@@ -953,7 +966,7 @@ extension Page.Binding
         {
             mangled = Page.print(function: fields, labels: header.labels, delimiters: ("(", ")"), 
                 signature: &signature, declaration: &declaration)
-            name    = "\(basename)(\(header.labels.map{ "\($0):" }.joined()))" 
+            name    = "\(basename)(\(header.labels.map{ "\($0.variadic && $0.name == "_" ? "" : $0.name)\($0.variadic ? "..." : ""):" }.joined()))" 
         }
         
         let page:Page = .init(label: label, name: name, 

@@ -404,6 +404,13 @@ extension JPEG.Common:JPEG.Format
 }
 extension JPEG.YCbCr
 {
+    /// var JPEG.YCbCr.rgb  : JPEG.RGB 
+    ///     This color represented in the RGB color space. 
+    ///
+    ///     This property applies the YCbCr-to-RGB conversion formula defined in 
+    ///     the [JFIF standard](https://www.w3.org/Graphics/JPEG/jfif3.pdf). Some 
+    ///     YCbCr colors are not representable in the RGB color space; such colors 
+    ///     will be clipped to the acceptable range.
     public 
     var rgb:JPEG.RGB
     {
@@ -421,6 +428,11 @@ extension JPEG.YCbCr
 }
 extension JPEG.RGB
 {
+    /// var JPEG.RGB.ycc    : JPEG.YCbCr 
+    ///     This color represented in the YCbCr color space. 
+    ///
+    ///     This property applies the RGB-to-YCbCr conversion formula defined in 
+    ///     the [JFIF standard](https://www.w3.org/Graphics/JPEG/jfif3.pdf).
     public 
     var ycc:JPEG.YCbCr
     {
@@ -442,6 +454,15 @@ extension JPEG.RGB
 
 extension JPEG.YCbCr:JPEG.Color 
 {
+    /// static func JPEG.YCbCr.unpack(_:of:)
+    /// :   JPEG.Color
+    ///     Converts the given interleaved samples into an array of YCbCr pixels.
+    /// - interleaved   : [Swift.UInt16]
+    ///     A flat array of interleaved component samples.
+    /// - format        : JPEG.Common
+    ///     The color format of the interleaved input.
+    /// - ->            : [Self]
+    ///     An array of YCbCr pixels.
     public static 
     func unpack(_ interleaved:[UInt16], of format:JPEG.Common) -> [Self]
     {
@@ -465,6 +486,16 @@ extension JPEG.YCbCr:JPEG.Color
             }
         }
     }
+    /// static func JPEG.YCbCr.pack(_:as:)
+    /// :   JPEG.Color 
+    ///     Converts the given array of YCbCr pixels into an array of interleaved samples.
+    /// 
+    /// - pixels        : [Self]
+    ///     An array of YCbCr pixels.
+    /// - format        : JPEG.Common
+    ///     The color format of the interleaved output.
+    /// - ->            : [Swift.UInt16]
+    ///     A flat array of interleaved component samples.
     public static 
     func pack(_ pixels:[Self], as format:JPEG.Common) -> [UInt16]
     {
@@ -481,6 +512,15 @@ extension JPEG.YCbCr:JPEG.Color
 
 extension JPEG.RGB:JPEG.Color 
 {
+    /// static func JPEG.RGB.unpack(_:of:)
+    /// :   JPEG.Color
+    ///     Converts the given interleaved samples into an array of RGB pixels.
+    /// - interleaved   : [Swift.UInt16]
+    ///     A flat array of interleaved component samples.
+    /// - format        : JPEG.Common
+    ///     The color format of the interleaved input.
+    /// - ->            : [Self]
+    ///     An array of RGB pixels.
     public static 
     func unpack(_ interleaved:[UInt16], of format:JPEG.Common) -> [Self]
     {
@@ -504,6 +544,16 @@ extension JPEG.RGB:JPEG.Color
             }
         }
     }
+    /// static func JPEG.RGB.pack(_:as:)
+    /// :   JPEG.Color 
+    ///     Converts the given array of RGB pixels into an array of interleaved samples.
+    /// 
+    /// - pixels        : [Self]
+    ///     An array of RGB pixels.
+    /// - format        : JPEG.Common
+    ///     The color format of the interleaved output.
+    /// - ->            : [Swift.UInt16]
+    ///     A flat array of interleaved component samples.
     public static 
     func pack(_ pixels:[Self], as format:JPEG.Common) -> [UInt16]
     {
@@ -858,7 +908,6 @@ extension JPEG
     /// # [Component membership](layout-component-membership)
     /// # [File structure](layout-image-structure)
     
-    // note: `self.format.components` is a subset of `self.components.keys`
     // note: all components referenced by the scan headers in `self.scans`
     // must be recognized components.
     public 
@@ -980,7 +1029,32 @@ extension JPEG.Layout
             ($0, -1)
         })
     }
-    
+    /// init JPEG.Layout.init(format:process:components:scans:)
+    ///     Creates an image layout given image parameters and a scan decomposition.
+    /// 
+    ///     If the image coding process is a sequential process, the given scan headers 
+    ///     should be constructed using the [`(JPEG.Header.Scan).sequential(...:)`] 
+    ///     constructor. If the coding process is progressive, the scan headers 
+    ///     should be constructed with the [`(JPEG.Header.Scan).progressive(...:bits:)`], 
+    ///     [`(JPEG.Header.Scan).progressive(...:bit:)`], 
+    ///     [`(JPEG.Header.Scan).progressive(_:band:bits:)`], or
+    ///     [`(JPEG.Header.Scan).progressive(_:band:bit:)`] constructors.
+    /// 
+    ///     This initializer will validate the scan progression and attempt to 
+    ///     generate a sequence of JPEG table definitions to implement the 
+    ///     quantization table relationships specified by the `components` parameter. 
+    ///     It will suffer a precondition failure if the scan progression is invalid, or 
+    ///     if it is impossible to implement the specified table relationships with 
+    ///     the number of table selectors available for the given coding process.
+    /// - format    : Format
+    ///     The color format of the image.
+    /// - process   : JPEG.Process 
+    ///     The coding process used by the image.
+    /// - components: [JPEG.Component.Key: (factor:(x:Swift.Int, y:Swift.Int), qi:JPEG.Table.Quantization.Key)]
+    ///     The sampling factors and quantization table key for each component in the image.
+    /// - scans     : [JPEG.Header.Scan]
+    ///     The scan progression of the image. All referenced image components 
+    ///     must be recognized components.
     public 
     init(format:Format, 
         process:JPEG.Process, 
@@ -1250,6 +1324,10 @@ extension JPEG.Header.Scan
     // it is possible for users to construct a process-inconsistent scan header 
     // using these apis, but this is also possible with the validating constructor, 
     // by simply passing a fake value for `process`
+    
+    /// static func JPEG.Header.Scan.sequential(_:)
+    /// - components:[(ci:JPEG.Component.Key, dc:JPEG.Table.HuffmanDC.Selector, ac:JPEG.Table.HuffmanAC.Selector)]
+    /// - ->        :Self 
     public static 
     func sequential(_ components:
         [(
@@ -1261,7 +1339,9 @@ extension JPEG.Header.Scan
         .init(band: 0 ..< 64, bits: 0 ..< .max, 
             components: components.map{ .init(ci: $0.ci, selector: ($0.dc, $0.ac))})
     }
-    
+    /// static func JPEG.Header.Scan.sequential(...:)
+    /// - components:(ci:JPEG.Component.Key, dc:JPEG.Table.HuffmanDC.Selector, ac:JPEG.Table.HuffmanAC.Selector)
+    /// - ->        :Self 
     public static 
     func sequential(_ components:
         (
@@ -1272,7 +1352,10 @@ extension JPEG.Header.Scan
     {
         .sequential(components)
     }
-    
+    /// static func JPEG.Header.Scan.progressive(_:bits:)
+    /// - components:[(ci:JPEG.Component.Key, dc:JPEG.Table.HuffmanDC.Selector)]
+    /// - bits      :Swift.PartialRangeFrom<Swift.Int>
+    /// - ->        :Self 
     public static 
     func progressive(_ 
         components:[(ci:JPEG.Component.Key, dc:JPEG.Table.HuffmanDC.Selector)], 
@@ -1281,6 +1364,10 @@ extension JPEG.Header.Scan
         .init(band: 0 ..< 1, bits: bits.lowerBound ..< .max, 
             components: components.map{ .init(ci: $0.ci, selector: ($0.dc, \.0))})
     }
+    /// static func JPEG.Header.Scan.progressive(...:bits:)
+    /// - components:(ci:JPEG.Component.Key, dc:JPEG.Table.HuffmanDC.Selector)
+    /// - bits      :Swift.PartialRangeFrom<Swift.Int>
+    /// - ->        :Self 
     public static 
     func progressive(_ 
         components:(ci:JPEG.Component.Key, dc:JPEG.Table.HuffmanDC.Selector)..., 
@@ -1288,7 +1375,10 @@ extension JPEG.Header.Scan
     {
         .progressive(components, bits: bits)
     }
-    
+    /// static func JPEG.Header.Scan.progressive(_:bit:)
+    /// - components:[JPEG.Component.Key]
+    /// - bit       :Swift.Int
+    /// - ->        :Self 
     public static 
     func progressive(_ 
         components:[JPEG.Component.Key], 
@@ -1297,6 +1387,10 @@ extension JPEG.Header.Scan
         .init(band: 0 ..< 1, bits: bit ..< bit + 1, 
             components: components.map{ .init(ci: $0, selector: (\.0, \.0))})
     }
+    /// static func JPEG.Header.Scan.progressive(...:bit:)
+    /// - components:JPEG.Component.Key
+    /// - bit       :Swift.Int
+    /// - ->        :Self 
     public static 
     func progressive(_ 
         components:JPEG.Component.Key..., 
@@ -1304,7 +1398,11 @@ extension JPEG.Header.Scan
     {
         .progressive(components, bit: bit)
     }
-    
+    /// static func JPEG.Header.Scan.progressive(_:band:bits:)
+    /// - component :(ci:JPEG.Component.Key, ac:JPEG.Table.HuffmanAC.Selector)
+    /// - band      :Swift.Range<Swift.Int>
+    /// - bits      :Swift.PartialRangeFrom<Swift.Int>
+    /// - ->        :Self 
     public static 
     func progressive(_ 
         component:(ci:JPEG.Component.Key, ac:JPEG.Table.HuffmanAC.Selector), 
@@ -1313,7 +1411,11 @@ extension JPEG.Header.Scan
         .init(band: band, bits: bits.lowerBound ..< .max, 
             components: [.init(ci: component.ci, selector: (\.0, component.ac))])
     }
-    
+    /// static func JPEG.Header.Scan.progressive(_:band:bit:)
+    /// - component :(ci:JPEG.Component.Key, ac:JPEG.Table.HuffmanAC.Selector)
+    /// - band      :Swift.Range<Swift.Int>
+    /// - bit       :Swift.Int
+    /// - ->        :Self 
     public static 
     func progressive(_ 
         component:(ci:JPEG.Component.Key, ac:JPEG.Table.HuffmanAC.Selector), 

@@ -269,6 +269,11 @@ enum Token
         static 
         let token:String = "->"
     } 
+    struct Ellipsis:Parseable.Terminal
+    {
+        static 
+        let token:String = "..."
+    } 
     
     struct Throws:Parseable.Terminal
     {
@@ -504,7 +509,7 @@ enum Symbol
         }
     }
     
-    // FunctionField       ::= <FunctionKeyword> <Whitespace> <Identifiers> <TypeParameters> ? '?' ? '(' <FunctionLabels> ')' <Endline>
+    // FunctionField       ::= <FunctionKeyword> <Whitespace> <Identifiers> <TypeParameters> ? '?' ? '(' ( <FunctionLabel> ':' ) * ')' <Endline>
     //                       | 'case' <Whitespace> <Identifiers> <Endline>
     // FunctionKeyword     ::= 'init'
     //                       | 'func'
@@ -512,7 +517,8 @@ enum Symbol
     //                       | 'static' <Whitespace> 'func'
     //                       | 'case' 
     //                       | 'indirect' <Whitespace> 'case' 
-    // FunctionLabels      ::= ( <Identifier> ':' ) * 
+    // FunctionLabel       ::= <Identifier> 
+    //                       | <Identifier> ? '...'
     // Identifiers         ::= <Identifier> ( '.' <Identifier> ) *
     // TypeParameters      ::= '<' <Whitespace> ? <Identifier> <Whitespace> ? ( ',' <Whitespace> ? <Identifier> <Whitespace> ? ) * '>'
     struct FunctionField:Parseable, CustomStringConvertible
@@ -523,7 +529,7 @@ enum Symbol
             let identifiers:[String]
             let generics:[String] 
             let failable:Bool
-            let labels:[String]
+            let labels:[(name:String, variadic:Bool)]
             
             static 
             func parse(_ tokens:[Character], position:inout Int) throws -> Self
@@ -534,14 +540,14 @@ enum Symbol
                     generics:Symbol.TypeParameters?         =     .parse(tokens, position: &position),
                     failable:Token.Question?                =     .parse(tokens, position: &position),
                     _:Token.Parenthesis.Left                = try .parse(tokens, position: &position),
-                    labels:Symbol.FunctionLabels            = try .parse(tokens, position: &position),
+                    labels:[List<Symbol.FunctionLabel, Token.Colon>] = .parse(tokens, position: &position),
                     _:Token.Parenthesis.Right               = try .parse(tokens, position: &position),
                     _:Symbol.Endline                        = try .parse(tokens, position: &position)
                 return .init(keyword: keyword, 
                     identifiers:    identifiers.identifiers, 
                     generics:       generics?.identifiers ?? [], 
                     failable:       failable != nil, 
-                    labels:         labels.identifiers)
+                    labels:         labels.map{ ($0.head.string, $0.head.variadic) })
             }
         }
         struct FunctionFieldUninhabitedCase:Parseable
@@ -563,7 +569,7 @@ enum Symbol
         let identifiers:[String]
         let generics:[String] 
         let failable:Bool
-        let labels:[String]
+        let labels:[(name:String, variadic:Bool)]
             
         static 
         func parse(_ tokens:[Character], position:inout Int) throws -> Self
@@ -670,20 +676,33 @@ enum Symbol
             }
         }
     }
-    struct FunctionLabels:Parseable, CustomStringConvertible
+    struct FunctionLabel:Parseable, CustomStringConvertible
     {
-        let identifiers:[String]
-            
+        let string:String, 
+            variadic:Bool 
+        
         static 
         func parse(_ tokens:[Character], position:inout Int) throws -> Self
         {
-            let identifiers:[List<Symbol.Identifier, Token.Colon>] = .parse(tokens, position: &position)
-            return .init(identifiers: identifiers.map(\.head.string))
+            if      let variadic:List<Symbol.Identifier?, Token.Ellipsis> = 
+                .parse(tokens, position: &position)
+            {
+                return .init(string: variadic.head?.string ?? "_", variadic: true)
+            }
+            else if let singular:Symbol.Identifier = 
+                .parse(tokens, position: &position)
+            {
+                return .init(string: singular.string, variadic: false)
+            }
+            else 
+            {
+                throw ParsingError.unexpected(tokens, position, expected: Self.self)
+            }
         }
         
         var description:String 
         {
-            "\(self.identifiers)"
+            "\(self.variadic && self.string == "_" ? "" : self.string)\(self.variadic ? "..." : ""):"
         }
     }
     struct Identifiers:Parseable, CustomStringConvertible
@@ -726,7 +745,7 @@ enum Symbol
         }
     }
     
-    // SubscriptField      ::= 'subscript' <Whitespace> <Identifiers> '[' <FunctionLabels> ']' <Endline> 
+    // SubscriptField      ::= 'subscript' <Whitespace> <Identifiers> '[' ( <Identifier> ':' ) * ']' <Endline> 
     struct SubscriptField:Parseable, CustomStringConvertible
     {
         struct Subscript:Parseable.Terminal 
@@ -745,10 +764,10 @@ enum Symbol
                 _:Symbol.Whitespace             = try .parse(tokens, position: &position),
                 identifiers:Symbol.Identifiers  = try .parse(tokens, position: &position),
                 _:Token.Bracket.Left            = try .parse(tokens, position: &position),
-                labels:Symbol.FunctionLabels    = try .parse(tokens, position: &position),
+                labels:[List<Symbol.Identifier, Token.Colon>] = .parse(tokens, position: &position),
                 _:Token.Bracket.Right           = try .parse(tokens, position: &position),
                 _:Symbol.Endline                = try .parse(tokens, position: &position)
-            return .init(identifiers: identifiers.identifiers, labels: labels.identifiers)
+            return .init(identifiers: identifiers.identifiers, labels: labels.map(\.head.string))
         }
         
         var description:String 
@@ -1838,6 +1857,7 @@ enum Symbol
 
 func main(_ paths:[String]) throws
 {
+    var doccomments:[[Character]] = [] 
     for path:String in paths 
     {
         guard let contents:String = File.source(path: path) 
@@ -1846,8 +1866,7 @@ func main(_ paths:[String]) throws
             continue 
         }
         
-        var doccomments:[[Character]] = [], 
-            doccomment:[Character]    = []
+        var doccomment:[Character] = []
         for line in contents.split(separator: "\n")
         {
             let line:[Character] = .init(line.drop{ $0.isWhitespace && !$0.isNewline })
@@ -1874,47 +1893,46 @@ func main(_ paths:[String]) throws
         {
             doccomments.append(doccomment)
         }
-        
-        
-        var pages:[(page:Page.Binding, path:[String])] = []
-        for (i, doccomment):(Int, [Character]) in doccomments.enumerated()
+    }
+    
+    var pages:[(page:Page.Binding, path:[String])] = []
+    for (i, doccomment):(Int, [Character]) in doccomments.enumerated()
+    {
+        let fields:[Symbol.Field] = [Symbol.Field].parse(doccomment) 
+        switch fields.first 
         {
-            let fields:[Symbol.Field] = [Symbol.Field].parse(doccomment) 
-            switch fields.first 
-            {
-            case .function(let header)?:
-                pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i))
-            case .member(let header)?:
-                pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i))
-            case .type(let header)?:
-                pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i))
-            case .associatedtype(let header)?:
-                pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i))
-            default:
-                break 
-            }
+        case .function(let header)?:
+            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i))
+        case .member(let header)?:
+            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i))
+        case .type(let header)?:
+            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i))
+        case .associatedtype(let header)?:
+            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i))
+        default:
+            break 
         }
-        
-        let tree:PageTree = .assemble(pages)
-        print(tree)
-        
-        tree.crosslink()
-        tree.attachTopics()
-        for (page, _):(Page.Binding, [String]) in pages
-        {
-            let document:String = 
-            """
-            <head>
-                <meta charset="UTF-8">
-                <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Questrial&display=swap" rel="stylesheet"> 
-                <link href="style.css" rel="stylesheet"> 
-            </head> 
-            <body>
-                \(page.page.html.string)
-            </body>
-            """
-            File.save(.init(document.utf8), path: "documentation/\(page.url)")
-        }
+    }
+    
+    let tree:PageTree = .assemble(pages)
+    print(tree)
+    
+    tree.crosslink()
+    tree.attachTopics()
+    for (page, _):(Page.Binding, [String]) in pages
+    {
+        let document:String = 
+        """
+        <head>
+            <meta charset="UTF-8">
+            <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Questrial&display=swap" rel="stylesheet"> 
+            <link href="style.css" rel="stylesheet"> 
+        </head> 
+        <body>
+            \(page.page.html.string)
+        </body>
+        """
+        File.save(.init(document.utf8), path: "documentation/\(page.url)")
     }
 }
 
