@@ -1896,7 +1896,7 @@ func main(_ paths:[String]) throws
     }
     
     let directory:[String] = ["docs"]
-    let prefix:String = "https://kelvin13.github.io/jpeg/\(directory.joined(separator: "/"))/"
+    let prefix:String = "https://kelvin13.github.io/jpeg/"
     
     var pages:[Page.Binding] = []
     for (i, doccomment):(Int, [Character]) in doccomments.enumerated()
@@ -1930,7 +1930,7 @@ func main(_ paths:[String]) throws
         <head>
             <meta charset="UTF-8">
             <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Questrial&display=swap" rel="stylesheet"> 
-            <link href="\(prefix)/style.css" rel="stylesheet"> 
+            <link href="\(prefix)style.css" rel="stylesheet"> 
         </head> 
         <body>
             \(page.page.html.string)
