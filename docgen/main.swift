@@ -1895,20 +1895,23 @@ func main(_ paths:[String]) throws
         }
     }
     
-    var pages:[(page:Page.Binding, path:[String])] = []
+    let directory:[String] = ["docs"]
+    let prefix:String = "https://kelvin13.github.io/jpeg/\(directory.joined(separator: "/"))/"
+    
+    var pages:[Page.Binding] = []
     for (i, doccomment):(Int, [Character]) in doccomments.enumerated()
     {
         let fields:[Symbol.Field] = [Symbol.Field].parse(doccomment) 
         switch fields.first 
         {
         case .function(let header)?:
-            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i))
+            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i, prefix: prefix))
         case .member(let header)?:
-            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i))
+            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i, prefix: prefix))
         case .type(let header)?:
-            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i))
+            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i, prefix: prefix))
         case .associatedtype(let header)?:
-            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i))
+            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i, prefix: prefix))
         default:
             break 
         }
@@ -1919,20 +1922,22 @@ func main(_ paths:[String]) throws
     
     tree.crosslink()
     tree.attachTopics()
-    for (page, _):(Page.Binding, [String]) in pages
+    
+    for page:Page.Binding in pages
     {
         let document:String = 
         """
         <head>
             <meta charset="UTF-8">
             <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Questrial&display=swap" rel="stylesheet"> 
-            <link href="style.css" rel="stylesheet"> 
+            <link href="\(prefix)/style.css" rel="stylesheet"> 
         </head> 
         <body>
             \(page.page.html.string)
         </body>
         """
-        File.save(.init(document.utf8), path: "documentation/\(page.url)")
+        File.pave(directory + page.path)
+        File.save(.init(document.utf8), path: "\(directory.joined(separator: "/"))/\(page.filepath)/index.html")
     }
 }
 

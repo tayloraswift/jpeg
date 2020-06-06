@@ -904,7 +904,8 @@ extension JPEG
     ///     color format will never accept any component declaration in a frame 
     ///     header that it does not also recognize. When encoding images to JPEG 
     ///     files, all declared resident components must also be recognized components.
-    /// # [Image format](layout-image-format)
+    /// # [Creating a layout](layout-creation)
+    /// # [Image modes](layout-image-format)
     /// # [Component membership](layout-component-membership)
     /// # [File structure](layout-image-structure)
     
@@ -1055,6 +1056,7 @@ extension JPEG.Layout
     /// - scans     : [JPEG.Header.Scan]
     ///     The scan progression of the image. All referenced image components 
     ///     must be recognized components.
+    /// ## (layout-creation)
     public 
     init(format:Format, 
         process:JPEG.Process, 
@@ -1326,8 +1328,16 @@ extension JPEG.Header.Scan
     // by simply passing a fake value for `process`
     
     /// static func JPEG.Header.Scan.sequential(_:)
+    ///     Creates a sequential scan descriptor.
+    /// 
+    ///     This constructor bypasses normal scan header validation checks.
     /// - components:[(ci:JPEG.Component.Key, dc:JPEG.Table.HuffmanDC.Selector, ac:JPEG.Table.HuffmanAC.Selector)]
+    ///     The components encoded by this scan, and associated DC and AC huffman 
+    ///     table selectors. For each type of huffman table, components with the 
+    ///     same table selector will share the same huffman table. Huffman tables 
+    ///     will not persist in between different scans.
     /// - ->        :Self 
+    ///     An unvalidated sequential scan header.
     public static 
     func sequential(_ components:
         [(
@@ -1340,6 +1350,9 @@ extension JPEG.Header.Scan
             components: components.map{ .init(ci: $0.ci, selector: ($0.dc, $0.ac))})
     }
     /// static func JPEG.Header.Scan.sequential(...:)
+    ///     Creates a sequential scan descriptor. 
+    ///     
+    ///     This function is variadic sugar for [`(Scan).sequential(_:)`].
     /// - components:(ci:JPEG.Component.Key, dc:JPEG.Table.HuffmanDC.Selector, ac:JPEG.Table.HuffmanAC.Selector)
     /// - ->        :Self 
     public static 

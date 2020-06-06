@@ -95,4 +95,15 @@ enum File
         
         fclose(descriptor)
     }
+    
+    // creates directories 
+    static 
+    func pave(_ directories:[String]) 
+    {
+        // scan directory paths 
+        for path:String in ((1 ... directories.count).map{ directories.prefix($0).joined(separator: "/") })
+        {
+            mkdir("\(path)/", 0o0755)
+        }
+    }
 }

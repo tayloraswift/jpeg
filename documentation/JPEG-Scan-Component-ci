@@ -1,8 +1,0 @@
-<head>
-    <meta charset="UTF-8">
-    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Questrial&display=swap" rel="stylesheet"> 
-    <link href="style.css" rel="stylesheet"> 
-</head> 
-<body>
-    <main ><nav ><div class="navigation-container"><ul ><li ><a href="JPEG">JPEG</a></li><li ><a href="JPEG-Scan">Scan</a></li><li ><a href="JPEG-Scan-Component">Component</a></li><li ><span >ci</span></li></ul></div></nav><section class="introduction"><div class="section-container"><div class="eyebrow">Instance Property</div><h1 class="topic-heading">ci</h1><p class="topic-blurb">The key specifying the image component referenced by this descriptor. </p></div></section><section class="discussion"><div class="section-container"><h2 >Declaration</h2><div class="declaration-container"><code class="declaration"><span class="syntax-group"><span class="syntax-keyword">let</span> </span><span class="syntax-group"><span class="syntax-identifier">ci</span><span class="syntax-punctuation">:</span><a href="JPEG" class="syntax-type">JPEG</a><span class="syntax-punctuation">.</span><a href="JPEG-Component" class="syntax-type">Component</a><span class="syntax-punctuation">.</span><a class="syntax-type" href="JPEG-Component-Key">Key</a> </span></code></div></div></section></main>
-</body>

@@ -279,15 +279,57 @@ class Page
             }
         }
         
-        let url:String
+        let prefix:String
+        let path:[String]
+        let page:Page 
         let locals:Set<String>, 
             keys:Set<Key>
-        let page:Page 
         
-        static 
-        func url(_ identifiers:[String]) -> String 
+        var url:String 
         {
-            identifiers.joined(separator: "-")
+            "\(self.prefix)\(self.path.map(Self.escape(url:)).joined(separator: "/"))"
+        }
+        var filepath:String 
+        {
+            "\(self.path.joined(separator: "/"))"
+        }
+        
+        init(_ page:Page, locals:Set<String>, keys:Set<Key>, prefix:String) 
+        {
+            self.prefix = prefix
+            self.path   = page.breadcrumbs.map(\.text) + [page.breadcrumb] 
+            self.page   = page 
+            self.locals = locals 
+            self.keys   = keys 
+        }
+        
+        private static 
+        func hex(_ value:UInt8) -> UInt8
+        {
+            if value < 10 
+            {
+                return 0x30 + value 
+            }
+            else 
+            {
+                return 0x37 + value 
+            }
+        }
+        private static 
+        func escape(url:String) -> String 
+        {
+            .init(decoding: url.utf8.flatMap 
+            {
+                (byte:UInt8) -> [UInt8] in 
+                switch byte 
+                {
+                ///  [0-9]          [A-Z]        [a-z]            '-'   '_'   '~'
+                case 0x30 ... 0x39, 0x41 ... 0x5a, 0x61 ... 0x7a, 0x2d, 0x5f, 0x7e:
+                    return [byte] 
+                default:
+                    return [0x25, hex(byte >> 4), hex(byte & 0x0f)]
+                }
+            }, as: Unicode.ASCII.self)
         }
     }
     
@@ -295,7 +337,7 @@ class Page
     typealias Topic         = (topic:String, key:String, symbols:[TopicSymbol])
     
     let label:Label 
-    let name:String 
+    let name:String //name is not always last component of path 
     let signature:[Signature.Token]
     var declaration:[Declaration.Token] 
     var blurb:[Markdown.Element]
@@ -378,16 +420,7 @@ class Page
         {
             ($0.component.0, $0.link)
         }
-        switch label 
-        {
-        case    .enumerationCase, .initializer, .genericInitializer, 
-                .staticMethod, .genericStaticMethod, 
-                .instanceMethod, .genericInstanceMethod, .
-                subscript:
-            self.breadcrumb     = name
-        default:
-            self.breadcrumb     = path[path.endIndex - 1]
-        }
+        self.breadcrumb     = path[path.endIndex - 1]
     }
 }
 extension Page 
@@ -841,8 +874,8 @@ extension Page
 extension Page.Binding 
 {
     static 
-    func create(_ header:Symbol.SubscriptField, fields:ArraySlice<Symbol.Field>, order:Int) 
-        -> (page:Self, path:[String]) 
+    func create(_ header:Symbol.SubscriptField, fields:ArraySlice<Symbol.Field>, order:Int, prefix:String) 
+        -> Self
     {
         let fields:Page.Fields = .init(fields, order: order)
         if !fields.wheres.isEmpty 
@@ -861,19 +894,16 @@ extension Page.Binding
             labels: header.labels.map{ ($0, false) }, delimiters: ("[", "]"), 
             signature: &signature, declaration: &declaration)
         
-        let path:[String] = header.identifiers + ["subscript"]
         let page:Page = .init(label: .subscript, name: name, 
             signature:      signature, 
             declaration:    declaration, 
             fields:         fields, 
-            path:           path)
-        let binding:Page.Binding    = .init(url: Self.url(path + mangled), 
-            locals: [], keys: fields.keys, page: page)
-        return (page: binding, path: path)
+            path:           header.identifiers + [name])
+        return .init(page, locals: [], keys: fields.keys, prefix: prefix)
     }
     static 
-    func create(_ header:Symbol.FunctionField, fields:ArraySlice<Symbol.Field>, order:Int) 
-        -> (page:Self, path:[String]) 
+    func create(_ header:Symbol.FunctionField, fields:ArraySlice<Symbol.Field>, order:Int, prefix:String) 
+        -> Self 
     {
         let fields:Page.Fields = .init(fields, order: order)
         if !fields.wheres.isEmpty 
@@ -973,15 +1003,13 @@ extension Page.Binding
             signature:      signature, 
             declaration:    declaration, 
             fields:         fields, 
-            path:           header.identifiers)
-        let binding:Page.Binding    = .init(url: Self.url(header.identifiers + mangled), 
-            locals: [], keys: fields.keys, page: page)
-        return (page: binding, path: header.identifiers.dropLast() + [name])
+            path:           header.identifiers.dropLast() + [name])
+        return .init(page, locals: [], keys: fields.keys, prefix: prefix)
     }
     
     static 
-    func create(_ header:Symbol.MemberField, fields:ArraySlice<Symbol.Field>, order:Int) 
-        -> (page:Self, path:[String]) 
+    func create(_ header:Symbol.MemberField, fields:ArraySlice<Symbol.Field>, order:Int, prefix:String) 
+        -> Self
     {
         let fields:Page.Fields = .init(fields, order: order)
         if !fields.wheres.isEmpty 
@@ -1055,19 +1083,17 @@ extension Page.Binding
             declaration.append(.punctuation("}"))
         }
         
-        let page:Page = .init(label: label, name: name, 
+        let page:Page       = .init(label: label, name: name, 
             signature:      signature, 
             declaration:    declaration, 
             fields:         fields, 
             path:           header.identifiers)
-        let binding:Page.Binding = .init(url: Self.url(header.identifiers), 
-            locals: [], keys: fields.keys, page: page)
-        return (page: binding, path: header.identifiers)
+        return .init(page, locals: [], keys: fields.keys, prefix: prefix)
     }
     
     static 
-    func create(_ header:Symbol.TypeField, fields:ArraySlice<Symbol.Field>, order:Int) 
-        -> (page:Self, path:[String]) 
+    func create(_ header:Symbol.TypeField, fields:ArraySlice<Symbol.Field>, order:Int, prefix:String) 
+        -> Self
     {
         let fields:Page.Fields = .init(fields, order: order)
         if !fields.parameters.isEmpty || fields.return != nil
@@ -1181,14 +1207,12 @@ extension Page.Binding
             fields:         fields, 
             path:           header.identifiers)
         let locals:Set<String>      = .init(header.generics + ["Self"])
-        let binding:Page.Binding    = .init(url: Self.url(header.identifiers), 
-            locals: locals, keys: fields.keys, page: page)
-        return (page: binding, path: header.identifiers)
+        return .init(page, locals: locals, keys: fields.keys, prefix: prefix)
     }
     
     static 
-    func create(_ header:Symbol.AssociatedtypeField, fields:ArraySlice<Symbol.Field>, order:Int) 
-        -> (page:Self, path:[String]) 
+    func create(_ header:Symbol.AssociatedtypeField, fields:ArraySlice<Symbol.Field>, order:Int, prefix:String) 
+        -> Self
     {
         let fields:Page.Fields = .init(fields, order: order)
         if !fields.attributes.isEmpty 
@@ -1234,9 +1258,7 @@ extension Page.Binding
             declaration:    declaration, 
             fields:         fields, 
             path:           header.identifiers)
-        let binding:Page.Binding    = .init(url: Self.url(header.identifiers), 
-            locals: [], keys: fields.keys, page: page)
-        return (page: binding, path: header.identifiers)
+        return .init(page, locals: [], keys: fields.keys, prefix: prefix)
     }
 }
 
@@ -1250,13 +1272,13 @@ struct PageTree
     let empty:Self = .init(pages: [], children: [:], anchors: [:])
     
     static 
-    func assemble(_ pages:[(page:Page.Binding, path:[String])]) -> Self 
+    func assemble(_ pages:[Page.Binding]) -> Self 
     {
         var root:Self = .empty
         var anchors:[String: [(rank:(Int, Int), symbol:Page.TopicSymbol)]] = [:]
-        for (order, (page, path)):(Int, (Page.Binding, [String])) in pages.enumerated()
+        for (order, page):(Int, Page.Binding) in pages.enumerated()
         {
-            root.insert(page, at: path[...], absolute: path)
+            root.insert(page, at: page.path[...], absolute: page.path)
             let symbol:Page.TopicSymbol = 
             (
                 page.page.signature, 
@@ -1310,7 +1332,7 @@ struct PageTree
     static 
     func resolve(_ path:ArraySlice<String>, in scopes:[Self]) -> Page.Binding?
     {
-        let debugPath:String = path.joined(separator: ".")
+        let debugPath:String = path.joined(separator: "/")
         higher:
         for scope:Self in scopes.reversed() 
         {

@@ -1,8 +1,0 @@
-<head>
-    <meta charset="UTF-8">
-    <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Questrial&display=swap" rel="stylesheet"> 
-    <link href="style.css" rel="stylesheet"> 
-</head> 
-<body>
-    <main ><nav ><div class="navigation-container"><ul ><li ><a href="JPEG">JPEG</a></li><li ><span >Header</span></li></ul></div></nav><section class="introduction"><div class="section-container"><div class="eyebrow">Enumeration</div><h1 class="topic-heading">JPEG.Header</h1><p class="topic-blurb">No overview available</p></div></section><section class="discussion"><div class="section-container"><h2 >Declaration</h2><div class="declaration-container"><code class="declaration"><span class="syntax-group"><span class="syntax-keyword">enum</span> </span><span class="syntax-group"><span class="syntax-identifier">Header</span> </span></code></div></div></section><section class="topics"><div class="section-container"><h2 >Topics</h2><div class="topic"><div class="topic-container-right"><h3 >Structures</h3></div><div class="topic-container-left"><div class="topic-container-symbol"><code class="signature"><a href="JPEG-Header-Scan"><span class="signature-group"><span class="signature-text">struct</span> </span><span class="signature-group"><span class="signature-highlight">JPEG</span><span class="signature-punctuation">.</span><span class="signature-highlight">Header</span><span class="signature-punctuation">.</span><span class="signature-highlight">Scan</span> </span></a></code></div></div></div></div></section></main>
-</body>
