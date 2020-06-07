@@ -99,6 +99,8 @@ extension Page.Label
             text = "Generic Class"
         case .protocol:
             text = "Protocol"
+        case .typealias:
+            text = "Typealias"
         case .enumerationCase:
             text = "Enumeration Case"
         case .initializer:

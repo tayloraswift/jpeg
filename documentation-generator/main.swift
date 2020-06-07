@@ -1899,17 +1899,22 @@ func main(sources:[String], directory:String, urlpattern:(prefix:String, suffix:
     var pages:[Page.Binding] = []
     for (i, doccomment):(Int, [Character]) in doccomments.enumerated()
     {
-        let fields:[Symbol.Field] = [Symbol.Field].parse(doccomment) 
+        let fields:[Symbol.Field]           = [Symbol.Field].parse(doccomment) 
+        let body:ArraySlice<Symbol.Field>   = fields.dropFirst()
         switch fields.first 
         {
+        case .subscript(let header)?:
+            pages.append(Page.Binding.create(header, fields: body, order: i, urlpattern: urlpattern))
         case .function(let header)?:
-            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i, urlpattern: urlpattern))
+            pages.append(Page.Binding.create(header, fields: body, order: i, urlpattern: urlpattern))
         case .member(let header)?:
-            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i, urlpattern: urlpattern))
+            pages.append(Page.Binding.create(header, fields: body, order: i, urlpattern: urlpattern))
         case .type(let header)?:
-            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i, urlpattern: urlpattern))
+            pages.append(Page.Binding.create(header, fields: body, order: i, urlpattern: urlpattern))
+        case .typealias(let header)?:
+            pages.append(Page.Binding.create(header, fields: body, order: i, urlpattern: urlpattern))
         case .associatedtype(let header)?:
-            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i, urlpattern: urlpattern))
+            pages.append(Page.Binding.create(header, fields: body, order: i, urlpattern: urlpattern))
         default:
             break 
         }

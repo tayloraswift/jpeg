@@ -498,15 +498,26 @@ extension JPEG.Data.Spectral
 }
 extension JPEG.Layout 
 {
+    // note: all components referenced by the scan headers in `self.scans`
+    // must be recognized components.
     public 
     var scans:[JPEG.Header.Scan] 
     {
-        self.definitions.flatMap
+        let recognized:Set<JPEG.Component.Key> = .init(self.recognized)
+        return self.definitions.flatMap
         {
-            $0.scans.map 
+            $0.scans.compactMap 
             {
-                .init(band: $0.band, bits: $0.bits, 
-                    components: $0.components.map(\.component))
+                let components:[JPEG.Scan.Component] = $0.components.compactMap 
+                { 
+                    recognized.contains($0.component.ci) ? $0.component : nil 
+                }
+                guard !components.isEmpty 
+                else 
+                {
+                    return nil 
+                }
+                return .init(band: $0.band, bits: $0.bits, components: components)
             }
         }
     }

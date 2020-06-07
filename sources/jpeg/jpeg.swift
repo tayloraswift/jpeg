@@ -781,6 +781,215 @@ extension JPEG
     }
 }
 
+/// protocol JPEG.AnyTable
+///     Functionality common to all JPEG table types.
+public 
+protocol _JPEGAnyTable 
+{
+    /// associatedtype JPEG.AnyTable.Delegate 
+    ///     A type representing a table instance while it is bound to a table slot.
+    associatedtype Delegate 
+    /// typealias JPEG.AnyTable.Slots = (Delegate?, Delegate?, Delegate?, Delegate?)
+    ///     Four table slots. 
+    /// 
+    ///     JPEG images are always limited to four table slots for each table type. 
+    ///     Some coding processes may limit further the number of available table slots.
+    typealias Slots     = (Delegate?, Delegate?, Delegate?, Delegate?)
+    /// typealias JPEG.AnyTable.Selector = Swift.WritableKeyPath<Slots, Delegate?>
+    ///     A table selector.
+    typealias Selector  = WritableKeyPath<Slots, Delegate?>
+}
+extension JPEG 
+{
+    /// enum JPEG.Header 
+    ///     A namespace for partially-validated JPEG data structures. 
+    /// 
+    ///     In general, the fields in these types can be assumed to be valid with 
+    ///     respect to the other fields in the structure, but not necessarily with 
+    ///     respect to the JPEG file as a whole.
+    public 
+    enum Header 
+    {
+        /// struct JPEG.Header.HeightRedefinition 
+        ///     A height redefinition header. 
+        /// 
+        ///     This structure is the parsed form of a [`(JPEG.Marker).height`] 
+        ///     marker segment. 
+        public 
+        struct HeightRedefinition 
+        {
+            /// let JPEG.Header.HeightRedefinition.height   : Swift.Int 
+            ///     The visible image height, in pixels. 
+            /// 
+            ///     This value is always positive.
+            public 
+            let height:Int 
+            /// init JPEG.Header.HeightRedefinition.init(height:)
+            ///     Creates a height redefinition header.
+            /// - height    : Swift.Int 
+            ///     The visible image height, in pixels. Passing a negative value 
+            ///     will result in a precondition failure.
+            public 
+            init(height:Int)
+            {
+                precondition(height > 0, "height must be positive")
+                self.height = height
+            }
+        }
+        /// struct JPEG.Header.RestartInterval 
+        ///     A restart interval definition header. 
+        /// 
+        ///     This structure is the parsed form of an [`(JPEG.Marker).interval`] 
+        ///     marker segment. It can modify or clear the restart interval of an 
+        ///     image.
+        public 
+        struct RestartInterval 
+        {
+            /// let JPEG.Header.RestartInterval.interval    : Swift.Int?
+            ///     The restart interval, in minimum-coded units, or `nil` if the 
+            ///     header is meant to disable restart markers.
+            /// 
+            ///     This value is always positive or `nil`.
+            public 
+            let interval:Int? 
+            /// init JPEG.Header.RestartInterval.init(interval:)
+            ///     Creates a restart interval definition header. 
+            /// - interval    : Swift.Int? 
+            ///     The restart interval, in minimum-coded units, or `nil` to 
+            ///     disable restart markers. Passing a negative or zero value 
+            ///     will result in a precondition failure.
+            public 
+            init(interval:Int?)
+            {
+                precondition(interval.map{ $0 > 0 } ?? true, "interval must be positive or `nil`")
+                self.interval = interval
+            }
+        }
+        /// struct JPEG.Header.Frame 
+        ///     A frame header.
+        /// 
+        ///     This structure is the parsed form of a [`(JPEG.Marker).frame(_:)`] 
+        ///     marker segment. In non-hierarchical mode images, it defines global 
+        ///     image parameters. It contains some of the information needed to 
+        ///     fully-define an image [`(JPEG).Layout`].
+        public 
+        struct Frame 
+        {
+            /// let JPEG.Header.Frame.process   : JPEG.Process 
+            ///     The coding process used by the image. 
+            public 
+            let process:Process,
+            /// let JPEG.Header.Frame.precision : Swift.Int 
+            ///     The bit precision of this image.
+                precision:Int, 
+            /// let JPEG.Header.Frame.size      : (x:Swift.Int, y:Swift.Int)
+            ///     The visible size of this image, in pixels. 
+            ///     
+            ///     The width is always positive. The height can be either positive 
+            ///     or zero, if the height is to be defined later by a 
+            ///     [`(JPEG.Header).HeightRedefinition`] header.
+                size:(x:Int, y:Int)
+            /// let JPEG.Header.Frame.components: [JPEG.Component.Key: JPEG.Component]
+            ///     The components in this image.
+            /// 
+            ///     This dictionary will always have at least one element.
+            public 
+            let components:[Component.Key: Component]
+        }
+        /// struct JPEG.Header.Scan 
+        ///     A scan header. 
+        ///     
+        ///     This structure is the parsed form of a [`(JPEG.Marker).scan`] 
+        ///     marker segment. It defines scan-level image parameters. The library 
+        ///     validates these structures against the global image parameters to 
+        ///     create the [`JPEG.Scan`] structures elsewhere in the library API.
+        /// # [Creating sequential scans](scan-header-creation-sequential)
+        /// # [Creating progressive scans](scan-header-creation-progressive)
+        public 
+        struct Scan
+        {
+            /// let JPEG.Header.Scan.band       : Swift.Range<Swift.Int>
+            ///     The frequency band encoded by this scan. 
+            /// 
+            ///     This property specifies a range of zigzag-indexed frequency coefficients.
+            ///     It is always within the interval of 0 to 64. 
+            public 
+            let band:Range<Int>, 
+            /// let JPEG.Header.Scan.bits       : Swift.Range<Swift.Int> 
+            ///     The bit range encoded by this scan. 
+            /// 
+            ///     This range is always non-negative.
+                bits:Range<Int>, 
+            /// let JPEG.Header.Scan.components : [JPEG.Scan.Component] 
+            ///     The color components in this scan, in the order in which their 
+            ///     data units are interleaved. 
+            /// 
+            ///     This array always contains at least one element.
+                components:[JPEG.Scan.Component] 
+        }
+    }
+    
+    public 
+    typealias AnyTable = _JPEGAnyTable 
+    public 
+    enum Table 
+    {
+        public 
+        typealias HuffmanDC = Huffman<Bitstream.Symbol.DC>
+        public 
+        typealias HuffmanAC = Huffman<Bitstream.Symbol.AC>
+        public 
+        struct Huffman<Symbol>:AnyTable where Symbol:Bitstream.AnySymbol
+        {
+            public 
+            typealias Delegate = Self 
+            
+            let symbols:[[Symbol]]
+            var target:Selector
+            
+            // these are size parameters generated by the structural validator. 
+            // we store them here as proof of tree validity, so that the 
+            // constructor for the huffman Decoder type can just read it from here 
+            let size:(n:Int, z:Int)
+        }
+        
+        public 
+        struct Quantization:AnyTable
+        {
+            public 
+            struct Key:Hashable, Comparable  
+            {
+                let value:Int 
+                
+                init<I>(_ value:I) where I:BinaryInteger 
+                {
+                    self.value = .init(value)
+                }
+                
+                public static 
+                func < (lhs:Self, rhs:Self) -> Bool 
+                {
+                    lhs.value < rhs.value
+                }
+            }
+            
+            public 
+            typealias Delegate = (q:Int, qi:Table.Quantization.Key)
+            
+            public 
+            enum Precision  
+            {
+                case uint8
+                case uint16
+            }
+            
+            var storage:[UInt16], 
+                target:Selector
+            let precision:Precision
+        }
+    }
+}
+
 // layout 
 extension JPEG 
 {
@@ -829,6 +1038,10 @@ extension JPEG
     /// 
     ///     Depending on the coding process used by the image, a scan may encode 
     ///     a select frequency band, range of bits, and subset of color components.
+    /// 
+    ///     This type contains essentially the same information as [`(JPEG).Header.Scan`], 
+    ///     but has been validated against the global image parameters and has its 
+    ///     component keys pre-resolved to integer indices.
     public 
     struct Scan
     {
@@ -858,32 +1071,39 @@ extension JPEG
         }
         
         /// let JPEG.Scan.band  : Swift.Range<Swift.Int> 
-        ///     The frequency band encoded by this image scan. 
+        ///     The frequency band encoded by this scan. 
         /// 
         ///     This property specifies a range of zigzag-indexed frequency coefficients.
-        ///     It must be within the interval of 0 to 64. If the image coding [`Process`] 
-        ///     is not [`(Process).progressive(coding:differential:)`], this property must be set to `0 ..< 64`.
-        
+        ///     It is always within the interval of 0 to 64. If the image coding 
+        ///     process is not [`(Process).progressive(coding:differential:)`], 
+        ///     this value will be `0 ..< 64`.
+        public 
+        let band:Range<Int>, 
         /// let JPEG.Scan.bits  : Swift.Range<Swift.Int> 
-        ///     The bit range encoded by this image scan. 
+        ///     The bit range encoded by this scan. 
         /// 
         ///     This property specifies a range of bit indices, where bit zero is 
-        ///     the least significant bit. The upper range bound must be either 
+        ///     the least significant bit. The upper range bound is always either 
         ///     infinity ([`Swift.Int`max`]) or one greater than the lower bound.
-        ///     If the image coding [`Process`] is not [`(Process).progressive(coding:differential:)`], this property 
-        ///     must be set to `0 ..< .max`.
-        
+        ///     If the image coding process is not [`(Process).progressive(coding:differential:)`], 
+        ///     this value will be `0 ..< .max`.
+            bits:Range<Int>, 
         /// let JPEG.Scan.components    : [(c:Swift.Int, component:Component)] 
-        ///     The descriptors for the components encoded by this scan, in the 
-        ///     order in which they are interleaved within the scan. 
+        ///     The color components in this scan, in the order in which their 
+        ///     data units are interleaved. 
         /// 
         ///     The component descriptors are paired with resolved component indices 
         ///     which are equivalent to the index of the image plane storing that 
-        ///     color channel.
-        public 
-        let band:Range<Int>, 
-            bits:Range<Int>, 
+        ///     color channel. This array will always have at least one element.
             components:[(c:Int, component:Component)] 
+        // restrict access for synthesized init
+        fileprivate 
+        init(band:Range<Int>, bits:Range<Int>, components:[(c:Int, component:Component)]) 
+        {
+            self.band = band 
+            self.bits = bits 
+            self.components = components 
+        }
     }
     
     /// struct JPEG.Layout<Format> 
@@ -898,19 +1118,15 @@ extension JPEG
     ///     Such components will not recieve a plane in the [`JPEG.Data`] types, 
     ///     but will be ignored by the scan decoder without errors. 
     ///
-    ///     Non-recognized 
-    ///     components can only occur in images decoded from JPEG files, and only 
-    ///     when using a custom [`JPEG.Format`] type, as the built-in [`JPEG.Common`]
-    ///     color format will never accept any component declaration in a frame 
-    ///     header that it does not also recognize. When encoding images to JPEG 
+    ///     Non-recognized components can only occur in images decoded from JPEG files, 
+    ///     and only when using a custom [`JPEG.Format`] type, as the built-in 
+    ///     [`JPEG.Common`] color format will never accept any component declaration 
+    ///     in a frame header that it does not also recognize. When encoding images to JPEG 
     ///     files, all declared resident components must also be recognized components.
     /// # [Creating a layout](layout-creation)
     /// # [Image modes](layout-image-format)
     /// # [Component membership](layout-component-membership)
     /// # [File structure](layout-image-structure)
-    
-    // note: all components referenced by the scan headers in `self.scans`
-    // must be recognized components.
     public 
     struct Layout<Format> where Format:JPEG.Format 
     {
@@ -1346,7 +1562,8 @@ extension JPEG.Header.Scan
     ///     The components encoded by this scan, and associated DC and AC huffman 
     ///     table selectors. For each type of huffman table, components with the 
     ///     same table selector will share the same huffman table. Huffman tables 
-    ///     will not persist in between different scans.
+    ///     will not persist in between different scans. Passing an empty array 
+    ///     will result in a precondition failure.
     /// - ->        :Self 
     ///     An unvalidated sequential scan header.
     /// # [See also](scan-header-creation-sequential)
@@ -1359,7 +1576,8 @@ extension JPEG.Header.Scan
             ac:JPEG.Table.HuffmanAC.Selector
         )]) -> Self 
     {
-        .init(band: 0 ..< 64, bits: 0 ..< .max, 
+        precondition(!components.isEmpty, "components array cannot be empty")
+        return .init(band: 0 ..< 64, bits: 0 ..< .max, 
             components: components.map{ .init(ci: $0.ci, selector: ($0.dc, $0.ac))})
     }
     /// static func JPEG.Header.Scan.sequential(...:)
@@ -1393,10 +1611,11 @@ extension JPEG.Header.Scan
     ///     The components encoded by this scan, and associated DC huffman 
     ///     table selectors. Components with the same table selector will share
     ///     the same huffman table. Huffman tables will not persist in between 
-    ///     different scans.
+    ///     different scans. Passing an empty array will result in a precondition failure.
     /// - bits      :Swift.PartialRangeFrom<Swift.Int>
     ///     The range of DC bits encoded by this scan. Setting this argument to 
-    ///     `0...` disables spectral selection.
+    ///     `0...` disables spectral selection. Passing a range with a negative 
+    ///     lower bound will result in a precondition failure.
     /// - ->        :Self 
     ///     An unvalidated initial DC scan header.
     /// # [See also](scan-header-creation-progressive)
@@ -1406,7 +1625,9 @@ extension JPEG.Header.Scan
         components:[(ci:JPEG.Component.Key, dc:JPEG.Table.HuffmanDC.Selector)], 
         bits:PartialRangeFrom<Int>) -> Self 
     {
-        .init(band: 0 ..< 1, bits: bits.lowerBound ..< .max, 
+        precondition(!components.isEmpty,  "components array cannot be empty")
+        precondition(bits.lowerBound >= 0, "lower bound of bit range cannot be negative")
+        return .init(band: 0 ..< 1, bits: bits.lowerBound ..< .max, 
             components: components.map{ .init(ci: $0.ci, selector: ($0.dc, \.0))})
     }
     /// static func JPEG.Header.Scan.progressive(...:bits:)
@@ -1436,9 +1657,11 @@ extension JPEG.Header.Scan
     ///     Refining DC scans do not use entropy-coding, so no huffman table selectors 
     ///     need to be specified.
     /// - components:[JPEG.Component.Key]
-    ///     The components encoded by this scan.
+    ///     The components encoded by this scan. Passing an empty array will 
+    ///     result in a precondition failure.
     /// - bit       :Swift.Int
-    ///     The index of the bit refined by this scan. 
+    ///     The index of the bit refined by this scan. Passing a negative index
+    ///     will result in a precondition failure.
     /// - ->        :Self 
     ///     An unvalidated refining DC scan header.
     /// # [See also](scan-header-creation-progressive)
@@ -1448,7 +1671,9 @@ extension JPEG.Header.Scan
         components:[JPEG.Component.Key], 
         bit:Int) -> Self 
     {
-        .init(band: 0 ..< 1, bits: bit ..< bit + 1, 
+        precondition(!components.isEmpty, "components array cannot be empty")
+        precondition(bit >= 0,            "bit index cannot be negative")
+        return .init(band: 0 ..< 1, bits: bit ..< bit + 1, 
             components: components.map{ .init(ci: $0, selector: (\.0, \.0))})
     }
     /// static func JPEG.Header.Scan.progressive(...:bit:)
@@ -1481,10 +1706,11 @@ extension JPEG.Header.Scan
     ///     different scans.
     /// - band      :Swift.Range<Swift.Int>
     ///     The frequency band encoded by this scan, in zigzag indices. This range 
-    ///     should be within the interval `1 ..< 64`.
+    ///     will be clamped to the interval `1 ..< 64`.
     /// - bits      :Swift.PartialRangeFrom<Swift.Int>
     ///     The range of AC bits encoded by this scan. Setting this argument to 
-    ///     `0...` disables spectral selection.
+    ///     `0...` disables spectral selection. Passing a range with a negative 
+    ///     lower bound will result in a precondition failure.
     /// - ->        :Self 
     ///     An unvalidated initial AC scan header.
     /// # [See also](scan-header-creation-progressive)
@@ -1494,7 +1720,8 @@ extension JPEG.Header.Scan
         component:(ci:JPEG.Component.Key, ac:JPEG.Table.HuffmanAC.Selector), 
         band:Range<Int>, bits:PartialRangeFrom<Int>) -> Self 
     {
-        .init(band: band, bits: bits.lowerBound ..< .max, 
+        precondition(bits.lowerBound >= 0, "lower bound of bit range cannot be negative")
+        return .init(band: band.clamped(to: 1 ..< 64), bits: bits.lowerBound ..< .max, 
             components: [.init(ci: component.ci, selector: (\.0, component.ac))])
     }
     /// static func JPEG.Header.Scan.progressive(_:band:bit:)
@@ -1512,9 +1739,10 @@ extension JPEG.Header.Scan
     ///     different scans.
     /// - band      :Swift.Range<Swift.Int>
     ///     The frequency band encoded by this scan, in zigzag indices. This range 
-    ///     should be within the interval `1 ..< 64`.
+    ///     will be clamped to the interval `1 ..< 64`.
     /// - bit       :Swift.Int
-    ///     The index of the bit refined by this scan. 
+    ///     The index of the bit refined by this scan. Passing a negative index
+    ///     will result in a precondition failure.
     /// - ->        :Self 
     ///     An unvalidated refining AC scan header.
     /// # [See also](scan-header-creation-progressive)
@@ -1524,7 +1752,8 @@ extension JPEG.Header.Scan
         component:(ci:JPEG.Component.Key, ac:JPEG.Table.HuffmanAC.Selector), 
         band:Range<Int>, bit:Int) -> Self 
     {
-        .init(band: band, bits: bit ..< bit + 1, 
+        precondition(bit >= 0, "bit index cannot be negative")
+        return .init(band: band.clamped(to: 1 ..< 64), bits: bit ..< bit + 1, 
             components: [.init(ci: component.ci, selector: (\.0, component.ac))])
     }
 }

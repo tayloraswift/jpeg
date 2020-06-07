@@ -10,6 +10,7 @@ class Page
         case `class`
         case genericClass 
         case `protocol`
+        case `typealias`
         
         case enumerationCase
         case initializer
@@ -548,6 +549,7 @@ extension Page
             structures          :[TopicSymbol],
             classes             :[TopicSymbol],
             protocols           :[TopicSymbol],
+            typealiases         :[TopicSymbol],
             cases               :[TopicSymbol],
             initializers        :[TopicSymbol],
             typeMethods         :[TopicSymbol],
@@ -557,7 +559,7 @@ extension Page
             associatedtypes     :[TopicSymbol],
             subscripts          :[TopicSymbol]
         )
-        topics = ([], [], [], [], [], [], [], [], [], [], [], [])
+        topics = ([], [], [], [], [], [], [], [], [], [], [], [], [])
         for binding:Page.Binding in 
             (children.flatMap(\.pages).sorted{ $0.page.name < $1.page.name })
         {
@@ -584,6 +586,8 @@ extension Page
                 topics.classes.append(symbol)
             case .protocol:
                 topics.protocols.append(symbol)
+            case .typealias:
+                topics.typealiases.append(symbol)
             
             case .enumerationCase:
                 topics.cases.append(symbol)
@@ -618,6 +622,7 @@ extension Page
             (topic: "Structures",           symbols: topics.structures), 
             (topic: "Classes",              symbols: topics.classes), 
             (topic: "Protocols",            symbols: topics.protocols), 
+            (topic: "Typealiases",          symbols: topics.typealiases), 
         ]
             where !builtin.symbols.isEmpty
         {
@@ -1192,6 +1197,52 @@ extension Page.Binding
             path:           header.identifiers)
         let locals:Set<String>      = .init(header.generics + ["Self"])
         return .init(page, locals: locals, keys: fields.keys, urlpattern: urlpattern)
+    }
+    
+    static 
+    func create(_ header:Symbol.TypealiasField, fields:ArraySlice<Symbol.Field>, 
+        order:Int, urlpattern:(prefix:String, suffix:String)) 
+        -> Self
+    {
+        let fields:Page.Fields = .init(fields, order: order)
+        if !fields.attributes.isEmpty 
+        {
+            print("warning: attribute fields are ignored in an associatedtype doccoment")
+        }
+        if !fields.wheres.isEmpty 
+        {
+            print("warning: where fields are ignored in an associatedtype doccoment")
+        }
+        if !fields.parameters.isEmpty || fields.return != nil
+        {
+            print("warning: parameter/return fields are ignored in an associatedtype doccoment")
+        }
+        if fields.throws != nil
+        {
+            print("warning: throws fields are ignored in an associatedtype doccoment")
+        }
+        
+        let name:String = header.identifiers.joined(separator: ".")
+        let signature:[Page.Signature.Token]        = [.text("typealias"), .whitespace] + 
+            header.identifiers.map{ [.highlight($0)] }.joined(separator: [.punctuation(".")])
+        var declaration:[Page.Declaration.Token]    = 
+        [
+            .keyword("typealias"), 
+            .whitespace,
+            .identifier(header.identifiers[header.identifiers.endIndex - 1])
+        ]
+        
+        declaration.append(.whitespace)
+        declaration.append(.punctuation("="))
+        declaration.append(.breakableWhitespace)
+        declaration.append(contentsOf: Page.Declaration.tokenize(header.target))
+        
+        let page:Page = .init(label: .typealias, name: name, 
+            signature:      signature, 
+            declaration:    declaration, 
+            fields:         fields, 
+            path:           header.identifiers)
+        return .init(page, locals: [], keys: fields.keys, urlpattern: urlpattern)
     }
     
     static 
