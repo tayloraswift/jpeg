@@ -279,7 +279,7 @@ class Page
             }
         }
         
-        let prefix:String
+        let urlpattern:(prefix:String, suffix:String)
         let path:[String]
         let page:Page 
         let locals:Set<String>, 
@@ -287,20 +287,20 @@ class Page
         
         var url:String 
         {
-            "\(self.prefix)\(self.path.map(Self.escape(url:)).joined(separator: "/"))"
+            "\(self.urlpattern.prefix)\(self.path.map(Self.escape(url:)).joined(separator: "/"))\(self.urlpattern.suffix)"
         }
         var filepath:String 
         {
             "\(self.path.joined(separator: "/"))"
         }
         
-        init(_ page:Page, locals:Set<String>, keys:Set<Key>, prefix:String) 
+        init(_ page:Page, locals:Set<String>, keys:Set<Key>, urlpattern:(prefix:String, suffix:String)) 
         {
-            self.prefix = prefix
-            self.path   = page.breadcrumbs.map(\.text) + [page.breadcrumb] 
-            self.page   = page 
-            self.locals = locals 
-            self.keys   = keys 
+            self.urlpattern = urlpattern
+            self.path       = page.breadcrumbs.map(\.text) + [page.breadcrumb] 
+            self.page       = page 
+            self.locals     = locals 
+            self.keys       = keys 
         }
         
         private static 
@@ -637,7 +637,6 @@ extension Page
         delimiters:(Character, Character),
         signature:inout [Signature.Token], 
         declaration:inout [Declaration.Token]) 
-        -> [String]
     {
         guard labels.count == fields.parameters.count 
         else 
@@ -647,8 +646,6 @@ extension Page
         
         signature.append(.punctuation(.init(delimiters.0)))
         declaration.append(.punctuation(.init(delimiters.0)))
-        
-        var mangled:[String] = []
         
         var interior:(signature:[[Page.Signature.Token]], declaration:[[Page.Declaration.Token]]) = 
             ([], [])
@@ -663,7 +660,6 @@ extension Page
             
             if label != "_" 
             {
-                mangled.append(label)
                 signature.append(.highlight(label))
                 signature.append(.punctuation(":"))
                 declaration.append(.identifier(label))
@@ -685,7 +681,6 @@ extension Page
             }
             if parameter.inout 
             {
-                mangled.append("inout")
                 signature.append(.text("inout"))
                 signature.append(.whitespace)
                 declaration.append(.keyword("inout"))
@@ -694,16 +689,6 @@ extension Page
             let type:(declaration:[Page.Declaration.Token], signature:[Page.Signature.Token]) 
             type.declaration = Page.Declaration.tokenize(parameter.type)
             type.signature   = Page.Signature.convert(type.declaration)
-            for token:Page.Signature.Token in type.signature 
-            {
-                switch token 
-                {
-                case    .whitespace, .punctuation:
-                    break
-                case    .text(let text), .highlight(let text):
-                    mangled.append(text)
-                }
-            }
             signature.append(contentsOf: type.signature)
             declaration.append(contentsOf: type.declaration)
             
@@ -746,8 +731,6 @@ extension Page
             signature.append(contentsOf: Page.Signature.convert(tokens))
             declaration.append(contentsOf: tokens)
         }
-        
-        return mangled
     }
 }
 extension Page 
@@ -874,7 +857,8 @@ extension Page
 extension Page.Binding 
 {
     static 
-    func create(_ header:Symbol.SubscriptField, fields:ArraySlice<Symbol.Field>, order:Int, prefix:String) 
+    func create(_ header:Symbol.SubscriptField, fields:ArraySlice<Symbol.Field>, 
+        order:Int, urlpattern:(prefix:String, suffix:String)) 
         -> Self
     {
         let fields:Page.Fields = .init(fields, order: order)
@@ -889,8 +873,7 @@ extension Page.Binding
             Page.Declaration.tokenize(fields.attributes) + [.keyword("subscript")]
         var signature:[Page.Signature.Token]        =      [   .text("subscript")]
         
-        
-        let mangled:[String] = Page.print(function: fields, 
+        Page.print(function: fields, 
             labels: header.labels.map{ ($0, false) }, delimiters: ("[", "]"), 
             signature: &signature, declaration: &declaration)
         
@@ -899,10 +882,11 @@ extension Page.Binding
             declaration:    declaration, 
             fields:         fields, 
             path:           header.identifiers + [name])
-        return .init(page, locals: [], keys: fields.keys, prefix: prefix)
+        return .init(page, locals: [], keys: fields.keys, urlpattern: urlpattern)
     }
     static 
-    func create(_ header:Symbol.FunctionField, fields:ArraySlice<Symbol.Field>, order:Int, prefix:String) 
+    func create(_ header:Symbol.FunctionField, fields:ArraySlice<Symbol.Field>, 
+        order:Int, urlpattern:(prefix:String, suffix:String)) 
         -> Self 
     {
         let fields:Page.Fields = .init(fields, order: order)
@@ -985,16 +969,14 @@ extension Page.Binding
             declaration.append(contentsOf: tokens)
         }
         
-        let name:String, 
-            mangled:[String]
+        let name:String
         if case .enumerationCase = label, header.labels.isEmpty, fields.parameters.isEmpty 
         {
-            mangled = []
             name    = basename
         }
         else 
         {
-            mangled = Page.print(function: fields, labels: header.labels, delimiters: ("(", ")"), 
+            Page.print(function: fields, labels: header.labels, delimiters: ("(", ")"), 
                 signature: &signature, declaration: &declaration)
             name    = "\(basename)(\(header.labels.map{ "\($0.variadic && $0.name == "_" ? "" : $0.name)\($0.variadic ? "..." : ""):" }.joined()))" 
         }
@@ -1004,11 +986,12 @@ extension Page.Binding
             declaration:    declaration, 
             fields:         fields, 
             path:           header.identifiers.dropLast() + [name])
-        return .init(page, locals: [], keys: fields.keys, prefix: prefix)
+        return .init(page, locals: [], keys: fields.keys, urlpattern: urlpattern)
     }
     
     static 
-    func create(_ header:Symbol.MemberField, fields:ArraySlice<Symbol.Field>, order:Int, prefix:String) 
+    func create(_ header:Symbol.MemberField, fields:ArraySlice<Symbol.Field>, 
+        order:Int, urlpattern:(prefix:String, suffix:String)) 
         -> Self
     {
         let fields:Page.Fields = .init(fields, order: order)
@@ -1088,11 +1071,12 @@ extension Page.Binding
             declaration:    declaration, 
             fields:         fields, 
             path:           header.identifiers)
-        return .init(page, locals: [], keys: fields.keys, prefix: prefix)
+        return .init(page, locals: [], keys: fields.keys, urlpattern: urlpattern)
     }
     
     static 
-    func create(_ header:Symbol.TypeField, fields:ArraySlice<Symbol.Field>, order:Int, prefix:String) 
+    func create(_ header:Symbol.TypeField, fields:ArraySlice<Symbol.Field>, 
+        order:Int, urlpattern:(prefix:String, suffix:String)) 
         -> Self
     {
         let fields:Page.Fields = .init(fields, order: order)
@@ -1207,11 +1191,12 @@ extension Page.Binding
             fields:         fields, 
             path:           header.identifiers)
         let locals:Set<String>      = .init(header.generics + ["Self"])
-        return .init(page, locals: locals, keys: fields.keys, prefix: prefix)
+        return .init(page, locals: locals, keys: fields.keys, urlpattern: urlpattern)
     }
     
     static 
-    func create(_ header:Symbol.AssociatedtypeField, fields:ArraySlice<Symbol.Field>, order:Int, prefix:String) 
+    func create(_ header:Symbol.AssociatedtypeField, fields:ArraySlice<Symbol.Field>, 
+        order:Int, urlpattern:(prefix:String, suffix:String)) 
         -> Self
     {
         let fields:Page.Fields = .init(fields, order: order)
@@ -1258,7 +1243,7 @@ extension Page.Binding
             declaration:    declaration, 
             fields:         fields, 
             path:           header.identifiers)
-        return .init(page, locals: [], keys: fields.keys, prefix: prefix)
+        return .init(page, locals: [], keys: fields.keys, urlpattern: urlpattern)
     }
 }
 

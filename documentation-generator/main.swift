@@ -1855,10 +1855,11 @@ enum Symbol
     }
 }
 
-func main(_ paths:[String]) throws
+// baseurl without trailing slash
+func main(sources:[String], directory:String, urlpattern:(prefix:String, suffix:String)) throws
 {
     var doccomments:[[Character]] = [] 
-    for path:String in paths 
+    for path:String in sources 
     {
         guard let contents:String = File.source(path: path) 
         else 
@@ -1895,9 +1896,6 @@ func main(_ paths:[String]) throws
         }
     }
     
-    let directory:[String] = ["docs"]
-    let prefix:String = "https://kelvin13.github.io/jpeg/"
-    
     var pages:[Page.Binding] = []
     for (i, doccomment):(Int, [Character]) in doccomments.enumerated()
     {
@@ -1905,13 +1903,13 @@ func main(_ paths:[String]) throws
         switch fields.first 
         {
         case .function(let header)?:
-            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i, prefix: prefix))
+            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i, urlpattern: urlpattern))
         case .member(let header)?:
-            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i, prefix: prefix))
+            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i, urlpattern: urlpattern))
         case .type(let header)?:
-            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i, prefix: prefix))
+            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i, urlpattern: urlpattern))
         case .associatedtype(let header)?:
-            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i, prefix: prefix))
+            pages.append(Page.Binding.create(header, fields: fields.dropFirst(), order: i, urlpattern: urlpattern))
         default:
             break 
         }
@@ -1930,15 +1928,29 @@ func main(_ paths:[String]) throws
         <head>
             <meta charset="UTF-8">
             <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Questrial&display=swap" rel="stylesheet"> 
-            <link href="\(prefix)style.css" rel="stylesheet"> 
+            <link href="\(urlpattern.prefix)style.css" rel="stylesheet"> 
         </head> 
         <body>
             \(page.page.html.string)
         </body>
         """
-        File.pave(directory + page.path)
-        File.save(.init(document.utf8), path: "\(directory.joined(separator: "/"))/\(page.filepath)/index.html")
+        File.pave([directory] + page.path)
+        File.save(.init(document.utf8), path: "\(directory)/\(page.filepath)/index.html")
     }
+    
+    // copy big-sur.css 
+    guard let stylesheet:String = File.source(path: "documentation-generator/big-sur.css") 
+    else 
+    {
+        fatalError("missing stylesheet") 
+    }
+    File.save(.init(stylesheet.utf8), path: "\(directory)/style.css")
 }
 
-try main(.init(CommandLine.arguments.dropFirst()))
+guard CommandLine.arguments.count >= 4 
+else 
+{
+    fatalError("need at least 3 arguments (destination directory, url prefix, url suffix)")
+}
+
+try main(sources: .init(CommandLine.arguments.dropFirst()), directory: CommandLine.arguments[1], urlpattern: (CommandLine.arguments[2], CommandLine.arguments[3]))

@@ -1,0 +1,71 @@
+#!/bin/bash
+DEFAULT_BUILD_CONFIGURATION="debug"
+DEFAULT_DIRECTORY="documentation/"
+
+SCRIPT_NAME="generate-documentation"
+
+usage() 
+{
+    echo "usage: utils/$SCRIPT_NAME [OPTION...]
+  -c, --configuration       swift build configuration mode, default '$DEFAULT_BUILD_CONFIGURATION'
+  -d, --directory           directory to generate documentation in, default '$DEFAULT_DIRECTORY'
+  -u, --baseurl             base url, if unset will build a local website"
+}
+
+error()
+{
+    echo $1 
+    exit 1
+}
+
+check()
+{
+    message=$1
+    shift 
+    echo $@
+    "$@" || error "$message"
+}
+
+build_configuration=$DEFAULT_BUILD_CONFIGURATION
+directory=$DEFAULT_DIRECTORY
+baseurl=
+suffix=""
+
+while [ "$1" != "" ] ; do
+    case $1 in 
+    -c | --configuration ) 
+        shift
+        build_configuration=$1
+        ;;
+    -d | --directory ) 
+        shift 
+        directory="$1/"
+        ;;
+    -u | --baseurl ) 
+        shift 
+        baseurl=$1
+        ;;
+    * )
+        usage 
+        exit 1
+    esac 
+    shift 
+done 
+
+if [ -z "$baseurl" ]; then 
+    baseurl=$PWD/$directory 
+    suffix="/index.html"
+fi 
+
+product="documentation-generator"
+check   "error: swift build failed" \
+        swift build -c $build_configuration --product $product
+        
+binaries=".build/$build_configuration"
+if ! [ -f $binaries/$product ]; then
+    error "error: missing '$product' product"
+fi
+
+# run `decode-basic` example
+check   "error: runtime error" \
+        .build/$build_configuration/$product $directory $baseurl $suffix sources/jpeg/*.swift

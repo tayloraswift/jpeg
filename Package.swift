@@ -22,7 +22,7 @@ let package = Package(
         .executable(name: "rotate",             targets: ["JPEGRotate"]),
         .executable(name: "custom-color",       targets: ["JPEGCustomColor"]),
         
-        .executable(name: "docgen",       targets: ["DocumentationGenerator"]),
+        .executable(name: "documentation-generator", targets: ["DocumentationGenerator"]),
     ],
     targets: 
     [
@@ -43,7 +43,7 @@ let package = Package(
         .target(name: "JPEGRotate",             dependencies: ["JPEG"], path: "examples/rotate"),
         .target(name: "JPEGCustomColor",        dependencies: ["JPEG"], path: "examples/custom-color"),
         
-        .target(name: "DocumentationGenerator", dependencies: [],       path: "docgen"),
+        .target(name: "DocumentationGenerator", dependencies: [],       path: "documentation-generator"),
     ], 
     swiftLanguageVersions: [.v4_2, .v5]
 )
