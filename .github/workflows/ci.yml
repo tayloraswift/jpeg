@@ -16,7 +16,7 @@ jobs:
     - run: | 
         brew install imagemagick
         utils/tests
-        utils/examples
+        utils/examples -c release
 
   build-linux:
     runs-on: ubuntu-latest
@@ -25,4 +25,4 @@ jobs:
     - uses: YOCKOW/Action-setup-swift@master
     - run: | 
         utils/tests
-        utils/examples
+        utils/examples -c release

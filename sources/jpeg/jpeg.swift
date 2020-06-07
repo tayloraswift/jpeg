@@ -84,7 +84,7 @@ protocol _JPEGColor
 }
 
 /// enum JPEG 
-///     A library namespace containing all JPEG-related APIs. TEST
+///     A library namespace containing all JPEG-related APIs. 
 public 
 enum JPEG 
 {
