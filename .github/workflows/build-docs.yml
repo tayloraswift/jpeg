@@ -31,3 +31,9 @@ jobs:
         ls .
         echo "---"
         ls .build
+    
+    - uses: JamesIves/github-pages-deploy-action@releases/v3
+      with:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        BRANCH: pages # The branch the action should deploy to.
+        FOLDER: docs/ # The folder the action should deploy.
