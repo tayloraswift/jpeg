@@ -102,7 +102,7 @@ done
 check   "error: runtime error" \
         .build/$build_configuration/recompress
 
- run `rotate` example
+# run `rotate` example
 check   "error: runtime error" \
         .build/$build_configuration/rotate examples/rotate/karlie-kwk-wwdc-2017.jpg examples/rotate/karlie-kwk-wwdc-2017-ii.jpg --rotation ii
 check   "error: runtime error" \

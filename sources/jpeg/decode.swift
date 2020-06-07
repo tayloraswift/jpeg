@@ -288,6 +288,8 @@ extension JPEG
             let components:[Component.Key: Component]
         }
         /// struct JPEG.Header.Scan 
+        /// # [Creating sequential scans](scan-header-creation-sequential)
+        /// # [Creating progressive scans](scan-header-creation-progressive)
         public 
         struct Scan
         {
@@ -741,6 +743,13 @@ extension JPEG.Header.Frame
 } 
 extension JPEG.Header.Scan 
 {
+    /// static func JPEG.Header.Scan.validate(process:band:bits:components:)
+    /// - process   : JPEG.Process 
+    /// - band      : Swift.Range<Swift.Int>
+    /// - bits      : Swift.Range<Swift.Int>
+    /// - components: [JPEG.Scan.Component]
+    /// - ->        : Self 
+    /// throws
     public static 
     func validate(process:JPEG.Process, 
         band:Range<Int>, bits:Range<Int>, components:[JPEG.Scan.Component]) 

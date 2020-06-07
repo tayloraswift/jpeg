@@ -1047,6 +1047,15 @@ extension JPEG.Layout
     ///     It will suffer a precondition failure if the scan progression is invalid, or 
     ///     if it is impossible to implement the specified table relationships with 
     ///     the number of table selectors available for the given coding process.
+    /// 
+    ///     This initializer will normalize all scan headers passed to the `scans`
+    ///     argument. It will strip non-recognized components from the headers, 
+    ///     and rearrange their component descriptors in ascending numeric order.
+    ///     It will also validate the scan headers against the `process` argument 
+    ///     with [`(Header.Scan).validate(process:band:bits:components:)`].
+    ///     Passing invalid scan headers will result in a precondition failure.
+    ///     See the [advanced encoding](https://github.com/kelvin13/jpeg/tree/master/examples#advanced-encoding)
+    ///     library tutorial to learn more about the validation rules.
     /// - format    : Format
     ///     The color format of the image.
     /// - process   : JPEG.Process 
@@ -1054,8 +1063,7 @@ extension JPEG.Layout
     /// - components: [JPEG.Component.Key: (factor:(x:Swift.Int, y:Swift.Int), qi:JPEG.Table.Quantization.Key)]
     ///     The sampling factors and quantization table key for each component in the image.
     /// - scans     : [JPEG.Header.Scan]
-    ///     The scan progression of the image. All referenced image components 
-    ///     must be recognized components.
+    ///     The scan progression of the image. 
     /// ## (layout-creation)
     public 
     init(format:Format, 
@@ -1330,7 +1338,10 @@ extension JPEG.Header.Scan
     /// static func JPEG.Header.Scan.sequential(_:)
     ///     Creates a sequential scan descriptor.
     /// 
-    ///     This constructor bypasses normal scan header validation checks.
+    ///     This constructor bypasses normal scan header validation checks. It is 
+    ///     otherwise equivalent to calling [`(Header.Scan).validate(process:band:bits:components:)`]
+    ///     with the `band` argument set to `0 ..< 64` and the `bits` argument set 
+    ///     to `0 ..< .max`.
     /// - components:[(ci:JPEG.Component.Key, dc:JPEG.Table.HuffmanDC.Selector, ac:JPEG.Table.HuffmanAC.Selector)]
     ///     The components encoded by this scan, and associated DC and AC huffman 
     ///     table selectors. For each type of huffman table, components with the 
@@ -1338,6 +1349,8 @@ extension JPEG.Header.Scan
     ///     will not persist in between different scans.
     /// - ->        :Self 
     ///     An unvalidated sequential scan header.
+    /// # [See also](scan-header-creation-sequential)
+    /// ## (scan-header-creation-sequential)
     public static 
     func sequential(_ components:
         [(
@@ -1355,6 +1368,8 @@ extension JPEG.Header.Scan
     ///     This function is variadic sugar for [`(Scan).sequential(_:)`].
     /// - components:(ci:JPEG.Component.Key, dc:JPEG.Table.HuffmanDC.Selector, ac:JPEG.Table.HuffmanAC.Selector)
     /// - ->        :Self 
+    /// # [See also](scan-header-creation-sequential)
+    /// ## (scan-header-creation-sequential)
     public static 
     func sequential(_ components:
         (
@@ -1366,9 +1381,26 @@ extension JPEG.Header.Scan
         .sequential(components)
     }
     /// static func JPEG.Header.Scan.progressive(_:bits:)
+    ///     Creates a progressive initial DC scan descriptor.
+    /// 
+    ///     This constructor bypasses normal scan header validation checks. It is 
+    ///     otherwise equivalent to calling [`(Header.Scan).validate(process:band:bits:components:)`]
+    ///     with the `band` argument set to `0 ..< 1`.
+    ///
+    ///     Initial DC scans only use DC huffman tables, so no AC table selectors 
+    ///     need to be specified.
     /// - components:[(ci:JPEG.Component.Key, dc:JPEG.Table.HuffmanDC.Selector)]
+    ///     The components encoded by this scan, and associated DC huffman 
+    ///     table selectors. Components with the same table selector will share
+    ///     the same huffman table. Huffman tables will not persist in between 
+    ///     different scans.
     /// - bits      :Swift.PartialRangeFrom<Swift.Int>
+    ///     The range of DC bits encoded by this scan. Setting this argument to 
+    ///     `0...` disables spectral selection.
     /// - ->        :Self 
+    ///     An unvalidated initial DC scan header.
+    /// # [See also](scan-header-creation-progressive)
+    /// ## (scan-header-creation-progressive)
     public static 
     func progressive(_ 
         components:[(ci:JPEG.Component.Key, dc:JPEG.Table.HuffmanDC.Selector)], 
@@ -1378,9 +1410,14 @@ extension JPEG.Header.Scan
             components: components.map{ .init(ci: $0.ci, selector: ($0.dc, \.0))})
     }
     /// static func JPEG.Header.Scan.progressive(...:bits:)
+    ///     Creates a progressive initial DC scan descriptor.
+    ///     
+    ///     This function is variadic sugar for [`(Scan).progressive(_:bits:)`].
     /// - components:(ci:JPEG.Component.Key, dc:JPEG.Table.HuffmanDC.Selector)
     /// - bits      :Swift.PartialRangeFrom<Swift.Int>
     /// - ->        :Self 
+    /// # [See also](scan-header-creation-progressive)
+    /// ## (scan-header-creation-progressive)
     public static 
     func progressive(_ 
         components:(ci:JPEG.Component.Key, dc:JPEG.Table.HuffmanDC.Selector)..., 
@@ -1389,9 +1426,23 @@ extension JPEG.Header.Scan
         .progressive(components, bits: bits)
     }
     /// static func JPEG.Header.Scan.progressive(_:bit:)
+    ///     Creates a progressive refining DC scan descriptor.
+    /// 
+    ///     This constructor bypasses normal scan header validation checks. It is 
+    ///     otherwise equivalent to calling [`(Header.Scan).validate(process:band:bits:components:)`]
+    ///     with the `band` argument set to `0 ..< 1` and the `bits` argument set 
+    ///     to `bit ..< bit + 1`.
+    /// 
+    ///     Refining DC scans do not use entropy-coding, so no huffman table selectors 
+    ///     need to be specified.
     /// - components:[JPEG.Component.Key]
+    ///     The components encoded by this scan.
     /// - bit       :Swift.Int
+    ///     The index of the bit refined by this scan. 
     /// - ->        :Self 
+    ///     An unvalidated refining DC scan header.
+    /// # [See also](scan-header-creation-progressive)
+    /// ## (scan-header-creation-progressive)
     public static 
     func progressive(_ 
         components:[JPEG.Component.Key], 
@@ -1401,9 +1452,14 @@ extension JPEG.Header.Scan
             components: components.map{ .init(ci: $0, selector: (\.0, \.0))})
     }
     /// static func JPEG.Header.Scan.progressive(...:bit:)
+    ///     Creates a progressive refining DC scan descriptor.
+    ///     
+    ///     This function is variadic sugar for [`(Scan).progressive(_:bit:)`].
     /// - components:JPEG.Component.Key
     /// - bit       :Swift.Int
     /// - ->        :Self 
+    /// # [See also](scan-header-creation-progressive)
+    /// ## (scan-header-creation-progressive)
     public static 
     func progressive(_ 
         components:JPEG.Component.Key..., 
@@ -1412,10 +1468,27 @@ extension JPEG.Header.Scan
         .progressive(components, bit: bit)
     }
     /// static func JPEG.Header.Scan.progressive(_:band:bits:)
+    ///     Creates a progressive initial AC scan descriptor.
+    /// 
+    ///     This constructor bypasses normal scan header validation checks. It is 
+    ///     otherwise equivalent to calling [`(Header.Scan).validate(process:band:bits:components:)`].
+    ///
+    ///     AC scans only use AC huffman tables, so no DC table selectors 
+    ///     need to be specified.
     /// - component :(ci:JPEG.Component.Key, ac:JPEG.Table.HuffmanAC.Selector)
+    ///     The component encoded by this scan, and its associated AC huffman 
+    ///     table selector. Huffman tables will not persist in between 
+    ///     different scans.
     /// - band      :Swift.Range<Swift.Int>
+    ///     The frequency band encoded by this scan, in zigzag indices. This range 
+    ///     should be within the interval `1 ..< 64`.
     /// - bits      :Swift.PartialRangeFrom<Swift.Int>
+    ///     The range of AC bits encoded by this scan. Setting this argument to 
+    ///     `0...` disables spectral selection.
     /// - ->        :Self 
+    ///     An unvalidated initial AC scan header.
+    /// # [See also](scan-header-creation-progressive)
+    /// ## (scan-header-creation-progressive)
     public static 
     func progressive(_ 
         component:(ci:JPEG.Component.Key, ac:JPEG.Table.HuffmanAC.Selector), 
@@ -1425,10 +1498,27 @@ extension JPEG.Header.Scan
             components: [.init(ci: component.ci, selector: (\.0, component.ac))])
     }
     /// static func JPEG.Header.Scan.progressive(_:band:bit:)
+    ///     Creates a progressive refining AC scan descriptor.
+    /// 
+    ///     This constructor bypasses normal scan header validation checks. It is 
+    ///     otherwise equivalent to calling [`(Header.Scan).validate(process:band:bits:components:)`] 
+    ///     with the `bits` argument set to `bit ..< bit + 1`.
+    ///
+    ///     AC scans only use AC huffman tables, so no DC table selectors 
+    ///     need to be specified.
     /// - component :(ci:JPEG.Component.Key, ac:JPEG.Table.HuffmanAC.Selector)
+    ///     The component encoded by this scan, and its associated AC huffman 
+    ///     table selector. Huffman tables will not persist in between 
+    ///     different scans.
     /// - band      :Swift.Range<Swift.Int>
+    ///     The frequency band encoded by this scan, in zigzag indices. This range 
+    ///     should be within the interval `1 ..< 64`.
     /// - bit       :Swift.Int
+    ///     The index of the bit refined by this scan. 
     /// - ->        :Self 
+    ///     An unvalidated refining AC scan header.
+    /// # [See also](scan-header-creation-progressive)
+    /// ## (scan-header-creation-progressive)
     public static 
     func progressive(_ 
         component:(ci:JPEG.Component.Key, ac:JPEG.Table.HuffmanAC.Selector), 

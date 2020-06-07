@@ -2,7 +2,7 @@
 
 [![platforms](https://img.shields.io/badge/platforms-linux%20%7C%20macos-lightgrey.svg)](https://swift.org)
 [![build](https://img.shields.io/github/workflow/status/kelvin13/jpeg/build/master)](https://github.com/kelvin13/jpeg/actions?query=workflow%3Abuild)
-[![build documentation](https://img.shields.io/github/workflow/status/kelvin13/jpeg/documentation/master?label=build%20documentation)](https://github.com/kelvin13/jpeg/actions?query=workflow%3Adocumentation)
+[![build documentation](https://img.shields.io/github/workflow/status/kelvin13/jpeg/documentation/master?label=build%20docs)](https://github.com/kelvin13/jpeg/actions?query=workflow%3Adocumentation)
 [![language](https://img.shields.io/badge/version-swift_5-ffa020.svg)](https://swift.org)
 [![license](https://img.shields.io/badge/license-GPL3-ff3079.svg)](https://github.com/kelvin13/png/blob/master/COPYING)
 
