@@ -26,5 +26,8 @@ jobs:
       
     - run: |
         swift build -c release --product docgen
-        $GITHUB_WORKSPACE/.build/release/docgen $GITHUB_WORKSPACE/sources/jpeg/*.swift
-        ls $GITHUB_WORKSPACE/.build
+        .build/release/docgen sources/jpeg/*.swift
+        echo "---"
+        ls .
+        echo "---"
+        ls .build
