@@ -14,6 +14,7 @@ jobs:
     # reads .swift-version
     - uses: YOCKOW/Action-setup-swift@master
     - run: | 
+        brew install imagemagick
         utils/tests
         utils/examples
 
