@@ -29,7 +29,7 @@ check()
 build_configuration=$DEFAULT_BUILD_CONFIGURATION
 directory=$DEFAULT_DIRECTORY
 baseurl=
-suffix=""
+suffix="/"
 
 while [ "$1" != "" ] ; do
     case $1 in 

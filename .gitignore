@@ -6,3 +6,4 @@
 /tests/integration/decode/*.png
 /tests/integration/decode/*.rgb
 /tests/integration/encode/*.jpg
+/documentation

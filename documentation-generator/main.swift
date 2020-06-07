@@ -1953,4 +1953,10 @@ else
     fatalError("need at least 3 arguments (destination directory, url prefix, url suffix)")
 }
 
-try main(sources: .init(CommandLine.arguments.dropFirst()), directory: CommandLine.arguments[1], urlpattern: (CommandLine.arguments[2], CommandLine.arguments[3]))
+try main(sources: .init(CommandLine.arguments.dropFirst()), 
+    directory: CommandLine.arguments[1], 
+    urlpattern: 
+    (
+        prefix: CommandLine.arguments[2], 
+        suffix: CommandLine.arguments[3] == "/" ? "" : CommandLine.arguments[3]
+    ))
