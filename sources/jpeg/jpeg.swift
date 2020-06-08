@@ -782,7 +782,7 @@ extension JPEG
 }
 
 /// protocol JPEG.AnyTable
-///     Functionality common to all JPEG table types.
+///     Functionality common to all table types.
 public 
 protocol _JPEGAnyTable 
 {
@@ -931,16 +931,32 @@ extension JPEG
     
     public 
     typealias AnyTable = _JPEGAnyTable 
+    /// enum JPEG.Table 
+    ///     A namespace for table types.
     public 
     enum Table 
     {
+        /// typealias JPEG.Table.HuffmanDC = Huffman<JPEG.Bitstream.Symbol.DC>
+        ///     A DC huffman table.
         public 
         typealias HuffmanDC = Huffman<Bitstream.Symbol.DC>
+        /// typealias JPEG.Table.HuffmanAC = Huffman<JPEG.Bitstream.Symbol.AC>
+        ///     An AC huffman table.
         public 
         typealias HuffmanAC = Huffman<Bitstream.Symbol.AC>
+        /// struct JPEG.Table.Huffman<Symbol> 
+        /// :   JPEG.AnyTable 
+        /// where Symbol:JPEG.Bitstream.AnySymbol
+        ///     A huffman table. 
+        /// 
+        ///     This type stores a huffman tree, but does not support efficient 
+        ///     lookup or encoding. To create a lookup table, call the [`(Huffman).decoder()`]
+        ///     method. To create a codebook, call the [`(Huffman).encoder()`] method.
         public 
         struct Huffman<Symbol>:AnyTable where Symbol:Bitstream.AnySymbol
         {
+            /// typealias JPEG.Table.Huffman.Delegate = Self 
+            /// :   JPEG.AnyTable
             public 
             typealias Delegate = Self 
             

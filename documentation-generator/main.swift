@@ -1920,11 +1920,7 @@ func main(sources:[String], directory:String, urlpattern:(prefix:String, suffix:
         }
     }
     
-    let tree:PageTree = .assemble(pages)
-    print(tree)
-    
-    tree.crosslink()
-    tree.attachTopics()
+    PageTree.assemble(pages)
     
     for page:Page.Binding in pages
     {

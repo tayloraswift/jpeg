@@ -354,13 +354,17 @@ class Page
     var breadcrumbs:[(text:String, link:Link)], 
         breadcrumb:String 
     
+    var inheritances:[[String]]
+    
     init(label:Label, name:String, signature:[Signature.Token], declaration:[Declaration.Token], 
-        fields:Fields, path:[String])
+        fields:Fields, path:[String], inheritances:[[String]] = [])
     {
         self.label          = label 
         self.name           = name 
         self.signature      = signature 
         self.declaration    = declaration 
+        self.inheritances   = inheritances.filter{ !($0.first == "Swift") }
+        
         self.blurb          = fields.blurb?.elements ?? [] 
         
         let required:[Markdown.Element] 
@@ -371,7 +375,7 @@ class Page
             {
             case .initializer, .genericInitializer, .staticMethod, .genericStaticMethod, 
                 .instanceMethod, .genericInstanceMethod, .staticProperty, .instanceProperty, 
-                .subscript:
+                .subscript, .typealias:
                 let conformances:[String] = fields.annotations.map 
                 {
                     if $0.annotations.count != 1 
@@ -427,7 +431,7 @@ class Page
 extension Page 
 {
     private static 
-    func crosslink(_ unlinked:[Markdown.Element], scopes:[PageTree]) -> [Markdown.Element]
+    func crosslink(_ unlinked:[Markdown.Element], scopes:[PageTree.Node]) -> [Markdown.Element]
     {
         var elements:[Markdown.Element] = []
         for element:Markdown.Element in unlinked
@@ -455,12 +459,12 @@ extension Page
                             `class` = "syntax-type"
                         case .unresolved(path: let path):
                             let full:[String] = sublink.prefix + path 
-                            guard let binding:Binding = PageTree.resolve(full[...], in: scopes)
+                            guard let url:String = PageTree.Node.resolve(full[...], in: scopes)
                             else 
                             {
                                 return element.component.0.map{ .text(.wildcard($0)) }
                             }
-                            target = binding.url
+                            target = url
                             `class` = "syntax-type"
                         }
                         
@@ -486,19 +490,19 @@ extension Page
         return elements
     }
     
-    func crosslink(scopes:[PageTree]) 
+    func crosslink(scopes:[PageTree.Node]) 
     {
         self.declaration = self.declaration.map 
         {
             switch $0 
             {
             case .type(let component, .unresolved(path: let path)):
-                guard let binding:Binding = PageTree.resolve(path[...], in: scopes)
+                guard let url:String = PageTree.Node.resolve(path[...], in: scopes)
                 else 
                 {
                     return .identifier(component)
                 }
-                return .type(component, .resolved(url: binding.url))
+                return .type(component, .resolved(url: url))
             default:
                 return $0
             }
@@ -518,12 +522,12 @@ extension Page
             switch $0.link 
             {
             case .unresolved(path: let path):
-                guard let binding:Binding = PageTree.resolve(path[...], in: scopes)
+                guard let url:String = PageTree.Node.resolve(path[...], in: scopes)
                 else 
                 {
                     break 
                 }
-                return ($0.text, .resolved(url: binding.url))
+                return ($0.text, .resolved(url: url))
             default:
                 break 
             }
@@ -532,7 +536,7 @@ extension Page
     }
     
     func attachTopics<C>(children:C, global:[String: [TopicSymbol]]) 
-        where C:Collection, C.Element == PageTree 
+        where C:Collection, C.Element == PageTree.Node 
     {
         for i:Int in self.topics.indices 
         {
@@ -560,8 +564,21 @@ extension Page
             subscripts          :[TopicSymbol]
         )
         topics = ([], [], [], [], [], [], [], [], [], [], [], [], [])
-        for binding:Page.Binding in 
-            (children.flatMap(\.pages).sorted{ $0.page.name < $1.page.name })
+        for binding:Binding in 
+            (children.flatMap
+            { 
+                $0.payloads.compactMap
+                { 
+                    if case .binding(let binding) = $0 
+                    {
+                        return binding 
+                    }
+                    else 
+                    {
+                        return nil 
+                    }
+                } 
+            }.sorted{ $0.page.name < $1.page.name })
         {
             guard !seen.contains(binding.url)
             else 
@@ -1148,6 +1165,8 @@ extension Page.Binding
             signature.append(.punctuation(">"))
             declaration.append(.punctuation(">"))
         }
+        
+        let inheritances:[[String]]
         if !fields.annotations.isEmpty 
         {
             declaration.append(.punctuation(":"))
@@ -1156,7 +1175,14 @@ extension Page.Binding
                 $0.annotations.map(Page.Declaration.tokenize(_:))
                 .joined(separator: [.punctuation("&")])
             }.joined(separator: [.punctuation(","), .breakableWhitespace]))
+            
+            inheritances = fields.annotations.flatMap(\.annotations)
         }
+        else 
+        {
+            inheritances = []
+        }
+        
         if !fields.wheres.isEmpty 
         {
             declaration.append(.breakableWhitespace)
@@ -1194,7 +1220,8 @@ extension Page.Binding
             signature:      signature, 
             declaration:    declaration, 
             fields:         fields, 
-            path:           header.identifiers)
+            path:           header.identifiers, 
+            inheritances:   inheritances)
         let locals:Set<String>      = .init(header.generics + ["Self"])
         return .init(page, locals: locals, keys: fields.keys, urlpattern: urlpattern)
     }
@@ -1237,11 +1264,21 @@ extension Page.Binding
         declaration.append(.breakableWhitespace)
         declaration.append(contentsOf: Page.Declaration.tokenize(header.target))
         
+        let inheritances:[[String]]
+        switch header.target 
+        {
+        case .named(let identifiers):
+            inheritances = [identifiers.map(\.identifier)]
+        default:
+            inheritances = []
+        }
+        
         let page:Page = .init(label: .typealias, name: name, 
             signature:      signature, 
             declaration:    declaration, 
             fields:         fields, 
-            path:           header.identifiers)
+            path:           header.identifiers, 
+            inheritances:   inheritances)
         return .init(page, locals: [], keys: fields.keys, urlpattern: urlpattern)
     }
     
@@ -1300,73 +1337,126 @@ extension Page.Binding
 
 struct PageTree 
 {
-    var pages:[Page.Binding] 
-    var children:[String: PageTree]
-    var anchors:[String: [Page.TopicSymbol]]
-    
-    static 
-    let empty:Self = .init(pages: [], children: [:], anchors: [:])
-    
-    static 
-    func assemble(_ pages:[Page.Binding]) -> Self 
+    struct Node 
     {
-        var root:Self = .empty
-        var anchors:[String: [(rank:(Int, Int), symbol:Page.TopicSymbol)]] = [:]
-        for (order, page):(Int, Page.Binding) in pages.enumerated()
+        enum Payload 
         {
-            root.insert(page, at: page.path[...], absolute: page.path)
-            let symbol:Page.TopicSymbol = 
-            (
-                page.page.signature, 
-                page.url, 
-                page.page.blurb,
-                page.page.discussion.required
-            )
-            for key:Page.Binding.Key in page.keys 
+            case binding(Page.Binding)
+            case redirect(url:String)
+            
+            var url:String 
             {
-                anchors[key.key, default: []].append(((key.rank, order), symbol))
+                switch self 
+                {
+                case .binding(let binding):
+                    return binding.url 
+                case .redirect(url: let url):
+                    return url 
+                }
             }
         }
-        root.anchors = anchors.mapValues 
-        {
-            $0.sorted{ $0.rank < $1.rank }.map(\.symbol)
-        }
-        return root
+        
+        var payloads:[Payload]
+        var children:[String: Self]
+        
+        static 
+        let empty:Self = .init(payloads: [], children: [:])
     }
-    
-    func crosslink(scopes:[Self] = []) 
+}
+extension PageTree.Node 
+{
+    mutating 
+    func insert(_ binding:Page.Binding, at path:ArraySlice<String>) 
     {
-        for binding:Page.Binding in self.pages 
+        guard let key:String = path.first 
+        else 
         {
-            binding.page.crosslink(scopes: scopes)
+            self.payloads.append(.binding(binding))
+            return 
         }
         
-        let scopes:[Self] = scopes + [self]
-        for child:Self in self.children.values 
-        {
-            child.crosslink(scopes: scopes)
-        }
+        self.children[key, default: .empty].insert(binding, at: path.dropFirst())
     }
-    
-    func attachTopics() 
+    mutating 
+    func attachInheritedSymbols(scopes:[Self] = []) 
     {
-        self.attachTopics(global: self.anchors)
+        // go through the children first since we are writing to self.children later 
+        let next:[Self] = scopes + [self]
+        self.children = self.children.mapValues  
+        {
+            var child:Self = $0
+            child.attachInheritedSymbols(scopes: next)
+            return child
+        }
+        
+        if case .binding(let binding)? = self.payloads.first 
+        {
+            // we also have to bring in everything the inheritances themselves inherit
+            var inheritances:[[String]] = binding.page.inheritances
+            while let path:[String] = inheritances.popLast() 
+            {
+                let (clones, next):([String: Self], [[String]]) = 
+                    Self.clone(path[...], in: scopes)
+                self.children.merge(clones) 
+                { 
+                    (current, _) in current 
+                }
+                
+                inheritances.append(contentsOf: next)
+            }
+        }
     }
     
-    func attachTopics(global:[String: [Page.TopicSymbol]]) 
+    var cloned:Self 
     {
-        for binding:Page.Binding in self.pages 
-        {
-            binding.page.attachTopics(children: self.children.values, global: global)
-        }
-        for child:Self in self.children.values 
-        {
-            child.attachTopics(global: global)
-        }
+        .init(payloads: self.payloads.map{ .redirect(url: $0.url) }, 
+            children: self.children.mapValues(\.cloned))
     }
-    
     static 
-    func resolve(_ path:ArraySlice<String>, in scopes:[Self]) -> Page.Binding?
+    func clone(_ path:ArraySlice<String>, in scopes:[Self]) -> (cloned:[String: Self], next:[[String]])
+    {
+        let debugPath:String = path.joined(separator: "/")
+        higher:
+        for scope:Self in scopes.reversed() 
+        {
+            var path:ArraySlice<String> = path, 
+                scope:Self              = scope
+            while let root:String = path.first 
+            {
+                if let next:Self = scope.children[root] 
+                {
+                    path    = path.dropFirst()
+                    scope   = next 
+                }
+                else if case .binding(let binding)? = scope.payloads.first, 
+                    binding.locals.contains(root), 
+                    path.dropFirst().isEmpty
+                {
+                    break
+                }
+                else 
+                {
+                    continue higher 
+                }
+            }
+            
+            let inheritances:[[String]]
+            if case .binding(let binding)? = scope.payloads.first 
+            {
+                inheritances = binding.page.inheritances
+            }
+            else 
+            {
+                inheritances = []
+            }
+            return (scope.children.mapValues(\.cloned), inheritances)
+        }
+        
+        print("(PageTree.clone(_:in:)): failed to resolve '\(debugPath)'")
+        return ([:], [])
+    }
+    static 
+    func resolve(_ path:ArraySlice<String>, in scopes:[Self]) -> String?
     {
         let debugPath:String = path.joined(separator: "/")
         higher:
@@ -1381,15 +1471,11 @@ struct PageTree
                     path    = path.dropFirst()
                     scope   = next 
                 }
-                else if let page:Page.Binding = scope.pages.first, 
-                    page.locals.contains(root), 
+                else if case .binding(let binding)? = scope.payloads.first, 
+                    binding.locals.contains(root), 
                     path.dropFirst().isEmpty
                 {
-                    if scope.pages.count > 1 
-                    {
-                        print("warning: path '\(debugPath)' is ambiguous")
-                    }
-                    return page
+                    break
                 }
                 else 
                 {
@@ -1397,52 +1483,102 @@ struct PageTree
                 }
             }
             
-            guard let page:Page.Binding = scope.pages.first
+            guard let payload:Payload = scope.payloads.first
             else 
             {
                 break higher 
             }
-            if scope.pages.count > 1 
+            if scope.payloads.count > 1 
             {
                 print("warning: path '\(debugPath)' is ambiguous")
             }
             
-            return page
+            return payload.url
         }
         
-        print("failed to resolve '\(debugPath)'")
+        print("(PageTree.resolve(_:in:)): failed to resolve '\(debugPath)'")
         return nil
     }
     
-    mutating 
-    func insert(_ page:Page.Binding, at path:ArraySlice<String>, absolute:[String]) 
+    func traverse(scopes:[Self] = [], _ body:([Self], Self) throws -> ()) rethrows 
     {
-        guard let key:String = path.first 
-        else 
-        {
-            self.pages.append(page)
-            return 
-        }
+        try body(scopes, self)
         
-        self.children[key, default: .empty].insert(page, 
-            at: path.dropFirst(), absolute: absolute)
+        let scopes:[Self] = scopes + [self]
+        for child:Self in self.children.values 
+        {
+            try child.traverse(scopes: scopes, body)
+        }
     }
-}
-extension PageTree:CustomStringConvertible
-{
-    var description:String 
-    {
-        self.describe()
-    }
-    private 
+    
+    fileprivate 
     func describe(indent:Int = 0) -> String 
     {
         var description:String = 
-            "\(String.init(repeating: " ", count: indent * 4))\(self.pages.map(\.url))\n"
+            "\(String.init(repeating: " ", count: indent * 4))\(self.payloads.map(\.url))\n"
         for child:Self in self.children.values 
         {
             description += child.describe(indent: indent + 1)
         }
         return description
+    }
+}        
+extension PageTree 
+{
+    static 
+    func assemble(_ pages:[Page.Binding]) 
+    {
+        var root:Node = .empty
+        var anchors:[String: [(rank:(Int, Int), symbol:Page.TopicSymbol)]] = [:]
+        for (order, page):(Int, Page.Binding) in pages.enumerated()
+        {
+            root.insert(page, at: page.path[...])
+            let symbol:Page.TopicSymbol = 
+            (
+                page.page.signature, 
+                page.url, 
+                page.page.blurb,
+                page.page.discussion.required
+            )
+            for key:Page.Binding.Key in page.keys 
+            {
+                anchors[key.key, default: []].append(((key.rank, order), symbol))
+            }
+        }
+        
+        // sort anchors 
+        let global:[String: [Page.TopicSymbol]] = anchors.mapValues 
+        {
+            $0.sorted{ $0.rank < $1.rank }.map(\.symbol)
+        }
+        
+        // attach inherited symbols 
+        root.attachInheritedSymbols()
+        // resolve type links 
+        root.traverse
+        {
+            (scopes:[Node], node:Node) in 
+            for payload:Node.Payload in node.payloads
+            {
+                if case .binding(let binding) = payload 
+                {
+                    binding.page.crosslink(scopes: scopes)
+                }
+            }
+        }
+        // attach topics 
+        root.traverse
+        {
+            (_:[Node], node:Node) in 
+            for payload:Node.Payload in node.payloads  
+            {
+                if case .binding(let binding) = payload 
+                {
+                    binding.page.attachTopics(children: node.children.values, global: global)
+                }
+            }
+        }
+        // print out root 
+        print(root.describe())
     }
 }
