@@ -1,6 +1,9 @@
 /// protocol JPEG.Format
-///     A JPEG color format, determined by the bit-depth and set of component keys in 
-///     a JPEG frame header. 
+///     A color format, determined by the bit-depth and set of component keys in 
+///     a frame header. 
+/// 
+///     The coding [`(JPEG).Process`] of an image may place restrictions on which 
+///     combinations of component sets and bit precisions are valid.
 /// # [See also](color-protocols)
 /// ## (color-protocols)
 public 
@@ -24,7 +27,9 @@ protocol _JPEGFormat
     ///     The set of component keys for this color format. 
     /// 
     ///     The ordering is used to determine plane index assignments when initializing 
-    ///     an image layout.
+    ///     an image layout. This property should never be empty. It is allowed 
+    ///     for this array to contain fewer components than were detected by the 
+    ///     [`(Self).recognize(_:precision:)`] constructor.
     var components:[JPEG.Component.Key]
     {
         get 
@@ -32,12 +37,7 @@ protocol _JPEGFormat
     
     /// var JPEG.Format.precision   : Swift.Int {get}
     /// required 
-    ///     The bit-depth of each component in this color format. 
-    /// 
-    ///     The [`(Process).baseline`] coding process can only be used with color formats with a 
-    ///     precision of 8.
-    ///     The [`(Process).extended(coding:differential:)`] and [`(Process).progressive(coding:differential:)`] coding processes can only be used with color 
-    ///     formats with a precision of 8 or 12.
+    ///     The bit-depth of each component in this color format.
     var precision:Int 
     {
         get 
@@ -52,7 +52,7 @@ protocol _JPEGColor
 {
     /// associatedtype JPEG.Color.Format   
     /// :   JPEG.Format
-    ///     The JPEG color format associated with this color target. A JPEG image using 
+    ///     The color format associated with this color target. An image using 
     ///     any color format of this type will support rendering to this color target.
     associatedtype Format:JPEG.Format 
     
@@ -94,7 +94,7 @@ enum JPEG
     typealias Color  = _JPEGColor
     
     /// enum JPEG.Metadata
-    ///     A JPEG metadata record.
+    ///     A metadata record.
     public 
     enum Metadata 
     {
@@ -107,14 +107,14 @@ enum JPEG
         /// - _     : JPEG.EXIF
         case exif(EXIF)
         /// case JPEG.Metadata.application(_:data:)
-        ///     An unparsed JPEG application data segment.
+        ///     An unparsed application data segment.
         /// - _     : Swift.Int
         ///     The type code of this application segment.
         /// - data  : Swift.Array<Swift.UInt8>
         ///     The raw data of this application segment.
         case application(Int, data:[UInt8])
         /// case JPEG.Metadata.comment(data:)
-        ///     A JPEG comment segment.
+        ///     A comment segment.
         /// - data  : Swift.Array<Swift.UInt8>
         ///     The raw contents of this comment segment. Often, but not always, 
         ///     this data is UTF-8-encoded text.
@@ -247,7 +247,7 @@ extension JPEG
     /// enum JPEG.Common 
     /// :   JPEG.Format 
     ///     A built-in color format which covers the JFIF/EXIF subset of the 
-    ///     JPEG standard.
+    ///     [JPEG standard](https://www.w3.org/Graphics/JPEG/itu-t81.pdf).
     /// 
     ///     This color format is able to recognize conforming JFIF and EXIF images,
     ///     which use the component key assignments *Y*\ =\ **1**, *Cb*\ =\ **2**, *Cr*\ =\ **3**.
@@ -351,9 +351,6 @@ extension JPEG.Common:JPEG.Format
             break 
         }
         
-        // some jpegs use a nonstandard indexing like 0,1,2 or 2,3,4, so we 
-        // categorize those as nonconforming, as long as they form a contiguously 
-        // increasing sequence
         if sorted.count == 1 
         {
             return .nonconforming1x8(sorted[0])
@@ -579,11 +576,12 @@ extension JPEG
     /// enum JPEG.Process 
     ///     A JPEG coding process.
     /// 
-    ///     The [**JPEG standard**](https://www.w3.org/Graphics/JPEG/itu-t81.pdf)
+    ///     The [JPEG standard](https://www.w3.org/Graphics/JPEG/itu-t81.pdf)
     ///     specifies several subformats of the JPEG format known as *coding processes*.
     ///     The library can recognize images using any coding process, but 
     ///     only supports encoding and decoding images using the [`(Process).baseline`], 
-    ///     [`(Process).extended(coding:differential:)`], or [`(Process).progressive(coding:differential:)`] processes with 
+    ///     [`(Process).extended(coding:differential:)`], or 
+    ///     [`(Process).progressive(coding:differential:)`] processes with 
     ///     [`(Process.Coding).huffman`] entropy coding and the `differential` flag 
     ///     set to `false`.
     /// # [Coding processes](coding-processes)
@@ -591,7 +589,7 @@ extension JPEG
     enum Process 
     {
         /// enum JPEG.Process.Coding 
-        ///     A JPEG entropy coding method.
+        ///     An entropy coding method.
         public 
         enum Coding 
         {
@@ -604,7 +602,7 @@ extension JPEG
         }
         
         /// case JPEG.Process.baseline
-        ///     The baseline JPEG coding process. 
+        ///     The baseline coding process. 
         /// 
         ///     This is a sequential coding process. It allows up to two simultaneously 
         ///     referenced tables of each type. It can only be used with color formats 
@@ -612,7 +610,7 @@ extension JPEG
         /// ## (coding-processes)
         case baseline 
         /// case JPEG.Process.extended(coding:differential:)
-        ///     The extended JPEG coding process. 
+        ///     The extended coding process. 
         /// 
         ///     This is a sequential coding process. It allows up to four simultaneously 
         ///     referenced tables of each type. It can only be used with color formats 
@@ -625,7 +623,7 @@ extension JPEG
         /// ## (coding-processes)
         case extended(coding:Coding, differential:Bool)
         /// case JPEG.Process.progressive(coding:differential:)
-        ///     The progressive JPEG coding process. 
+        ///     The progressive coding process. 
         /// 
         ///     This is a progressive coding process. It allows up to four simultaneously 
         ///     referenced tables of each type. It can only be used with color formats 
@@ -639,7 +637,7 @@ extension JPEG
         /// ## (coding-processes)
         case progressive(coding:Coding, differential:Bool)
         /// case JPEG.Process.lossless(coding:differential:)
-        ///     The lossless JPEG coding process.
+        ///     The lossless coding process.
         /// - coding        : Coding 
         ///     The entropy coding used by this coding process.
         /// - differential  : Swift.Bool 
@@ -650,7 +648,7 @@ extension JPEG
     }
     
     /// enum JPEG.Marker 
-    ///     A JPEG marker type indicator.
+    ///     A marker type indicator.
     public 
     enum Marker
     {
@@ -938,10 +936,14 @@ extension JPEG
     {
         /// typealias JPEG.Table.HuffmanDC = Huffman<JPEG.Bitstream.Symbol.DC>
         ///     A DC huffman table.
+        /// #  [See also](huffman-table-types)
+        /// ## (huffman-table-types)
         public 
         typealias HuffmanDC = Huffman<Bitstream.Symbol.DC>
         /// typealias JPEG.Table.HuffmanAC = Huffman<JPEG.Bitstream.Symbol.AC>
         ///     An AC huffman table.
+        /// #  [See also](huffman-table-types)
+        /// ## (huffman-table-types)
         public 
         typealias HuffmanAC = Huffman<Bitstream.Symbol.AC>
         /// struct JPEG.Table.Huffman<Symbol> 
@@ -952,6 +954,7 @@ extension JPEG
         ///     This type stores a huffman tree, but does not support efficient 
         ///     lookup or encoding. To create a lookup table, call the [`(Huffman).decoder()`]
         ///     method. To create a codebook, call the [`(Huffman).encoder()`] method.
+        /// #  [See also](huffman-table-types)
         public 
         struct Huffman<Symbol>:AnyTable where Symbol:Bitstream.AnySymbol
         {
@@ -968,10 +971,27 @@ extension JPEG
             // constructor for the huffman Decoder type can just read it from here 
             let size:(n:Int, z:Int)
         }
-        
+        /// struct JPEG.Table.Quantization 
+        /// :   JPEG.AnyTable 
+        ///     A quantization table.
+        /// 
+        ///     Quantization tables store 64 coefficient quanta. The quantum values 
+        ///     can be accessed using either a zigzag index with the [`(Quantization).[z:]`] 
+        ///     subscript, or grid indices with the [`(Quantization).[k:h:]`] subscript.
         public 
         struct Quantization:AnyTable
         {
+            /// struct JPEG.Table.Quantization.Key 
+            /// :   Swift.Hashable 
+            /// :   Swift.Comparable 
+            /// :   Swift.ExpressibleByIntegerLiteral
+            ///     A unique identifier assigned to each quantization table in an image.
+            /// 
+            ///     Quanta keys are numeric values ranging from [`Swift.Int`min`] 
+            ///     to [`Swift.Int`max`]. In these reference pages, quanta keys 
+            ///     in their numerical representation are written in **boldface**.
+            /// #  [See also](key-types)
+            /// ## (key-types)
             public 
             struct Key:Hashable, Comparable  
             {
@@ -989,13 +1009,20 @@ extension JPEG
                 }
             }
             
+            /// typealias JPEG.Table.Quantization.Delegate = (q:Swift.Int, qi:JPEG.Table.Quantization.Key) 
+            /// :   JPEG.AnyTable
             public 
             typealias Delegate = (q:Int, qi:Table.Quantization.Key)
-            
+            /// enum JPEG.Table.Quantization.Precision 
+            ///     The integer width of the quantum values in this quantization table.
             public 
             enum Precision  
             {
+                /// case JPEG.Table.Quantization.Precision.uint8 
+                ///     The quantum values are encoded as 8-bit unsigned integers.
                 case uint8
+                /// case JPEG.Table.Quantization.Precision.uint16 
+                ///     The quantum values are encoded as big endian 16-bit unsigned integers.
                 case uint16
             }
             
@@ -1010,7 +1037,7 @@ extension JPEG
 extension JPEG 
 {
     /// struct JPEG.Component 
-    ///     A type modeling one channel of a JPEG image.
+    ///     A color channel in an image.
     public 
     struct Component
     {
@@ -1026,11 +1053,13 @@ extension JPEG
         /// :   Swift.Hashable 
         /// :   Swift.Comparable 
         /// :   Swift.ExpressibleByIntegerLiteral
-        ///     A unique identifier assigned to each color component in a JPEG image.
+        ///     A unique identifier assigned to each color component in an image.
         /// 
-        ///     JPEG component keys are numeric values ranging from 0 to 255. In 
-        ///     these documentation pages, component keys in their numerical 
+        ///     Component keys are numeric values ranging from 0 to 255. In 
+        ///     these reference pages, component keys in their numerical 
         ///     representation are written in **boldface**.
+        /// #  [See also](key-types)
+        /// ## (key-types)
         public 
         struct Key:Hashable, Comparable 
         {
@@ -1050,7 +1079,7 @@ extension JPEG
     }
     
     /// struct JPEG.Scan 
-    ///     A type modeling one scan of a JPEG image. 
+    ///     An image scan. 
     /// 
     ///     Depending on the coding process used by the image, a scan may encode 
     ///     a select frequency band, range of bits, and subset of color components.
@@ -1062,7 +1091,7 @@ extension JPEG
     struct Scan
     {
         /// struct JPEG.Scan.Component 
-        ///     A descriptor for a component encoded within a JPEG scan. 
+        ///     A descriptor for a component encoded within a scan. 
         public 
         struct Component 
         {
@@ -1074,14 +1103,14 @@ extension JPEG
             ///     The table selectors for the huffman tables associated with this 
             ///     component in the context of this scan.
             ///
-            ///     A single component of a JPEG image may use different huffman 
-            ///     tables in different image scans. (In contrast, quantization 
+            ///     An image component may use different huffman 
+            ///     tables in different scans. (In contrast, quantization 
             ///     table assignments are global to the file.) The DC table is 
             ///     used to encode or decode coefficient zero; the AC table is used 
             ///     for all other frequency coefficients. Depending on the band 
             ///     and bit range encoded by the image scan, one or both of the 
             ///     huffman table selectors may be unused, and therefore may not 
-            ///     need to reference valid JPEG tables.
+            ///     need to reference valid tables.
             public 
             let selector:(dc:Table.HuffmanDC.Selector, ac:Table.HuffmanAC.Selector)
         }
@@ -1125,17 +1154,17 @@ extension JPEG
     /// struct JPEG.Layout<Format> 
     /// where Format:JPEG.Format 
     ///     A specification of the components, coding process, table assignments, 
-    ///     and scan progression of a JPEG file.
+    ///     and scan progression of an image.
     ///
     ///     This structure records both the *recognized components* and 
     ///     the *resident components* in an image. We draw this distinction because 
     ///     the [`(Layout).planes`] property is allowed to include definitions for components 
     ///     that are not part of [`(Layout).format``(Format).components`].
-    ///     Such components will not recieve a plane in the [`JPEG.Data`] types, 
+    ///     Such components will not recieve a plane in the [`(JPEG).Data`] types, 
     ///     but will be ignored by the scan decoder without errors. 
     ///
     ///     Non-recognized components can only occur in images decoded from JPEG files, 
-    ///     and only when using a custom [`JPEG.Format`] type, as the built-in 
+    ///     and only when using a custom [`(JPEG).Format`] type, as the built-in 
     ///     [`JPEG.Common`] color format will never accept any component declaration 
     ///     in a frame header that it does not also recognize. When encoding images to JPEG 
     ///     files, all declared resident components must also be recognized components.
@@ -1152,7 +1181,7 @@ extension JPEG
         public 
         let format:Format  
         /// let JPEG.Layout.process     : JPEG.Process 
-        ///     The JPEG coding process used by the image.
+        ///     The coding process used by the image.
         /// ## (layout-image-format)
         public 
         let process:Process
@@ -1274,7 +1303,7 @@ extension JPEG.Layout
     ///     [`(JPEG.Header.Scan).progressive(_:band:bit:)`] constructors.
     /// 
     ///     This initializer will validate the scan progression and attempt to 
-    ///     generate a sequence of JPEG table definitions to implement the 
+    ///     generate a sequence of table definitions to implement the 
     ///     quantization table relationships specified by the `components` parameter. 
     ///     It will suffer a precondition failure if the scan progression is invalid, or 
     ///     if it is impossible to implement the specified table relationships with 
@@ -1777,6 +1806,9 @@ extension JPEG.Header.Scan
 // bitstream 
 extension JPEG 
 {
+    /// struct JPEG.Bitstream 
+    /// :   Swift.ExpressibleByArrayLiteral
+    ///     A padded bitstream.
     public 
     struct Bitstream 
     {
@@ -1926,6 +1958,18 @@ extension JPEG.Bitstream
 }
 extension JPEG.Bitstream:ExpressibleByArrayLiteral 
 {
+    /// init JPEG.Bitstream.init(arrayLiteral...:)
+    ///     Creates a bitstream from the given array literal.
+    ///
+    ///     This type stores the bitstream in 16-bit atoms. If the array literal 
+    ///     does not contain an even number of bytes, the last atom is padded 
+    ///     with 1-bits.
+    /// :   Swift.ExpressibleByArrayLiteral 
+    /// - arrayLiteral  : Swift.UInt8
+    ///     The raw bytes making up the bitstream. The more significant bits in 
+    ///     each byte come first in the bitstream. If the bitstream does not 
+    ///     correspond to a whole number of bytes, the least significant bits 
+    ///     in the last byte should be padded with 1-bits.
     public 
     init(arrayLiteral:UInt8...) 
     {

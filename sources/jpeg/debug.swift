@@ -1,6 +1,9 @@
 // literal forms 
 extension JPEG.Component.Key:ExpressibleByIntegerLiteral 
 {
+    /// init JPEG.Component.Key.init(integerLiteral:)
+    /// :   Swift.ExpressibleByIntegerLiteral 
+    /// - integerLiteral    : Swift.UInt8
     public 
     init(integerLiteral:UInt8) 
     {
@@ -9,6 +12,9 @@ extension JPEG.Component.Key:ExpressibleByIntegerLiteral
 }
 extension JPEG.Table.Quantization.Key:ExpressibleByIntegerLiteral 
 {
+    /// init JPEG.Table.Quantization.Key.init(integerLiteral:)
+    /// :   Swift.ExpressibleByIntegerLiteral 
+    /// - integerLiteral    : Swift.Int
     public 
     init(integerLiteral:Int) 
     {

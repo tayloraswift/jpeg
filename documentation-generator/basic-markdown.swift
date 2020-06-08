@@ -39,6 +39,7 @@ struct Markdown
     //  SymbolPath              ::= '`' ( '(' <Identifiers> ').' ) ? <SymbolTail> '`'
     //  SymbolTail              ::= <SymbolName> ( '.' <SymbolName> ) * 
     //  SymbolName              ::= <Identifier> ( '(' ( <FunctionLabel> ':' ) * ')' ) ?
+    //                            | '[' ( <FunctionLabel> ':' ) * ']'
     //  ParagraphLink           ::= '[' [^\]] * '](' [^\)] ')'
     struct NotClosingBracket:Parseable.TerminalClass
     {
@@ -161,15 +162,26 @@ struct Markdown
                     static 
                     func parse(_ tokens:[Character], position:inout Int) throws -> Self
                     {
-                        let identifier:Symbol.Identifier    = try .parse(tokens, position: &position)
-                        if let labels:List<Token.Parenthesis.Left, List<[List<Symbol.FunctionLabel, Token.Colon>], Token.Parenthesis.Right>> = 
-                            .parse(tokens, position: &position)
+                        if let identifier:Symbol.Identifier = .parse(tokens, position: &position)
                         {
-                            return .init(string: "\(identifier.string)(\(labels.body.head.map(\.head.description).joined()))")
+                            if let labels:List<Token.Parenthesis.Left, List<[List<Symbol.FunctionLabel, Token.Colon>], Token.Parenthesis.Right>> = 
+                                .parse(tokens, position: &position)
+                            {
+                                return .init(string: "\(identifier.string)(\(labels.body.head.map(\.head.description).joined()))")
+                            }
+                            else 
+                            {
+                                return .init(string: identifier.string)
+                            }
+                        }
+                        else if let labels:List<Token.Bracket.Left, List<[List<Symbol.FunctionLabel, Token.Colon>], Token.Bracket.Right>> = 
+                            .parse(tokens, position: &position) 
+                        {
+                            return .init(string: "[\(labels.body.head.map(\.head.description).joined())]")
                         }
                         else 
                         {
-                            return .init(string: identifier.string)
+                            throw ParsingError.unexpected(tokens, position, expected: Self.self)
                         }
                     }
                 }

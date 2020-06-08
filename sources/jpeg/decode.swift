@@ -1031,6 +1031,12 @@ extension JPEG.Table.Quantization
     // than the other way around, so we store the coefficients in zig-zag 
     // order, and provide a subscript that converts 2-d coordinates into 
     // zig-zag coordinates 
+    
+    /// subscript JPEG.Table.Quantization[k:h:]
+    /// @inlinable
+    /// - k     : Swift.Int
+    /// - h     : Swift.Int
+    /// - ->    : Swift.UInt16
     @inlinable
     public 
     subscript(k k:Int, h h:Int) -> UInt16 
@@ -1044,7 +1050,9 @@ extension JPEG.Table.Quantization
             self[z: Self.z(k: k, h: h)] = value 
         }
     }
-    
+    /// subscript JPEG.Table.Quantization[z:]
+    /// - z     : Swift.Int
+    /// - ->    : Swift.UInt16
     public 
     subscript(z z:Int) -> UInt16 
     {
