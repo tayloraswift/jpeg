@@ -155,7 +155,7 @@ extension Test
             
             let rgb:[JPEG.RGB] = image.unpack(as: JPEG.RGB.self)
             // write to rgb file 
-            guard let _:Void = try (Common.File.Destination.open(path: "\(path).rgb")
+            guard let _:Void = try (System.File.Destination.open(path: "\(path).rgb")
             {
                 guard let _:Void = $0.write(rgb.flatMap{ [$0.r, $0.g, $0.b] })
                 else 
@@ -298,7 +298,7 @@ extension Test
     {
         do 
         {
-            guard let rgb:[JPEG.RGB]    = try (Common.File.Source.open(path: "\(path).rgb")
+            guard let rgb:[JPEG.RGB]    = try (System.File.Source.open(path: "\(path).rgb")
             {
                 guard let data:[UInt8]  = $0.read(count: 3 * size.x * size.y)
                 else

@@ -1,9 +1,9 @@
 public 
-enum Common   
+enum General    
 {
 }
 
-extension Common  
+extension General  
 {
     @propertyWrapper 
     public 
@@ -75,7 +75,7 @@ extension Common
     }
 }
 
-extension Common 
+extension General 
 {    
     struct Heap<Key, Value> where Key:Comparable 
     {
@@ -121,7 +121,7 @@ extension Common
         }
     }
 }
-extension Common.Heap
+extension General.Heap
 {
     @inline(__always)
     private static 
@@ -247,7 +247,7 @@ extension Common.Heap
         }
     }
 }
-extension Common.Heap:ExpressibleByArrayLiteral 
+extension General.Heap:ExpressibleByArrayLiteral 
 {
     init(arrayLiteral:(key:Key, value:Value)...) 
     {
@@ -256,7 +256,7 @@ extension Common.Heap:ExpressibleByArrayLiteral
 } 
 
 // 2d iterators 
-extension Common 
+extension General 
 {
     public 
     struct Range2<Bound> where Bound:Comparable 
@@ -282,24 +282,24 @@ extension Common
         let bound:(x:(Bound, Bound), y:Bound)
     }
 }
-func ..< <Bound>(lhs:(x:Bound, y:Bound), rhs:(x:Bound, y:Bound)) -> Common.Range2<Bound> 
+func ..< <Bound>(lhs:(x:Bound, y:Bound), rhs:(x:Bound, y:Bound)) -> General.Range2<Bound> 
     where Bound:Comparable
 {
     return .init(lowerBound: lhs, upperBound: rhs)
 }
 
-extension Common.Range2:Sequence where Bound:Strideable, Bound.Stride:SignedInteger
+extension General.Range2:Sequence where Bound:Strideable, Bound.Stride:SignedInteger
 {
     public 
     typealias Element = (x:Bound, y:Bound)
     public 
-    func makeIterator() -> Common.Range2Iterator<Bound> 
+    func makeIterator() -> General.Range2Iterator<Bound> 
     {
         .init(x: self.lowerBound.x, y: self.lowerBound.y, 
             bound: ((self.lowerBound.x, self.upperBound.x), self.upperBound.y))
     }
 }
-extension Common.Range2Iterator:IteratorProtocol
+extension General.Range2Iterator:IteratorProtocol
 {
     public mutating 
     func next() -> (x:Bound, y:Bound)? 

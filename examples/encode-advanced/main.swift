@@ -2,7 +2,7 @@ import JPEG
 
 let path:String          = "examples/encode-advanced/karlie-cfdas-2011.png.rgb",
     size:(x:Int, y:Int)  = (600, 900)
-guard let rgb:[JPEG.RGB] = (Common.File.Source.open(path: path)
+guard let rgb:[JPEG.RGB] = (System.File.Source.open(path: path)
 {
     guard let data:[UInt8] = $0.read(count: 3 * size.x * size.y)
     else 

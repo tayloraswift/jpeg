@@ -1005,7 +1005,7 @@ extension JPEG.Table.Huffman
         struct Entry 
         {
             let symbol:Symbol
-            @Common.Storage<UInt8> 
+            @General.Storage<UInt8> 
             var length:Int 
         }
         
@@ -1342,6 +1342,8 @@ extension JPEG.Table.Quantization
 // intermediate forms
 extension JPEG 
 {
+    /// enum JPEG.Data 
+    ///     A namespace for image representation types.
     public 
     enum Data 
     {
@@ -1356,10 +1358,27 @@ extension JPEG.Data
             partial:Int  = size % stride != 0 ? 1 : 0 
         return complete + partial 
     }
-    
+    /// struct JPEG.Data.Spectral<Format> 
+    /// where Format:JPEG.Format
+    ///     A planar image represented in the frequency domain.
+    /// 
+    ///     A spectral image stores its data in blocks called *data units*. Each 
+    ///     block is a square 8×8 matrix of frequency coefficients. The data units 
+    ///     themselves have the same spatial arrangement they do in the spatial domain.
+    /// 
+    ///     A spectral image always stores a whole number of data units in both 
+    ///     dimensions, even if the image dimensions in pixels are not multiples of 8.
+    ///     Because each component in an image has its own sampling factors, the 
+    ///     image planes may not have the same size.
+    /// 
+    ///     The spectral representation is the a lossless representation. JPEG 
+    ///     images that have been decoded to this representation can be re-encoded 
+    ///     without loss of information or compression.
     public 
     struct Spectral<Format> where Format:JPEG.Format 
     {
+        /// struct JPEG.Data.Spectral.Quanta 
+        ///     A container for the quantization tables used by a spectral image.
         public 
         struct Quanta 
         {
@@ -1367,18 +1386,27 @@ extension JPEG.Data
             var quanta:[JPEG.Table.Quantization], 
                 q:[JPEG.Table.Quantization.Key: Int]
         }
-        
+        /// struct JPEG.Data.Spectral.Plane 
+        ///     A plane of an image in the frequency domain, containing one color channel.
         public 
         struct Plane 
         {
+            /// var JPEG.Data.Spectral.Plane.units  : (x:Swift.Int, y:Swift.Int)
+            ///     The number of data units in this plane in the horizontal and 
+            ///     vertical directions.
             public 
             var units:(x:Int, y:Int)
             
-            // have to be `Int16` to circumvent compiler size limits for `_read` and `_modify`
-            @Common.Storage2<Int16>
+            /// var JPEG.Data.Spectral.Plane.factor : (x:Swift.Int, y:Swift.Int) { get }
+            /// @ : General.Storage2<Swift.Int16>
+            ///     The sampling factors of the color component this plane stores.
+            /// 
+            ///     This property is backed by [`Swift.Int16`]s to circumvent compiler 
+            ///     size limits for `_read` and `_modify`.
+            @General.Storage2<Int16>
             public 
             var factor:(x:Int, y:Int) 
-            @Common.MutableStorage<Int32>
+            @General.MutableStorage<Int32>
             var q:Int
             
             private 
@@ -1443,7 +1471,7 @@ extension JPEG.Data
             }
             
             // have to be `Int32` to circumvent compiler size limits for `_read` and `_modify`
-            @Common.Storage2<Int32>
+            @General.Storage2<Int32>
             public 
             var factor:(x:Int, y:Int) 
             
@@ -1686,7 +1714,7 @@ extension JPEG.Data.Rectangular
 extension JPEG.Data.Spectral.Plane 
 {
     public 
-    var indices:Common.Range2<Int> 
+    var indices:General.Range2<Int> 
     {
         (0, 0) ..< self.units 
     }
@@ -1694,7 +1722,7 @@ extension JPEG.Data.Spectral.Plane
 extension JPEG.Data.Planar.Plane 
 {
     public 
-    var indices:Common.Range2<Int> 
+    var indices:General.Range2<Int> 
     {
         (0, 0) ..< self.size 
     }

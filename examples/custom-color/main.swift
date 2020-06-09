@@ -188,7 +188,7 @@ else
 }
 
 let rgb12:[JPEG.RGB12] = image.unpack(as: JPEG.RGB12.self)
-guard let _:Void = (Common.File.Destination.open(path: "\(path).rgb")
+guard let _:Void = (System.File.Destination.open(path: "\(path).rgb")
 {
     guard let _:Void = $0.write(rgb12.flatMap
     { 

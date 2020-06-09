@@ -51,7 +51,7 @@ extension Test
                 image.unpack(as: JPEG.YCbCr.self), 
                 image.unpack(as: JPEG.RGB.self)
             )
-            guard   let ycc:[JPEG.YCbCr] = try (Common.File.Source.open(path: "\(path).ycc")
+            guard   let ycc:[JPEG.YCbCr] = try (System.File.Source.open(path: "\(path).ycc")
             {
                 guard let data:[UInt8] = $0.read(count: 3 * output.ycc.count)
                 else
@@ -65,7 +65,7 @@ extension Test
                     .init(y: data[i * 3], cb: data[i * 3 + 1], cr: data[i * 3 + 2])
                 }
             }), 
-                    let rgb:[JPEG.RGB]   = try (Common.File.Source.open(path: "\(path).rgb")
+                    let rgb:[JPEG.RGB]   = try (System.File.Source.open(path: "\(path).rgb")
             {
                 guard let data:[UInt8] = $0.read(count: 3 * output.rgb.count)
                 else
@@ -82,7 +82,7 @@ extension Test
             else
             {
                 // write new golden output if there is none at the given location 
-                guard let _:Void = try (Common.File.Destination.open(path: "\(path).ycc")
+                guard let _:Void = try (System.File.Destination.open(path: "\(path).ycc")
                 {
                     guard let _:Void = $0.write(output.ycc.flatMap{ [$0.y, $0.cb, $0.cr] })
                     else 
@@ -95,7 +95,7 @@ extension Test
                     throw Failure.init(message: "failed to open file '\(path).ycc'")
                 }
                 
-                guard let _:Void = try (Common.File.Destination.open(path: "\(path).rgb")
+                guard let _:Void = try (System.File.Destination.open(path: "\(path).rgb")
                 {
                     guard let _:Void = $0.write(output.rgb.flatMap{ [$0.r, $0.g, $0.b] })
                     else 

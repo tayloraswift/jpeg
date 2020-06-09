@@ -890,12 +890,12 @@ else
 
 Up to this point we have been using the built-in file system-based API that the library provides on Linux and MacOS platforms. These APIs are built atop of the library’s core data stream APIs, which are available on all Swift platforms. (The core library is universally portable because it is written in pure Swift, with no dependencies, even [Foundation](https://developer.apple.com/documentation/foundation).) In this tutorial, we will use this lower-level interface to implement reading and writing JPEG files in memory.
 
-Our basic data type modeling a memory blob is incredibly simple; it consists of a Swift array containing the data buffer, and a file position pointer in the form of an integer. Here, we have namespaced it under the libary’s `Common` namespace to parallel the built-in file system APIs. 
+Our basic data type modeling a memory blob is incredibly simple; it consists of a Swift array containing the data buffer, and a file position pointer in the form of an integer. Here, we have namespaced it under the libary’s `System` namespace to parallel the built-in file system APIs. 
 
 ```swift 
 import JPEG 
 
-extension Common 
+extension System 
 {
     struct Blob 
     {
@@ -906,14 +906,10 @@ extension Common
 }
 ```
 
-> Note for those unfamiliar with Swift’s name resolution behaviors: 
-> 
-> The `Common` namespace, whose fully qualified name is `JPEG.Common` is *not* the same as the `JPEG.Common` color format, whose fully qualified name is `JPEG.JPEG.Common`. In user programs, the Swift compiler will resolve the name `JPEG` to the library symbol `JPEG.JPEG`, which means that the name `JPEG.Common` will refer to the `JPEG.JPEG.Common` color format type, not the `JPEG.Common` namespace. This is true even if you import the library namespaces separately, with `import enum JPEG.JPEG` and `import enum JPEG.Common`. To refer to the `JPEG.Common` namespace, you must spell it without the prefix, as `Common`.
-
 There are two protocols a custom data stream type can support: `JPEG.Bytestream.Source`, and `JPEG.Bytestream.Destination`. The first one enables image decoding, while the second one enables image encoding. We can conform to both with the following implementations:
 
 ```swift 
-extension Common.Blob:JPEG.Bytestream.Source, JPEG.Bytestream.Destination 
+extension System.Blob:JPEG.Bytestream.Source, JPEG.Bytestream.Destination 
 {
     init(_ data:[UInt8]) 
     {
@@ -951,9 +947,9 @@ For the sake of tutorial brevity, we are not going to bother bootstrapping the t
 
 ```swift 
 let path:String         = "examples/in-memory/karlie-2011.jpg"
-guard let data:[UInt8]  = (Common.File.Source.open(path: path) 
+guard let data:[UInt8]  = (System.File.Source.open(path: path) 
 {
-    (source:inout Common.File.Source) -> [UInt8]? in
+    (source:inout System.File.Source) -> [UInt8]? in
     
     guard let count:Int = source.count
     else 
@@ -967,7 +963,7 @@ else
     fatalError("failed to open or read file '\(path)'")
 }
 
-var blob:Common.Blob = .init(data)
+var blob:System.Blob = .init(data)
 ```
 
 <img width=300 src="in-memory/karlie-2011.jpg"/>
@@ -976,7 +972,7 @@ var blob:Common.Blob = .init(data)
 >
 > (photo by John “hugo971”)
 
-To decode using our `Common.Blob` type, we use the `decompress(stream:)` functions, which are part of the core library, and do essentially the same things as the file system-aware `decompress(path:)` functions.
+To decode using our `System.Blob` type, we use the `decompress(stream:)` functions, which are part of the core library, and do essentially the same things as the file system-aware `decompress(path:)` functions.
 
 ```swift 
 let spectral:JPEG.Data.Spectral<JPEG.Common>    = try .decompress(stream: &blob)
@@ -1000,7 +996,7 @@ try spectral.compress(stream: &blob)
 Then, we can save the blob to disk, to verify that the memory blob does indeed contain a valid JPEG file. 
 
 ```swift 
-guard let _:Void = (Common.File.Destination.open(path: "\(path).jpg")
+guard let _:Void = (System.File.Destination.open(path: "\(path).jpg")
 {
     guard let _:Void = $0.write(blob.data)
     else 
@@ -1100,9 +1096,9 @@ For the purposes of this tutorial we again initialize our mock data stream using
 
 ```swift 
 let path:String         = "examples/decode-online/karlie-oscars-2017.jpg"
-guard let data:[UInt8]  = (Common.File.Source.open(path: path) 
+guard let data:[UInt8]  = (System.File.Source.open(path: path) 
 {
-    (source:inout Common.File.Source) -> [UInt8]? in
+    (source:inout System.File.Source) -> [UInt8]? in
     
     guard let count:Int = source.count
     else 

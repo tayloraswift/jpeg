@@ -9,7 +9,8 @@
 #if os(macOS) || os(Linux)
 
 //  A namespace for file IO functionality.
-extension Common 
+public 
+enum System 
 {
     public
     enum File
@@ -33,7 +34,7 @@ extension Common
         }
     }
 }
-extension Common.File.Source
+extension System.File.Source
 {
     //  Calls a closure with an interface for reading from the specified file.
     //  
@@ -54,7 +55,7 @@ extension Common.File.Source
     func open<Result>(path:String, _ body:(inout Self) throws -> Result)
         rethrows -> Result?
     {
-        guard let descriptor:Common.File.Descriptor = fopen(path, "rb")
+        guard let descriptor:System.File.Descriptor = fopen(path, "rb")
         else
         {
             return nil
@@ -134,7 +135,7 @@ extension Common.File.Source
         return Int.init(status.st_size)
     } 
 }
-extension Common.File.Destination
+extension System.File.Destination
 {
     //  Calls a closure with an interface for writing to the specified file.
     //  
@@ -155,7 +156,7 @@ extension Common.File.Destination
     func open<Result>(path:String, _ body:(inout Self) throws -> Result)
         rethrows -> Result?
     {
-        guard let descriptor:Common.File.Descriptor = fopen(path, "wb")
+        guard let descriptor:System.File.Descriptor = fopen(path, "wb")
         else
         {
             return nil
@@ -199,10 +200,10 @@ extension Common.File.Destination
 }
 
 // declare conformance (as a formality)
-extension Common.File.Source:JPEG.Bytestream.Source 
+extension System.File.Source:JPEG.Bytestream.Source 
 {
 }
-extension Common.File.Destination:JPEG.Bytestream.Destination 
+extension System.File.Destination:JPEG.Bytestream.Destination 
 {
 }
 // file-based encoding and decoding apis
@@ -211,12 +212,12 @@ extension JPEG.Data.Spectral
     public static 
     func decompress(path:String) throws -> Self? 
     {
-        return try Common.File.Source.open(path: path, Self.decompress(stream:))
+        return try System.File.Source.open(path: path, Self.decompress(stream:))
     }
     public 
     func compress(path:String) throws -> Void?
     {
-        return try Common.File.Destination.open(path: path, self.compress(stream:))
+        return try System.File.Destination.open(path: path, self.compress(stream:))
     }
 }
 extension JPEG.Data.Planar 

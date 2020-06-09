@@ -690,7 +690,7 @@ extension JPEG.Table.Huffman
         
         // reversing (to get canonically sorted array) gets the heapify below 
         // to its best-case O(n) time, not that O matters for n = 256 
-        var heap:Common.Heap<Int, Subtree<Void>> = .init(sorted.reversed().map  
+        var heap:General.Heap<Int, Subtree<Void>> = .init(sorted.reversed().map  
         {
             ($0.frequency, .init(.leaf(())))
         })
@@ -745,7 +745,7 @@ extension JPEG.Table.Huffman
         {
             // the inhabited bits are in the most significant end of the `UInt16`
             let bits:UInt16
-            @Common.Storage<UInt16> 
+            @General.Storage<UInt16> 
             var length:Int 
         }
         

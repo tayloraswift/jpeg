@@ -11,7 +11,7 @@ func discrepancy(jpeg:String, reference:String)
     }
     
     let output:[JPEG.YCbCr]         =  rectangular.unpack(as: JPEG.YCbCr.self)
-    guard let expected:[JPEG.YCbCr] = (Common.File.Source.open(path: reference)
+    guard let expected:[JPEG.YCbCr] = (System.File.Source.open(path: reference)
     {
         guard let data:[UInt8] = $0.read(count: 3 * output.count)
         else

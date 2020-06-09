@@ -48,9 +48,9 @@ extension Stream:JPEG.Bytestream.Source
 }
 
 let path:String         = "examples/decode-online/karlie-oscars-2017.jpg"
-guard let data:[UInt8]  = (Common.File.Source.open(path: path) 
+guard let data:[UInt8]  = (System.File.Source.open(path: path) 
 {
-    (source:inout Common.File.Source) -> [UInt8]? in
+    (source:inout System.File.Source) -> [UInt8]? in
     
     guard let count:Int = source.count
     else 
@@ -321,7 +321,7 @@ try decodeOnline(stream: &stream)
     
     last = rgb
     
-    guard let _:Void = (Common.File.Destination.open(path: "\(path)-\(counter).rgb")
+    guard let _:Void = (System.File.Destination.open(path: "\(path)-\(counter).rgb")
     {
         guard let _:Void = $0.write(rgb.flatMap{ [$0.r, $0.g, $0.b] })
         else 
@@ -334,7 +334,7 @@ try decodeOnline(stream: &stream)
         fatalError("failed to open file '\(path)-\(counter).rgb'")
     } 
     
-    guard let _:Void = (Common.File.Destination.open(path: "\(path)-difference-\(counter).rgb")
+    guard let _:Void = (System.File.Destination.open(path: "\(path)-difference-\(counter).rgb")
     {
         guard let _:Void = $0.write(difference.flatMap{ [$0.r, $0.g, $0.b] })
         else 

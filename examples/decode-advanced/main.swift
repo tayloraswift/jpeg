@@ -116,7 +116,7 @@ for (p, plane):(Int, JPEG.Data.Planar<JPEG.Common>.Plane) in planar.enumerated()
     }
     
     let planepath:String = "\(path)-\(p).\(plane.size.x)x\(plane.size.y).gray"
-    guard let _:Void = (Common.File.Destination.open(path: planepath)
+    guard let _:Void = (System.File.Destination.open(path: planepath)
     {
         guard let _:Void = $0.write(samples)
         else 
@@ -132,7 +132,7 @@ for (p, plane):(Int, JPEG.Data.Planar<JPEG.Common>.Plane) in planar.enumerated()
 
 let rectangular:JPEG.Data.Rectangular<JPEG.Common> = planar.interleaved(cosite: false)
 let rgb:[JPEG.RGB] = rectangular.unpack(as: JPEG.RGB.self)
-guard let _:Void = (Common.File.Destination.open(path: "\(path).rgb")
+guard let _:Void = (System.File.Destination.open(path: "\(path).rgb")
 {
     guard let _:Void = $0.write(rgb.flatMap{ [$0.r, $0.g, $0.b] })
     else 
