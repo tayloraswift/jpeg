@@ -37,9 +37,8 @@ struct Markdown
     //  ParagraphSuperscript    ::= '^' [^\^] * '^'
     //  ParagraphSymbolLink     ::= '[' <SymbolPath> <SymbolPath> * ( <Identifier> '`' ) * ']'
     //  SymbolPath              ::= '`' ( '(' <Identifiers> ').' ) ? <SymbolTail> '`'
-    //  SymbolTail              ::= <SymbolName> ( '.' <SymbolName> ) * 
-    //  SymbolName              ::= <Identifier> ( '(' ( <FunctionLabel> ':' ) * ')' ) ?
-    //                            | '[' ( <FunctionLabel> ':' ) * ']'
+    //  SymbolTail              ::= <Identifiers> ? '[' ( <FunctionLabel> ':' ) * ']'
+    //                            | <Identifiers> ( '(' ( <FunctionLabel> ':' ) * ')' ) ?
     //  ParagraphLink           ::= '[' [^\]] * '](' [^\)] ')'
     struct NotClosingBracket:Parseable.TerminalClass
     {
@@ -155,37 +154,6 @@ struct Markdown
         {
             struct Path:Parseable
             {
-                struct Name:Parseable 
-                {
-                    let string:String 
-                    
-                    static 
-                    func parse(_ tokens:[Character], position:inout Int) throws -> Self
-                    {
-                        if let identifier:Symbol.Identifier = .parse(tokens, position: &position)
-                        {
-                            if let labels:List<Token.Parenthesis.Left, List<[List<Symbol.FunctionLabel, Token.Colon>], Token.Parenthesis.Right>> = 
-                                .parse(tokens, position: &position)
-                            {
-                                return .init(string: "\(identifier.string)(\(labels.body.head.map(\.head.description).joined()))")
-                            }
-                            else 
-                            {
-                                return .init(string: identifier.string)
-                            }
-                        }
-                        else if let labels:List<Token.Bracket.Left, List<[List<Symbol.FunctionLabel, Token.Colon>], Token.Bracket.Right>> = 
-                            .parse(tokens, position: &position) 
-                        {
-                            return .init(string: "[\(labels.body.head.map(\.head.description).joined())]")
-                        }
-                        else 
-                        {
-                            throw ParsingError.unexpected(tokens, position, expected: Self.self)
-                        }
-                    }
-                }
-                
                 let prefix:[String], 
                     path:[String]
                     
@@ -194,12 +162,37 @@ struct Markdown
                 {
                     let _:Backtick                      = try .parse(tokens, position: &position), 
                         prefix:List<Token.Parenthesis.Left, List<Symbol.Identifiers, List<Token.Parenthesis.Right, Token.Period>>>? = 
-                                                              .parse(tokens, position: &position),
-                        head:Name                       = try .parse(tokens, position: &position),
-                        body:[List<Token.Period, Name>] =     .parse(tokens, position: &position),
-                        _:Backtick                      = try .parse(tokens, position: &position)
-                    return .init(prefix: prefix?.body.head.identifiers ?? [], 
-                        path: [head.string] + body.map(\.body.string))
+                                                              .parse(tokens, position: &position)
+                    let path:[String]
+                    // parse subscript first, or else it’s ambiguous 
+                    if      let tail:List<Symbol.Identifiers?, 
+                        List<Token.Bracket.Left, List<[List<Symbol.FunctionLabel, Token.Colon>], Token.Bracket.Right>>> = 
+                        .parse(tokens, position: &position)
+                    {
+                        path = (tail.head?.identifiers ?? []) + 
+                            ["[\(tail.body.body.head.map(\.head.description).joined())]"]
+                    }
+                    else if let tail:Symbol.Identifiers = .parse(tokens, position: &position) 
+                    {
+                        if let labels:List<Token.Parenthesis.Left, List<[List<Symbol.FunctionLabel, Token.Colon>], Token.Parenthesis.Right>> = 
+                            .parse(tokens, position: &position)
+                        {
+                            path = tail.identifiers.dropLast() + 
+                                ["\(tail.identifiers[tail.identifiers.endIndex - 1])(\(labels.body.head.map(\.head.description).joined()))"]
+                        }
+                        else 
+                        {
+                            path = tail.identifiers
+                        }
+                        
+                    }
+                    else 
+                    {
+                        throw ParsingError.unexpected(tokens, position, expected: Self.self)
+                    }
+                    
+                    let _:Backtick = try .parse(tokens, position: &position)
+                    return .init(prefix: prefix?.body.head.identifiers ?? [], path: path)
                 }
             }
             
@@ -270,7 +263,7 @@ struct Markdown
             else if let sup:List<Ditto, List<[NotClosingDitto], Ditto>> = 
                 .parse(tokens, position: &position) 
             {
-                return .sub(.parse(sup.body.head.map(\.character)))
+                return .sup(.parse(sup.body.head.map(\.character)))
             }
             else if let text:Text = .parse(tokens, position: &position) 
             {

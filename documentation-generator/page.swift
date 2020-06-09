@@ -59,7 +59,7 @@ class Page
                 {
                     ($0.component, .unresolved(path: $0.accumulated))
                 } + 
-                [(last, .apple(url: "https://docs.swift.org/swift-book/ReferenceManual/Types.html#grammar_metatype-type"))]
+                [(last, .apple(url: "https://docs.swift.org/swift-book/ReferenceManual/Types.html#ID455"))]
             }
             else 
             {
@@ -94,7 +94,7 @@ class Page
         }
         
         static 
-        func tokenize(_ type:Symbol.SwiftType) -> [Token] 
+        func tokenize(_ type:Symbol.SwiftType, locals:Set<String> = []) -> [Token] 
         {
             switch type 
             {
@@ -109,7 +109,7 @@ class Page
                         let element:Symbol.SwiftType    = identifiers[1].generics[0]
                         let link:Link                   = .appleify(["Swift", "Optional"])
                         var tokens:[Token] = []
-                        tokens.append(contentsOf: Self.tokenize(element))
+                        tokens.append(contentsOf: Self.tokenize(element, locals: locals))
                         tokens.append(.typePunctuation("?", link))
                         return tokens 
                     }
@@ -120,7 +120,7 @@ class Page
                         let link:Link                   = .appleify(["Swift", "Array"])
                         var tokens:[Token] = []
                         tokens.append(.typePunctuation("[", link))
-                        tokens.append(contentsOf: Self.tokenize(element))
+                        tokens.append(contentsOf: Self.tokenize(element, locals: locals))
                         tokens.append(.typePunctuation("]", link))
                         return tokens 
                     }
@@ -132,13 +132,19 @@ class Page
                         let link:Link               = .appleify(["Swift", "Dictionary"])
                         var tokens:[Token] = []
                         tokens.append(.typePunctuation("[", link))
-                        tokens.append(contentsOf: Self.tokenize(key))
+                        tokens.append(contentsOf: Self.tokenize(key, locals: locals))
                         tokens.append(.typePunctuation(":", link))
                         tokens.append(.whitespace)
-                        tokens.append(contentsOf: Self.tokenize(value))
+                        tokens.append(contentsOf: Self.tokenize(value, locals: locals))
                         tokens.append(.typePunctuation("]", link))
                         return tokens 
                     }
+                }
+                else if identifiers.count == 1, 
+                    identifiers[0].generics.isEmpty, 
+                    locals.contains(identifiers[0].identifier) 
+                {
+                    return [.identifier(identifiers[0].identifier)]
                 }
                 
                 return .init(Link.link(identifiers.map{ ($0.identifier, $0.generics) }).map 
@@ -148,7 +154,7 @@ class Page
                     if !element.component.generics.isEmpty
                     {
                         tokens.append(.punctuation("<"))
-                        tokens.append(contentsOf: element.component.generics.map(Self.tokenize(_:))
+                        tokens.append(contentsOf: element.component.generics.map{ Self.tokenize($0, locals: locals) }
                             .joined(separator: [.punctuation(","), .breakableWhitespace]))
                         tokens.append(.punctuation(">"))
                     }
@@ -167,7 +173,7 @@ class Page
                         tokens.append(.identifier(label))
                         tokens.append(.punctuation(":"))
                     }
-                    tokens.append(contentsOf: Self.tokenize(element.type))
+                    tokens.append(contentsOf: Self.tokenize(element.type, locals: locals))
                     return tokens 
                 }.joined(separator: [.punctuation(","), .breakableWhitespace]))
                 tokens.append(.punctuation(")"))
@@ -195,7 +201,7 @@ class Page
                         tokens.append(.keyword("inout"))
                         tokens.append(.whitespace)
                     }
-                    tokens.append(contentsOf: Self.tokenize(parameter.type))
+                    tokens.append(contentsOf: Self.tokenize(parameter.type, locals: locals))
                     return tokens 
                 }.joined(separator: [.punctuation(","), .breakableWhitespace]))
                 tokens.append(.punctuation(")"))
@@ -207,7 +213,7 @@ class Page
                 }
                 tokens.append(.keyword("->"))
                 tokens.append(.whitespace)
-                tokens.append(contentsOf: Self.tokenize(type.return))
+                tokens.append(contentsOf: Self.tokenize(type.return, locals: locals))
                 return tokens
             }
         } 
@@ -667,7 +673,8 @@ extension Page
     func print(function fields:Fields, labels:[(name:String, variadic:Bool)], 
         delimiters:(Character, Character),
         signature:inout [Signature.Token], 
-        declaration:inout [Declaration.Token]) 
+        declaration:inout [Declaration.Token], 
+        locals:Set<String> = []) 
     {
         guard labels.count == fields.parameters.count 
         else 
@@ -693,17 +700,30 @@ extension Page
             {
                 signature.append(.highlight(label))
                 signature.append(.punctuation(":"))
-                declaration.append(.identifier(label))
+            }
+            
+            let names:[String] 
+            if delimiters == ("[", "]") 
+            {
+                switch (label, name) 
+                {
+                case ("_",             "_"):
+                    names = ["_"]
+                case ("_",       let inner):
+                    names = [inner]
+                case (let outer, let inner):
+                    names = [outer, inner]
+                }
             }
             else 
             {
-                declaration.append(.keyword(label))
+                names = label == name ? [label] : [label, name]
             }
-            if label != name || delimiters == ("[", "]")
+            declaration.append(contentsOf: names.map 
             {
-                declaration.append(.whitespace)
-                declaration.append(name == "_" ? .keyword(name) : .identifier(name))
-            }
+                [$0 == "_" ? .keyword($0) : .identifier($0)]
+            }.joined(separator: [.whitespace]))
+            
             declaration.append(.punctuation(":"))
             for attribute:Symbol.Attribute in parameter.attributes
             {
@@ -718,7 +738,7 @@ extension Page
                 declaration.append(.whitespace)
             }
             let type:(declaration:[Page.Declaration.Token], signature:[Page.Signature.Token]) 
-            type.declaration = Page.Declaration.tokenize(parameter.type)
+            type.declaration = Page.Declaration.tokenize(parameter.type, locals: locals)
             type.signature   = Page.Signature.convert(type.declaration)
             signature.append(contentsOf: type.signature)
             declaration.append(contentsOf: type.declaration)
@@ -758,7 +778,7 @@ extension Page
             declaration.append(.punctuation("->"))
             declaration.append(.whitespace)
             
-            let tokens:[Page.Declaration.Token] = Page.Declaration.tokenize(type)
+            let tokens:[Page.Declaration.Token] = Page.Declaration.tokenize(type, locals: locals)
             signature.append(contentsOf: Page.Signature.convert(tokens))
             declaration.append(contentsOf: tokens)
         }
@@ -1027,7 +1047,7 @@ extension Page.Binding
         else 
         {
             Page.print(function: fields, labels: header.labels, delimiters: ("(", ")"), 
-                signature: &signature, declaration: &declaration)
+                signature: &signature, declaration: &declaration, locals: .init(header.generics))
             name    = "\(basename)(\(header.labels.map{ "\($0.variadic && $0.name == "_" ? "" : $0.name)\($0.variadic ? "..." : ""):" }.joined()))" 
         }
         

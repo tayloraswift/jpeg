@@ -1029,13 +1029,15 @@ enum Symbol
             {
                 return .named(type)
             }
-            else if let type:Symbol.CompoundType = .parse(tokens, position: &position)
-            {
-                return .compound(type)
-            }
+            // must parse function types before compound types, because a function 
+            // parameters list looks just like a tuple
             else if let type:Symbol.FunctionType = .parse(tokens, position: &position)
             {
                 return .function(type)
+            }
+            else if let type:Symbol.CompoundType = .parse(tokens, position: &position)
+            {
+                return .compound(type)
             }
             else if let type:Symbol.CollectionType = .parse(tokens, position: &position)
             {
@@ -1140,9 +1142,9 @@ enum Symbol
         func parse(_ tokens:[Character], position:inout Int) throws -> Self
         {
             let attributes:[List<Symbol.Attribute, Symbol.Whitespace>] = 
-                                                      .parse(tokens, position: &position), 
-                _:Token.Parenthesis.Left        = try .parse(tokens, position: &position), 
-                _:Symbol.Whitespace?            =     .parse(tokens, position: &position), 
+                                                      .parse(tokens, position: &position),
+                _:Token.Parenthesis.Left        = try .parse(tokens, position: &position),
+                _:Symbol.Whitespace?            =     .parse(tokens, position: &position),
                 parameters:List<Symbol.FunctionParameter, List<Symbol.Whitespace?, [List<Token.Comma, List<Symbol.Whitespace?, List<Symbol.FunctionParameter, Symbol.Whitespace?>>>]>>? = 
                                                       .parse(tokens, position: &position), 
                 _:Token.Parenthesis.Right       = try .parse(tokens, position: &position),

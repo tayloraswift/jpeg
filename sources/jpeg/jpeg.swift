@@ -1,5 +1,5 @@
 /// protocol JPEG.Format
-///     A color format, determined by the bit-depth and set of component keys in 
+///     A color format, determined by the bit depth and set of component keys in 
 ///     a frame header. 
 /// 
 ///     The coding [`(JPEG).Process`] of an image may place restrictions on which 
@@ -11,12 +11,12 @@ protocol _JPEGFormat
 {
     /// static func JPEG.Format.recognize(_:precision:)
     /// required 
-    ///     Detects this color format, given a set of component keys and a bit-depth.
+    ///     Detects this color format, given a set of component keys and a bit depth.
     /// 
     /// - components    : Swift.Set<JPEG.Component.Key>
     ///     The set of given component keys.
     /// - precision     : Swift.Int
-    ///     The given bit-depth.
+    ///     The given bit depth.
     /// - ->            : Self?
     ///     A color format instance.
     static 
@@ -37,7 +37,7 @@ protocol _JPEGFormat
     
     /// var JPEG.Format.precision   : Swift.Int {get}
     /// required 
-    ///     The bit-depth of each component in this color format.
+    ///     The bit depth of each component in this color format.
     var precision:Int 
     {
         get 
@@ -326,7 +326,7 @@ extension JPEG.Common:JPEG.Format
     
     /// static func JPEG.Common.recognize(_:precision:)
     /// :   JPEG.Format 
-    ///     Detects this color format, given a set of component keys and a bit-depth.
+    ///     Detects this color format, given a set of component keys and a bit depth.
     ///     
     ///     If this constructor detects a [`(Common).nonconforming3x8(_:_:_:)`] 
     ///     color format, it will populate the associated values with the keys in 
@@ -390,7 +390,7 @@ extension JPEG.Common:JPEG.Format
     }
     /// var JPEG.Common.precision   : Swift.Int {get}
     /// :   JPEG.Format 
-    ///     The bit-depth of each component in this color format. 
+    ///     The bit depth of each component in this color format. 
     /// 
     ///     This value is always 8.
     public 
@@ -1320,6 +1320,8 @@ extension JPEG.Layout
     ///     The coding process used by the image.
     /// - components: [JPEG.Component.Key: (factor:(x:Swift.Int, y:Swift.Int), qi:JPEG.Table.Quantization.Key)]
     ///     The sampling factors and quantization table key for each component in the image.
+    ///     This dictionary must contain an entry for every component in the 
+    ///     given color `format`.
     /// - scans     : [JPEG.Header.Scan]
     ///     The scan progression of the image. 
     /// ## (layout-creation)
