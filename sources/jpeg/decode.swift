@@ -1371,7 +1371,7 @@ extension JPEG.Data
     ///     Because each component in an image has its own sampling factors, the 
     ///     image planes may not have the same size.
     /// 
-    ///     The spectral representation is the a lossless representation. JPEG 
+    ///     The spectral representation is a lossless representation. JPEG 
     ///     images that have been decoded to this representation can be re-encoded 
     ///     without loss of information or compression.
     public 
@@ -1391,18 +1391,19 @@ extension JPEG.Data
         public 
         struct Plane 
         {
-            /// var JPEG.Data.Spectral.Plane.units  : (x:Swift.Int, y:Swift.Int)
+            /// var JPEG.Data.Spectral.Plane.units  : (x:Swift.Int, y:Swift.Int) { get }
             ///     The number of data units in this plane in the horizontal and 
             ///     vertical directions.
-            public 
+            public internal(set)
             var units:(x:Int, y:Int)
             
             /// var JPEG.Data.Spectral.Plane.factor : (x:Swift.Int, y:Swift.Int) { get }
             /// @ : General.Storage2<Swift.Int16>
             ///     The sampling factors of the color component this plane stores.
             /// 
-            ///     This property is backed by [`Swift.Int16`]s to circumvent compiler 
-            ///     size limits for `_read` and `_modify`.
+            ///     This property is backed by two [`Swift.Int16`]s to circumvent compiler 
+            ///     size limits for the `read` and `modify` accessors that the image 
+            ///     planes are subscriptable through.
             @General.Storage2<Int16>
             public 
             var factor:(x:Int, y:Int) 
@@ -1412,7 +1413,24 @@ extension JPEG.Data
             private 
             var buffer:[Int16]
             
-            // subscript with a zigzag coordinate
+            /// subscript JPEG.Data.Spectral.Plane[x:y:z:] { get set }
+            ///     Accesses the frequency coefficient at the specified zigzag index 
+            ///     in the specified data unit.
+            /// 
+            ///     The `x` and `y` indices of this subscript have no index bounds. 
+            ///     Out-of-bounds reads will return 0; out-of-bounds writes will 
+            ///     have no effect. The `z` index still has to be within the 
+            ///     correct range.
+            /// - x : Swift.Int 
+            ///     The horizontal index of the data unit to access.
+            /// - y : Swift.Int 
+            ///     The vertical index of the data unit to access. Index 0 
+            ///     corresponds to the visual top of the image.
+            /// - z : Swift.Int 
+            ///     The zigzag index of the coefficient to access. This index must 
+            ///     be in the range `0 ..< 64`. 
+            /// - ->: Swift.Int16 
+            ///     The frequency coefficient.
             public 
             subscript(x x:Int, y y:Int, z z:Int) -> Int16 
             {
@@ -1440,44 +1458,93 @@ extension JPEG.Data
                 }
             }
         }
-        
+        /// var JPEG.Data.Spectral.size     : (x:Swift.Int, y:Swift.Int) { get }
+        ///     The size of this image, in pixels. 
+        /// 
+        ///     In general, this size is not the same as the size of the image planes.
         public private(set)
         var size:(x:Int, y:Int), 
+        /// var JPEG.Data.Spectral.blocks   : (x:Swift.Int, y:Swift.Int) { get }
+        ///     The number of minimum-coded units in this image, in the horizontal 
+        ///     and vertical directions.
+        /// 
+        ///     The size of the minimum-coded unit, in 8×8 blocks of pixels, 
+        ///     is given by [`layout``(Layout).scale`]. 
             blocks:(x:Int, y:Int)
-        
+        /// var JPEG.Data.Spectral.layout   : JPEG.Layout<Format> { get }
+        ///     The layout of this image.
         public private(set)
         var layout:JPEG.Layout<Format>
+        /// var JPEG.Data.Spectral.metadata : [JPEG.Metadata]
+        ///     The metadata records in this image.
         public 
         var metadata:[JPEG.Metadata]
         
+        /// var JPEG.Data.Spectral.quanta   : Quanta { get }
+        ///     The quantization tables used by this image.
         public private(set) 
         var quanta:Quanta
         private 
         var planes:[Plane]
     }
-    
+    /// struct JPEG.Data.Planar<Format> 
+    /// where Format:JPEG.Format
+    ///     A planar image represented in the spatial domain.
+    /// 
+    ///     A planar image stores its data in blocks called *data units*. Each 
+    ///     block is an 8×8-pixel square. A planar image always stores a whole 
+    ///     number of data units in both dimensions, even if the image dimensions 
+    ///     in pixels are not multiples of 8. Because each component in an image 
+    ///     has its own sampling factors, the image planes may not have the same size.
+    /// 
+    ///     A planar image is the result of applying an *inverse discrete cosine 
+    ///     transformation* to a spectral image. It can be converted back into a spectral 
+    ///     image (with some floating point error) with a *forward discrete cosine 
+    ///     transformation*.
     public 
     struct Planar<Format> where Format:JPEG.Format
     {
+        /// struct JPEG.Data.Planar.Plane 
+        ///     A plane of an image in the spatial domain, containing one color channel.
         public 
         struct Plane 
         {
+            /// let JPEG.Data.Planar.Plane.units    : (x:Swift.Int, y:Swift.Int)
+            ///     The number of data units in this plane in the horizontal and 
+            ///     vertical directions.
             public 
             let units:(x:Int, y:Int)
+            /// var JPEG.Data.Planar.Plane.size     : (x:Swift.Int, y:Swift.Int) { get }
+            ///     The size of this plane, in pixels. It is equivalent to multiplying 
+            ///     [`units`] by 8.
             public 
             var size:(x:Int, y:Int) 
             {
                 (8 * self.units.x, 8 * self.units.y)
             }
             
-            // have to be `Int32` to circumvent compiler size limits for `_read` and `_modify`
+            /// var JPEG.Data.Planar.Plane.factor   : (x:Swift.Int, y:Swift.Int) { get }
+            /// @ : General.Storage2<Swift.Int32>
+            ///     The sampling factors of the color component this plane stores.
+            /// 
+            ///     This property is backed by two [`Swift.Int32`]s to circumvent compiler 
+            ///     size limits for the `read` and `modify` accessors that the image 
+            ///     planes are subscriptable through.
             @General.Storage2<Int32>
             public 
             var factor:(x:Int, y:Int) 
             
             private 
             var buffer:[UInt16]
-            
+            /// subscript JPEG.Data.Planar.Plane[x:y:] { get set }
+            ///     Accesses the sample at the specified pixel location.
+            /// - x : Swift.Int 
+            ///     The horizontal pixel index of the sample to access.
+            /// - y : Swift.Int 
+            ///     The vertical pixel index of the sample to access. Index 0 
+            ///     corresponds to the visual top of the image.
+            /// - ->: Swift.UInt16 
+            ///     The sample.
             public 
             subscript(x x:Int, y y:Int) -> UInt16
             {
@@ -1491,12 +1558,18 @@ extension JPEG.Data
                 }
             }
         }
-        
+        /// let JPEG.Data.Planar.size       : (x:Swift.Int, y:Swift.Int)
+        ///     The size of this image, in pixels. 
+        /// 
+        ///     In general, this size is not the same as the size of the image planes.
         public 
         let size:(x:Int, y:Int)
-        
+        /// let JPEG.Data.Planar.layout     : JPEG.Layout<Format>
+        ///     The layout of this image.
         public 
         let layout:JPEG.Layout<Format>, 
+        /// let JPEG.Data.Planar.metadata   : [JPEG.Metadata]
+        ///     The metadata records in this image.
             metadata:[JPEG.Metadata]
         
         private 
