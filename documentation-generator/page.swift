@@ -52,6 +52,15 @@ class Page
                     ($0.component, .appleify($0.accumulated))
                 }
             } 
+            else if let (last, _):((String, T), [String]) = scan.last, 
+                last.0 == "Type" 
+            {
+                return scan.dropLast().map 
+                {
+                    ($0.component, .unresolved(path: $0.accumulated))
+                } + 
+                [(last, .apple(url: "https://docs.swift.org/swift-book/ReferenceManual/Types.html#grammar_metatype-type"))]
+            }
             else 
             {
                 return scan.map 
@@ -667,7 +676,7 @@ extension Page
         }
         
         signature.append(.punctuation(.init(delimiters.0)))
-        declaration.append(.punctuation(.init(delimiters.0)))
+        declaration.append(.punctuation("("))
         
         var interior:(signature:[[Page.Signature.Token]], declaration:[[Page.Declaration.Token]]) = 
             ([], [])
@@ -693,7 +702,7 @@ extension Page
             if label != name || delimiters == ("[", "]")
             {
                 declaration.append(.whitespace)
-                declaration.append(.identifier(name))
+                declaration.append(name == "_" ? .keyword(name) : .identifier(name))
             }
             declaration.append(.punctuation(":"))
             for attribute:Symbol.Attribute in parameter.attributes
@@ -730,7 +739,7 @@ extension Page
             interior.declaration.joined(separator: [.punctuation(","), .breakableWhitespace]))
         
         signature.append(.punctuation(.init(delimiters.1)))
-        declaration.append(.punctuation(.init(delimiters.1)))
+        declaration.append(.punctuation(")"))
         
         if let `throws`:Symbol.ThrowsField = fields.throws
         {
@@ -892,12 +901,31 @@ extension Page.Binding
         let name:String = "[\(header.labels.map{ "\($0):" }.joined())]" 
         
         var declaration:[Page.Declaration.Token]    = 
-            Page.Declaration.tokenize(fields.attributes) + [.keyword("subscript")]
-        var signature:[Page.Signature.Token]        =      [   .text("subscript")]
+            Page.Declaration.tokenize(fields.attributes) + [  .keyword("subscript")]
+        var signature:[Page.Signature.Token]        =      [.highlight("subscript")]
         
         Page.print(function: fields, 
             labels: header.labels.map{ ($0, false) }, delimiters: ("[", "]"), 
             signature: &signature, declaration: &declaration)
+        
+        declaration.append(.breakableWhitespace)
+        declaration.append(.punctuation("{"))
+        declaration.append(.whitespace)
+        declaration.append(.keyword("get"))
+        switch header.mutability 
+        {
+        case .get:
+            break 
+        case .nonmutatingset:
+            declaration.append(.whitespace)
+            declaration.append(.keyword("nonmutating"))
+            fallthrough
+        case .getset:
+            declaration.append(.whitespace)
+            declaration.append(.keyword("set"))
+        }
+        declaration.append(.whitespace)
+        declaration.append(.punctuation("}"))
         
         let page:Page = .init(label: .subscript, name: name, 
             signature:      signature, 
@@ -975,7 +1003,7 @@ extension Page.Binding
         if header.failable 
         {
             signature.append(.punctuation("?"))
-            declaration.append(.punctuation("?"))
+            declaration.append(.typePunctuation("?", .appleify(["Swift", "Optional"])))
         }
         if !header.generics.isEmpty
         {
@@ -1080,6 +1108,10 @@ extension Page.Binding
             {
             case .get:
                 break 
+            case .nonmutatingset:
+                declaration.append(.whitespace)
+                declaration.append(.keyword("nonmutating"))
+                fallthrough
             case .getset:
                 declaration.append(.whitespace)
                 declaration.append(.keyword("set"))

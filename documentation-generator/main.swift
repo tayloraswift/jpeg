@@ -745,7 +745,7 @@ enum Symbol
         }
     }
     
-    // SubscriptField      ::= 'subscript' <Whitespace> <Identifiers> '[' ( <Identifier> ':' ) * ']' <Endline> 
+    // SubscriptField      ::= 'subscript' <Whitespace> <Identifiers> '[' ( <Identifier> ':' ) * ']' <Whitespace> ? <MemberMutability> <Endline> 
     struct SubscriptField:Parseable, CustomStringConvertible
     {
         struct Subscript:Parseable.Terminal 
@@ -755,7 +755,8 @@ enum Symbol
         }
         
         let identifiers:[String],
-            labels:[String]
+            labels:[String], 
+            mutability:Symbol.MemberMutability
             
         static 
         func parse(_ tokens:[Character], position:inout Int) throws -> Self
@@ -766,8 +767,11 @@ enum Symbol
                 _:Token.Bracket.Left            = try .parse(tokens, position: &position),
                 labels:[List<Symbol.Identifier, Token.Colon>] = .parse(tokens, position: &position),
                 _:Token.Bracket.Right           = try .parse(tokens, position: &position),
+                _:Symbol.Whitespace?            =     .parse(tokens, position: &position),
+                mutability:Symbol.MemberMutability = try .parse(tokens, position: &position),
                 _:Symbol.Endline                = try .parse(tokens, position: &position)
-            return .init(identifiers: identifiers.identifiers, labels: labels.map(\.head.string))
+            return .init(identifiers: identifiers.identifiers, 
+                labels: labels.map(\.head.string), mutability: mutability)
         }
         
         var description:String 
@@ -788,7 +792,7 @@ enum Symbol
     //                       | 'static' <Whitespace> 'let'
     //                       | 'static' <Whitespace> 'var'
     //                       | 'associatedtype'
-    // MemberMutability    ::= '{' <Whitespace> ? 'get' ( <Whitespace> 'set' ) ? <Whitespace> ? '}'
+    // MemberMutability    ::= '{' <Whitespace> ? 'get' ( ( <Whitespace> 'nonmutating' ) ? <Whitespace> 'set' ) ? <Whitespace> ? '}'
     struct MemberField:Parseable, CustomStringConvertible
     {
         let keyword:Symbol.MemberKeyword
@@ -890,6 +894,11 @@ enum Symbol
             static 
             let token:String = "get"
         }
+        struct Nonmutating:Parseable.Terminal 
+        {
+            static 
+            let token:String = "nonmutating"
+        }
         struct Set:Parseable.Terminal 
         {
             static 
@@ -898,6 +907,7 @@ enum Symbol
         
         case get 
         case getset
+        case nonmutatingset
             
         static 
         func parse(_ tokens:[Character], position:inout Int) throws -> Self
@@ -905,10 +915,22 @@ enum Symbol
             let _:Token.Brace.Left                  = try .parse(tokens, position: &position), 
                 _:Symbol.Whitespace?                =     .parse(tokens, position: &position),
                 _:Get                               = try .parse(tokens, position: &position),
-                set:List<Symbol.Whitespace, Set>?   =     .parse(tokens, position: &position),
+                mutability:List<List<Symbol.Whitespace, Nonmutating>?, List<Symbol.Whitespace, Set>>? =
+                                                          .parse(tokens, position: &position),
                 _:Symbol.Whitespace?                =     .parse(tokens, position: &position),
                 _:Token.Brace.Right                 = try .parse(tokens, position: &position)
-            return set == nil ? .get : .getset
+            guard let set:List<List<Symbol.Whitespace, Nonmutating>?, List<Symbol.Whitespace, Set>> = 
+                mutability 
+            else 
+            {
+                return .get 
+            }
+            guard let _:List<Symbol.Whitespace, Nonmutating> = set.head 
+            else 
+            {
+                return .getset 
+            }
+            return .nonmutatingset
         }
     }
     
@@ -1916,7 +1938,7 @@ func main(sources:[String], directory:String, urlpattern:(prefix:String, suffix:
         case .associatedtype(let header)?:
             pages.append(Page.Binding.create(header, fields: body, order: i, urlpattern: urlpattern))
         default:
-            break 
+            print("warning unparsed doccoment '\(String.init(doccomment))'") 
         }
     }
     

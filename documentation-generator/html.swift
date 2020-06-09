@@ -229,8 +229,8 @@ extension Page
             {
             case .resolved(url: let target), .apple(url: let target):
                 return .init("li", [:], [.init("a", ["href": target], $0.text)])
-            default:
-                fatalError("attempted to render unresolved link")
+            case .unresolved(let path):
+                fatalError("attempted to render unresolved link \(path)")
             }
         }
         breadcrumbs.append(.init("li", [:], [.init("span", [:], self.breadcrumb)]))

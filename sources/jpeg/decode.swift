@@ -1,12 +1,36 @@
 // binary utilities 
+
+/// protocol JPEG.Bytestream.Source 
+///     A bytestream source.
+/// 
+///     To implement a custom data source type, conform it to this protocol by 
+///     implementing [`(Source).read(count:)`]. It can 
+///     then be used with the library’s core decompression interfaces.
 public 
 protocol _JPEGBytestreamSource 
 {
+    /// mutating func JPEG.Bytestream.Source.read(count:)
+    /// required 
+    ///     Attempts to read and return the given number of bytes from the stream.
+    /// 
+    ///     A successful call to this function should affect the bytestream state 
+    ///     such that subsequent calls should pick up where the last call left off.
+    /// 
+    ///     The rest of the library interprets a `nil` return value from this function 
+    ///     as indicating end-of-stream.
+    /// - count     : Swift.Int 
+    ///     The number of bytes to read. 
+    /// - ->        : [Swift.UInt8]?
+    ///     The `count` bytes read, or `nil` if the read attempt failed. This 
+    ///     method should return `nil` even if any number of bytes less than `count`
+    ///     were successfully read.
     mutating 
     func read(count:Int) -> [UInt8]?
 }
 extension JPEG 
 {
+    /// enum JPEG.Bytestream 
+    ///     A namespace for bytestream utilities.
     public 
     enum Bytestream 
     {
@@ -54,12 +78,44 @@ extension JPEG.Bytestream.Source
             return data
         }
     }
-    
+    /// mutating func JPEG.Bytestream.Source.segment() 
+    /// throws
+    ///     Lexes a single marker segment from this bytestream, assuming there 
+    ///     is no entropy-coded data prefixed to it. 
+    /// 
+    ///     Calling this function is roughly equivalent to calling [`segment(prefix:)`]
+    ///     with the `prefix` parameter set to `false`, except that the empty 
+    ///     prefix array is omitted from the return value.
+    /// 
+    ///     This function can throw a [`(JPEG).LexingError`] if it encounters an 
+    ///     unexpected end-of-stream.
+    /// - ->        : (JPEG.Marker, [Swift.UInt8])
+    ///     A tuple containing the marker segment type and the marker segment data. 
+    ///     The data array does *not* include the marker segment length field
+    ///     from the segment header.
     public mutating 
     func segment() throws -> (JPEG.Marker, [UInt8])
     {
         try self.segment(prefix: false).1
     }
+    /// mutating func JPEG.Bytestream.Source.segment(prefix:) 
+    /// throws
+    ///     Optionally lexes a single entropy-coded segment followed by a single marker 
+    ///     segment from this bytestream.
+    /// 
+    ///     This function can throw a [`(JPEG).LexingError`] if it encounters an 
+    ///     unexpected end-of-stream.
+    /// - prefix    : Swift.Bool 
+    ///     Whether this function should expect an entropy-coded segment prefixed 
+    ///     to the marker segment. If this parameter is set to `false`, and this 
+    ///     function encounters a prefixed entropy-coded segment, it will throw 
+    ///     a [`(JPEG).LexingError`].
+    /// - ->        : ([Swift.UInt8], (JPEG.Marker, [Swift.UInt8]))
+    ///     A tuple containing the entropy-coded segment, marker segment type, 
+    ///     and the marker segment data, in that order. If `prefix` was false, 
+    ///     the entropy-coded segment data array will be empty. 
+    ///     The data array does *not* include the marker segment length field
+    ///     from the segment header.
     public mutating 
     func segment(prefix:Bool) throws -> ([UInt8], (JPEG.Marker, [UInt8]))
     {
@@ -134,11 +190,21 @@ extension JPEG.Bytestream.Source
 }
 
 // parsing 
+
+/// protocol JPEG.Bitstream.AnySymbol 
+/// :   Swift.Hashable 
+///     Functionality common to all bitstream symbols.
 public 
 protocol _JPEGBitstreamAnySymbol:Hashable
 {
+    /// init JPEG.Bitstream.AnySymbol.init(_:)
+    /// required 
+    ///     Creates a symbol instance.
+    /// - _     : Swift.UInt8 
+    ///     The byte value of this symbol.
     init(_:UInt8)
-    
+    /// var JPEG.Bitstream.AnySymbol.value:Swift.UInt8 { get }
+    ///     The byte value of this symbol.
     var value:UInt8 
     {
         get 
@@ -148,27 +214,49 @@ extension JPEG.Bitstream
 {
     public 
     typealias AnySymbol = _JPEGBitstreamAnySymbol
+    /// enum JPEG.Bitstream.Symbol
+    ///     A namespace for bitstream symbol types.
     public 
     enum Symbol 
     {
+        /// enum JPEG.Bitstream.Symbol.DC
+        /// :   JPEG.Bitstream.AnySymbol
+        ///     A DC symbol.
         public 
         struct DC:AnySymbol
         {
+            /// let JPEG.Bitstream.Symbol.DC.value:Swift.UInt8
+            /// :   JPEG.Bitstream.AnySymbol
+            ///     The raw byte value of this symbol.
             public  
             let value:UInt8 
-            
+            /// init JPEG.Bitstream.Symbol.DC.init(_:)
+            /// :   JPEG.Bitstream.AnySymbol
+            ///     Creates a DC symbol instance.
+            /// - value : Swift.UInt8 
+            ///     The raw byte value of this symbol.
             public 
             init(_ value:UInt8) 
             {
                 self.value = value 
             }
         }
+        /// enum JPEG.Bitstream.Symbol.AC
+        /// :   JPEG.Bitstream.AnySymbol
+        ///     An AC symbol.
         public 
         struct AC:AnySymbol
         {
+            /// let JPEG.Bitstream.Symbol.AC.value:Swift.UInt8
+            /// :   JPEG.Bitstream.AnySymbol
+            ///     The raw byte value of this symbol.
             public  
             let value:UInt8
-            
+            /// init JPEG.Bitstream.Symbol.AC.init(_:)
+            /// :   JPEG.Bitstream.AnySymbol
+            ///     Creates an AC symbol instance.
+            /// - value : Swift.UInt8 
+            ///     The raw byte value of this symbol.
             public 
             init(_ value:UInt8) 
             {
@@ -278,7 +366,27 @@ extension JPEG.Table.Huffman
         
         self.init(symbols, target: target)
     }
-    
+    /// init JPEG.Table.Huffman.init?(_:target:)
+    ///     Creates a huffman tree from the given leaf nodes.
+    /// 
+    ///     This initializer determines the shape of the tree from the shape of 
+    ///     the leaf array input. It has no knowledge of symbol frequencies or 
+    ///     priority. To build an *optimal* huffman tree, use the [`init(frequencies:target:)`]
+    ///     initializer.
+    /// 
+    ///     This initializer will return `nil` if the sizes of the given leaf arrays do not 
+    ///     describe a [full binary tree](https://en.wikipedia.org/wiki/Binary_tree#full). 
+    ///     (The last level is allowed to be incomplete.)
+    ///     For example, the leaf counts (3,\ 0,\ 0,\ …\ ) are invalid because 
+    ///     no binary tree can have three leaf nodes in its first level.
+    /// - symbols   : [[Symbol]]
+    ///     The leaf nodes in each level of the tree. The tree root is always 
+    ///     assumed to be internal, so the 0th sub-array of this array should 
+    ///     contain the leaves in the first level of the tree. This array must 
+    ///     contain 16 sub-arrays, even if the deeper levels of the tree are 
+    ///     empty, or this initializer will suffer a precondition failure.
+    /// - target    : Selector 
+    ///     The table selector this huffman table is meant to be stored at.
     public 
     init?(_ symbols:[[Symbol]], target:Selector)
     {
@@ -317,11 +425,22 @@ extension JPEG.Table.Quantization
             self.init(precision: .uint16, values: uint16, target: target)
         }
     }
-    
+    /// init JPEG.Table.Quantization.init(precision:values:target:)
+    ///     Creates a quantization table from the given quantum values.
+    /// - precision : Precision 
+    ///     The bit-width of the integer type to encode the quanta as.
+    /// - values    : [Swift.UInt16]
+    ///     The quantum values, in zigzag order. This array must have exactly 64 
+    ///     elements. If the `precision` is [`(Precision).uint8`], all of the values 
+    ///     must be within the range of a [`Swift.UInt8`]. Passing an invalid 
+    ///     array will result in a precondition failure.
+    /// - target    : Selector 
+    ///     The table selector this quantization table is meant to be stored at.
     public 
     init(precision:Precision, values:[UInt16], target:Selector) 
     {
         precondition(values.count == 64, "quantization table must have exactly 64 quanta")
+        precondition(precision == .uint16 || values.allSatisfy{ $0 & 0xff00 == 0 }, "8-bit quantization table values must be representable by `UInt8`")
         self.precision  = precision
         self.storage    = values 
         self.target     = target 
@@ -329,8 +448,20 @@ extension JPEG.Table.Quantization
 }
 extension JPEG.Table 
 {
+    /// static func JPEG.Table.parse(_:as:)
+    /// throws 
+    ///     Parses a [`(Marker).huffman`] segment into huffman tables.
+    /// 
+    ///     If the given data does not parse to valid huffman tables, this function 
+    ///     will throw a [`(JPEG).ParsingError`].
+    /// - data  : [Swift.UInt8]
+    ///     The segment data to parse.
+    /// - _     : (HuffmanDC.Type, HuffmanAC.Type)
+    ///     This parameter must always be set to `(`[`(Table).HuffmanDC`self`]`, `[`(Table).HuffmanAC`self`]`)`
+    /// - ->    : (dc:[HuffmanDC], ac:[HuffmanAC]) 
+    ///     The parsed DC and AC huffman tables.
     public static 
-    func parse(_ data:[UInt8], as:(HuffmanDC.Type, HuffmanAC.Type)) 
+    func parse(_ data:[UInt8], as _:(HuffmanDC.Type, HuffmanAC.Type)) 
         throws -> (dc:[HuffmanDC], ac:[HuffmanAC]) 
     {
         var tables:(dc:[HuffmanDC], ac:[HuffmanAC]) = ([], [])
@@ -413,7 +544,18 @@ extension JPEG.Table
         
         return tables
     }
-    
+    /// static func JPEG.Table.parse(_:as:)
+    /// throws 
+    ///     Parses a [`(Marker).quantization`] segment into huffman tables.
+    /// 
+    ///     If the given data does not parse to valid quantization tables, this function 
+    ///     will throw a [`(JPEG).ParsingError`].
+    /// - data  : [Swift.UInt8]
+    ///     The segment data to parse.
+    /// - _     : Quantization.Type
+    ///     This parameter must always be set to [`(Table).Quantization`self`].
+    /// - ->    : [Quantization] 
+    ///     The parsed quantization tables.
     public static 
     func parse(_ data:[UInt8], as: Quantization.Type) 
         throws -> [Quantization] 
@@ -468,6 +610,16 @@ extension JPEG.Table
 // frame/scan header parsing 
 extension JPEG.Header.HeightRedefinition 
 {
+    /// static func JPEG.Header.HeightRedefinition.parse(_:)
+    /// throws 
+    ///     Parses a [`(Marker).height`] segment into a height redefinition.
+    /// 
+    ///     If the given data does not parse to a valid height redefinition, 
+    ///     this function will throw a [`(JPEG).ParsingError`].
+    /// - data  : [Swift.UInt8]
+    ///     The segment data to parse.
+    /// - ->    : Self 
+    ///     The parsed height redefinition.
     public static
     func parse(_ data:[UInt8]) throws -> Self
     {
@@ -482,6 +634,16 @@ extension JPEG.Header.HeightRedefinition
 }
 extension JPEG.Header.RestartInterval 
 {
+    /// static func JPEG.Header.RestartInterval.parse(_:)
+    /// throws 
+    ///     Parses an [`(Marker).interval`] segment into a restart interval definition.
+    /// 
+    ///     If the given data does not parse to a valid restart interval definition, 
+    ///     this function will throw a [`(JPEG).ParsingError`].
+    /// - data  : [Swift.UInt8]
+    ///     The segment data to parse.
+    /// - ->    : Self 
+    ///     The parsed restart definition.
     public static
     func parse(_ data:[UInt8]) throws -> Self
     {
@@ -497,10 +659,44 @@ extension JPEG.Header.RestartInterval
 }
 extension JPEG.Header.Frame 
 {
+    /// static func JPEG.Header.Frame.validate(process:precision:size:components:)
+    /// throws 
+    ///     Creates a frame header after validating the given field values.
+    /// 
+    ///     If the given parameters are not consistent with one another, and the 
+    ///     [JPEG standard](https://www.w3.org/Graphics/JPEG/itu-t81.pdf), this 
+    ///     function will throw a [`(JPEG).ParsingError`], unless otherwise noted.
+    /// - process   : JPEG.Process 
+    ///     The coding process used by the image.
+    /// - precision : Swift.Int 
+    ///     The bit-depth of the image. If the `process` is [`(JPEG.Process).baseline`], 
+    ///     this parameter must be 8. If the `process` is [`(JPEG.Process).extended(coding:differential:)`] 
+    ///     or [`(JPEG.Process).progressive(coding:differential:)`], this parameter 
+    ///     must be either 8 or 12. If the process is [`(JPEG.Process).lossless(coding:differential:)`], 
+    ///     this parameter must be within the interval `2 ... 16`.
+    /// - size      : (x:Swift.Int, y:Swift.Int)
+    ///     The size of the image, in pixels. Passing a negative height will result 
+    ///     in a precondition failure. Passing a negative or zero width will result 
+    ///     in a [`(JPEG).ParsingError`]. This constructor treats the two failure 
+    ///     conditions differently because the latter one is the only one that can 
+    ///     occur when parsing a frame header from input data.
+    /// - components: [JPEG.Component.Key: JPEG.Component]
+    ///     The components in the image. This dictionary must have at least one 
+    ///     element. If the `process` is [`(JPEG.Process).progressive(coding:differential:)`], 
+    ///     it can have no more than four elements. The sampling factors of each 
+    ///     component must be within the interval `1 ... 4` in both directions. 
+    ///     if the `process` is [`(JPEG.Process).baseline`], the components can 
+    ///     only use the quantization table selectors `\.0` and `\.1`.
+    /// - ->        : Self 
+    ///     A frame header.
     public static 
     func validate(process:JPEG.Process, precision:Int, size:(x:Int, y:Int), 
         components:[JPEG.Component.Key: JPEG.Component]) throws -> Self 
     {
+        // this is a precondition and not a guard because the height field 
+        // gets parsed from a UInt16, so the only way for this value to be negative 
+        // is through direct programmer action
+        precondition(size.y >= 0, "frame header cannot have negative height")
         guard size.x > 0 
         else 
         {
@@ -563,6 +759,20 @@ extension JPEG.Header.Frame
         return .init(process: process, precision: precision, size: size, 
             components: components)
     }
+    /// static func JPEG.Header.Frame.parse(_:process:)
+    /// throws 
+    ///     Parses a [`(Marker).frame(_:)`] segment into a frame header.
+    /// 
+    ///     If the given data does not parse to a valid frame header, 
+    ///     this function will throw a [`(JPEG).ParsingError`]. This function 
+    ///     invokes [`validate(process:precision:size:components:)`], so any errors 
+    ///     it can throw can also be thrown by this function.
+    /// - data      : [Swift.UInt8]
+    ///     The segment data to parse.
+    /// - process   : JPEG.Process 
+    ///     The coding process used by the image.
+    /// - ->        : Self 
+    ///     The parsed frame header.
     public static
     func parse(_ data:[UInt8], process:JPEG.Process) throws -> Self
     {
@@ -621,12 +831,34 @@ extension JPEG.Header.Frame
 extension JPEG.Header.Scan 
 {
     /// static func JPEG.Header.Scan.validate(process:band:bits:components:)
-    /// - process   : JPEG.Process 
-    /// - band      : Swift.Range<Swift.Int>
-    /// - bits      : Swift.Range<Swift.Int>
-    /// - components: [JPEG.Scan.Component]
-    /// - ->        : Self 
     /// throws
+    ///     Creates a scan header after validating the given field values.
+    /// 
+    ///     If the given parameters are not consistent with one another, and the 
+    ///     [JPEG standard](https://www.w3.org/Graphics/JPEG/itu-t81.pdf), this 
+    ///     function will throw a [`(JPEG).ParsingError`].
+    /// - process   : JPEG.Process 
+    ///     The coding process used by the image.
+    /// - band      : Swift.Range<Swift.Int>
+    ///     The frequency band encoded by the scan, in zigzag order. It must be 
+    ///     within the interval of 0 to 64. If the `process` is 
+    ///     [`(Process).progressive(coding:differential:)`], this parameter must 
+    ///     either be `0 ..< 1`, or some range within the interval `1 ..< 64`. 
+    ///     Otherwise, this parameter must be set to `0 ..< 64`.
+    /// - bits      : Swift.Range<Swift.Int>
+    ///     The bit range encoded by the scan, where bit zero is the least significant 
+    ///     bit. The upper range bound must be either infinity ([`Swift.Int`max`]) 
+    ///     or one greater than the lower bound. If the `process` is not
+    ///     [`(Process).progressive(coding:differential:)`], this value must 
+    ///     be set to `0 ..< .max`.
+    /// - components: [JPEG.Scan.Component]
+    ///     The color components in the scan, in the order in which their 
+    ///     data units are interleaved. If the scan is an AC progressive scan, 
+    ///     this array must have exactly one element. Otherwise, it must have 
+    ///     between one and four elements. If the `process` is [`(Process).baseline`], 
+    ///     the components can only use the huffman table selectors `\.0` and `\.1`.
+    /// - ->        : Self 
+    ///     A scan header.
     public static 
     func validate(process:JPEG.Process, 
         band:Range<Int>, bits:Range<Int>, components:[JPEG.Scan.Component]) 
@@ -689,6 +921,20 @@ extension JPEG.Header.Scan
         
         return .init(band: band, bits: bits, components: components)
     }
+    /// static func JPEG.Header.Scan.parse(_:process:)
+    /// throws 
+    ///     Parses a [`(Marker).scan`] segment into a scan header.
+    /// 
+    ///     If the given data does not parse to a valid scan header, 
+    ///     this function will throw a [`(JPEG).ParsingError`]. This function 
+    ///     invokes [`validate(process:band:bits:components:)`], so any errors 
+    ///     it can throw can also be thrown by this function.
+    /// - data      : [Swift.UInt8]
+    ///     The segment data to parse.
+    /// - process   : JPEG.Process 
+    ///     The coding process used by the image.
+    /// - ->        : Self 
+    ///     The parsed scan header.
     public static 
     func parse(_ data:[UInt8], process:JPEG.Process) throws -> Self
     {
@@ -1013,7 +1259,24 @@ extension JPEG.Table.Huffman.Decoder
 }
 extension JPEG.Table.Quantization 
 {
-    // convert a 2D coordinate to a zigzag parameter
+    /// static func JPEG.Table.Quantization.z(k:h:)
+    /// @inlinable 
+    ///     Converts a coefficient grid index to a zigzag index.
+    ///
+    ///     It is easier to convert grid indices (*k*,\ *h*) to zigzag indices (*z*)
+    ///     than the other way around, so most library APIs store coefficient-related 
+    ///     information natively in zigzag order.
+    /// 
+    ///     The JPEG format only uses the grid domain `0 ..< 8`\ ×\ `0 ..< 8`, which 
+    ///     maps to the zigzag range `0 ..< 64`. However, this function works for 
+    ///     any non-negative input coordinate.
+    /// - x : Swift.Int 
+    ///     The horizontal frequency index.
+    /// - y : Swift.Int 
+    ///     The vertical frequency index.
+    /// - ->: Swift.Int 
+    ///     The corresponding zigzag index.
+    /// #  [See also](quantization-table-subscripts)
     @inlinable
     public static 
     func z(k x:Int, h y:Int) -> Int 
@@ -1027,16 +1290,20 @@ extension JPEG.Table.Quantization
         return a + b * t - q * x - (q ^ 1) * y - 1
     }
     
-    // it is easier to convert (k, h) 2-d coordinates to z zig-zag coordinates
-    // than the other way around, so we store the coefficients in zig-zag 
-    // order, and provide a subscript that converts 2-d coordinates into 
-    // zig-zag coordinates 
-    
-    /// subscript JPEG.Table.Quantization[k:h:]
+    /// subscript JPEG.Table.Quantization[k:h:] { get set }
     /// @inlinable
+    ///     Accesses the quantum value at the given grid index.
+    /// 
+    ///     Using this subscript is equivalent to using [`[z:]`] with the output 
+    ///     of [`z(k:h:)`].
     /// - k     : Swift.Int
+    ///     The horizontal frequency index. This value must be in the range `0 ..< 8`.
     /// - h     : Swift.Int
+    ///     The vertical frequency index. This value must be in the range `0 ..< 8`.
     /// - ->    : Swift.UInt16
+    ///     The quantum value.
+    /// #  [See also](quantization-table-subscripts)
+    /// ## (quantization-table-subscripts)
     @inlinable
     public 
     subscript(k k:Int, h h:Int) -> UInt16 
@@ -1050,9 +1317,14 @@ extension JPEG.Table.Quantization
             self[z: Self.z(k: k, h: h)] = value 
         }
     }
-    /// subscript JPEG.Table.Quantization[z:]
+    /// subscript JPEG.Table.Quantization[z:] { get set }
+    ///     Accesses the quantum value at the given zigzag index.
     /// - z     : Swift.Int
+    ///     The zigzag index. This value must be in the range `0 ..< 64`.
     /// - ->    : Swift.UInt16
+    ///     The quantum value.
+    /// #  [See also](quantization-table-subscripts)
+    /// ## (quantization-table-subscripts)
     public 
     subscript(z z:Int) -> UInt16 
     {

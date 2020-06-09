@@ -8,7 +8,7 @@
 
 #if os(macOS) || os(Linux)
 
-/// A namespace for file IO functionality.
+//  A namespace for file IO functionality.
 extension Common 
 {
     public
@@ -16,7 +16,7 @@ extension Common
     {
         typealias Descriptor = UnsafeMutablePointer<FILE>
         
-        /// Read data from files on disk.
+        //  Read data from files on disk.
         public
         struct Source
         {
@@ -24,7 +24,7 @@ extension Common
             let descriptor:Descriptor
         }
         
-        /// Write data to files on disk.
+        //  Write data to files on disk.
         public 
         struct Destination 
         {
@@ -35,21 +35,21 @@ extension Common
 }
 extension Common.File.Source
 {
-    /// Calls a closure with an interface for reading from the specified file.
-    /// 
-    /// This method automatically closes the file when its function argument returns.
-    /// - Parameters:
-    ///     - path: A path to the file to open.
-    ///     - body: A closure with a `Source` parameter from which data in
-    ///         the specified file can be read. This interface is only valid
-    ///         for the duration of the method’s execution. The closure is
-    ///         only executed if the specified file could be successfully
-    ///         opened, otherwise `nil` is returned. If `body` has a return
-    ///         value and the specified file could be opened, its return
-    ///         value is returned as the return value of the `open(path:body:)`
-    ///         method.
-    /// - Returns: `nil` if the specified file could not be opened, or the
-    ///     return value of the function argument otherwise.
+    //  Calls a closure with an interface for reading from the specified file.
+    //  
+    //  This method automatically closes the file when its function argument returns.
+    //  - Parameters:
+    //      - path: A path to the file to open.
+    //      - body: A closure with a `Source` parameter from which data in
+    //          the specified file can be read. This interface is only valid
+    //          for the duration of the method’s execution. The closure is
+    //          only executed if the specified file could be successfully
+    //          opened, otherwise `nil` is returned. If `body` has a return
+    //          value and the specified file could be opened, its return
+    //          value is returned as the return value of the `open(path:body:)`
+    //          method.
+    //  - Returns: `nil` if the specified file could not be opened, or the
+    //      return value of the function argument otherwise.
     public static
     func open<Result>(path:String, _ body:(inout Self) throws -> Result)
         rethrows -> Result?
@@ -69,15 +69,15 @@ extension Common.File.Source
         return try body(&file)
     }
 
-    /// Read the specified number of bytes from this file interface.
-    /// 
-    /// This method only returns an array if the exact number of bytes
-    /// specified could be read. This method advances the file pointer.
-    /// 
-    /// - Parameters:
-    ///     - capacity: The number of bytes to read.
-    /// - Returns: An array containing the read data, or `nil` if the specified
-    ///     number of bytes could not be read.
+    //  Read the specified number of bytes from this file interface.
+    //  
+    //  This method only returns an array if the exact number of bytes
+    //  specified could be read. This method advances the file pointer.
+    //  
+    //  - Parameters:
+    //      - capacity: The number of bytes to read.
+    //  - Returns: An array containing the read data, or `nil` if the specified
+    //      number of bytes could not be read.
     public
     func read(count capacity:Int) -> [UInt8]?
     {
@@ -136,21 +136,21 @@ extension Common.File.Source
 }
 extension Common.File.Destination
 {
-    /// Calls a closure with an interface for writing to the specified file.
-    /// 
-    /// This method automatically closes the file when its function argument returns.
-    /// - Parameters:
-    ///     - path: A path to the file to open.
-    ///     - body: A closure with a `Destination` parameter representing
-    ///         the specified file to which data can be written to. This
-    ///         interface is only valid for the duration of the method’s
-    ///         execution. The closure is only executed if the specified
-    ///         file could be successfully opened, otherwise `nil` is returned.
-    ///         If `body` has a return value and the specified file could
-    ///         be opened, its return value is returned as the return value
-    ///         of the `open(path:body:)` method.
-    /// - Returns: `nil` if the specified file could not be opened, or the
-    ///     return value of the function argument otherwise.
+    //  Calls a closure with an interface for writing to the specified file.
+    //  
+    //  This method automatically closes the file when its function argument returns.
+    //  - Parameters:
+    //      - path: A path to the file to open.
+    //      - body: A closure with a `Destination` parameter representing
+    //          the specified file to which data can be written to. This
+    //          interface is only valid for the duration of the method’s
+    //          execution. The closure is only executed if the specified
+    //          file could be successfully opened, otherwise `nil` is returned.
+    //          If `body` has a return value and the specified file could
+    //          be opened, its return value is returned as the return value
+    //          of the `open(path:body:)` method.
+    //  - Returns: `nil` if the specified file could not be opened, or the
+    //      return value of the function argument otherwise.
     public static
     func open<Result>(path:String, _ body:(inout Self) throws -> Result)
         rethrows -> Result?
@@ -170,15 +170,15 @@ extension Common.File.Destination
         return try body(&file)
     }
 
-    /// Write the bytes in the given array to this file interface.
-    /// 
-    /// This method only returns `()` if the entire array argument could
-    /// be written. This method advances the file pointer.
-    /// 
-    /// - Parameters:
-    ///     - buffer: The data to write.
-    /// - Returns: `()` if the entire array argument could be written, or
-    ///     `nil` otherwise.
+    //  Write the bytes in the given array to this file interface.
+    //  
+    //  This method only returns `()` if the entire array argument could
+    //  be written. This method advances the file pointer.
+    //  
+    //  - Parameters:
+    //      - buffer: The data to write.
+    //  - Returns: `()` if the entire array argument could be written, or
+    //      `nil` otherwise.
     public
     func write(_ buffer:[UInt8]) -> Void?
     {

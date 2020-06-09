@@ -29,7 +29,7 @@ protocol _JPEGFormat
     ///     The ordering is used to determine plane index assignments when initializing 
     ///     an image layout. This property should never be empty. It is allowed 
     ///     for this array to contain fewer components than were detected by the 
-    ///     [`(Self).recognize(_:precision:)`] constructor.
+    ///     [`(Format).recognize(_:precision:)`] constructor.
     var components:[JPEG.Component.Key]
     {
         get 
@@ -44,7 +44,7 @@ protocol _JPEGFormat
     }
 }
 /// protocol JPEG.Color 
-///     A JPEG color target.
+///     A color target.
 /// # [See also](color-protocols)
 /// ## (color-protocols)
 public 
@@ -574,7 +574,7 @@ extension JPEG.RGB:JPEG.Color
 extension JPEG 
 {
     /// enum JPEG.Process 
-    ///     A JPEG coding process.
+    ///     A coding process.
     /// 
     ///     The [JPEG standard](https://www.w3.org/Graphics/JPEG/itu-t81.pdf)
     ///     specifies several subformats of the JPEG format known as *coding processes*.
@@ -785,6 +785,7 @@ public
 protocol _JPEGAnyTable 
 {
     /// associatedtype JPEG.AnyTable.Delegate 
+    /// required
     ///     A type representing a table instance while it is bound to a table slot.
     associatedtype Delegate 
     /// typealias JPEG.AnyTable.Slots = (Delegate?, Delegate?, Delegate?, Delegate?)
@@ -950,10 +951,6 @@ extension JPEG
         /// :   JPEG.AnyTable 
         /// where Symbol:JPEG.Bitstream.AnySymbol
         ///     A huffman table. 
-        /// 
-        ///     This type stores a huffman tree, but does not support efficient 
-        ///     lookup or encoding. To create a lookup table, call the [`(Huffman).decoder()`]
-        ///     method. To create a codebook, call the [`(Huffman).encoder()`] method.
         /// #  [See also](huffman-table-types)
         public 
         struct Huffman<Symbol>:AnyTable where Symbol:Bitstream.AnySymbol
