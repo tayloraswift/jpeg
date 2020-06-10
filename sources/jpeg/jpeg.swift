@@ -6,6 +6,7 @@
 ///     combinations of component sets and bit precisions are valid.
 /// # [See also](color-protocols)
 /// ## (color-protocols)
+/// ## (0:color-space-apis)
 public 
 protocol _JPEGFormat
 {
@@ -47,6 +48,7 @@ protocol _JPEGFormat
 ///     A color target.
 /// # [See also](color-protocols)
 /// ## (color-protocols)
+/// ## (0:color-space-apis)
 public 
 protocol _JPEGColor
 {
@@ -85,6 +87,8 @@ protocol _JPEGColor
 
 /// enum JPEG 
 ///     A library namespace containing all JPEG-related APIs. 
+/// #  [Color spaces](color-space-apis)
+/// #  [Error handling](error-handling)
 public 
 enum JPEG 
 {
@@ -131,6 +135,7 @@ enum JPEG
     /// # [Color channels](JPEG-YCbCr-color-channels)
     /// # [See also](builtin-color-targets)
     /// ## (builtin-color-targets)
+    /// ## (2:color-space-apis)
     @frozen 
     public 
     struct YCbCr:Hashable 
@@ -190,6 +195,7 @@ enum JPEG
     /// # [Color channels](JPEG-RGB-color-channels)
     /// # [See also](builtin-color-targets)
     /// ## (builtin-color-targets)
+    /// ## (2:color-space-apis)
     @frozen
     public 
     struct RGB:Hashable 
@@ -258,6 +264,7 @@ extension JPEG
     /// # [Compatibility formats](common-nonstandard-formats)
     /// # [See also](color-protocols)
     /// ## (color-protocols)
+    /// ## (1:color-space-apis)
     public 
     enum Common 
     {

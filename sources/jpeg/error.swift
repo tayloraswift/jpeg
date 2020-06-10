@@ -1,6 +1,8 @@
 /// protocol JPEG.Error
 /// :   Swift.Error 
 ///     Functionality common to all library error types.
+/// #  [See also](error-types)
+/// ## (error-handling)
 public 
 protocol _JPEGError:Swift.Error 
 {
@@ -34,6 +36,9 @@ extension JPEG
     /// enum JPEG.LexingError
     /// :   JPEG.Error 
     ///     A lexing error.
+    /// #  [See also](error-types)
+    /// ## (error-types)
+    /// ## (error-handling)
     public 
     enum LexingError:JPEG.Error
     {
@@ -135,6 +140,9 @@ extension JPEG
     /// enum JPEG.ParsingError
     /// :   JPEG.Error 
     ///     A parsing error.
+    /// #  [See also](error-types)
+    /// ## (error-types)
+    /// ## (error-handling)
     public 
     enum ParsingError:JPEG.Error 
     {
@@ -156,33 +164,146 @@ extension JPEG
         /// - expected  : Swift.Int
         ///     The amount of data that was expected, in bytes.
         case extraneousMarkerSegmentData(Marker, Int, expected:Int)
-        
+        /// case JPEG.ParsingError.invalidJFIFSignature(_:)
+        ///     A JFIF segment had an invalid signature.
+        /// - _ : [Swift.UInt8] 
+        ///     The signature read from the segment.
         case invalidJFIFSignature([UInt8])
+        /// case JPEG.ParsingError.invalidJFIFVersionCode(_:)
+        ///     A JFIF segment had an invalid version code. 
+        /// - _ : (major:Swift.UInt8, minor:Swift.UInt8) 
+        ///     The version code read from the segment.
         case invalidJFIFVersionCode((major:UInt8, minor:UInt8))
+        /// case JPEG.ParsingError.invalidJFIFDensityUnitCode(_:)
+        ///     A JFIF segment had an invalid density unit code. 
+        /// - _ : Swift.UInt8 
+        ///     The density unit code read from the segment.
         case invalidJFIFDensityUnitCode(UInt8)
-        
+        /// case JPEG.ParsingError.invalidEXIFSignature(_:)
+        ///     An EXIF segment had an invalid signature.
+        /// - _ : [Swift.UInt8] 
+        ///     The signature read from the segment.
         case invalidEXIFSignature([UInt8])
+        /// case JPEG.ParsingError.invalidEXIFEndiannessCode(_:)
+        ///     An EXIF segment had an invalid endianness specifier.
+        /// - _ : (Swift.UInt8, Swift.UInt8, Swift.UInt8, Swift.UInt8)
+        ///     The endianness specifier read from the segment.
         case invalidEXIFEndiannessCode((UInt8, UInt8, UInt8, UInt8))
         
+        /// case JPEG.ParsingError.invalidFrameWidth(_:)
+        ///     A frame header segment had a negative or zero width field. 
+        /// - _ : Swift.Int 
+        ///     The value of the width field read from the segment.
         case invalidFrameWidth(Int)
+        /// case JPEG.ParsingError.invalidFramePrecision(_:_:)
+        ///     A frame header segment had an invalid precision field. 
+        /// - _ : Swift.Int 
+        ///     The value of the precision field read from the segment.
+        /// - _ : JPEG.Process 
+        ///     The coding process specified by the frame header.
         case invalidFramePrecision(Int, Process)
+        /// case JPEG.ParsingError.invalidFrameComponentCount(_:_:)
+        ///     A frame header segment had an invalid number of components. 
+        /// - _ : Swift.Int 
+        ///     The number of components in the segment.
+        /// - _ : JPEG.Process 
+        ///     The coding process specified by the frame header.
         case invalidFrameComponentCount(Int, Process)
+        /// case JPEG.ParsingError.invalidFrameQuantizationSelectorCode(_:)
+        ///     A component in a frame header segment had an invalid quantization 
+        ///     table selector code. 
+        /// - _ : Swift.UInt8  
+        ///     The selector code read from the segment.
         case invalidFrameQuantizationSelectorCode(UInt8)
+        /// case JPEG.ParsingError.invalidFrameQuantizationSelector(_:_:)
+        ///     A component in a frame header segment used a quantization table 
+        ///     selector which is well-formed but unavailable given the frame header coding process.
+        /// - _ : JPEG.Table.Quantization.Selector 
+        ///     The quantization table selector. 
+        /// - _ : JPEG.Process 
+        ///     The coding process specified by the frame header.
         case invalidFrameQuantizationSelector(JPEG.Table.Quantization.Selector, Process)
+        /// case JPEG.ParsingError.invalidFrameComponentSamplingFactor(_:_:)
+        ///     A component in a frame header had an invalid sampling factor. 
+        /// 
+        ///     Sampling factors must be within the range `1 ... 4`.
+        /// - _ : (x:Swift.Int, y:Swift.Int)
+        ///     The sampling factor of the component.
+        /// - _ : JPEG.Component.Key 
+        ///     The component key.
         case invalidFrameComponentSamplingFactor((x:Int, y:Int), Component.Key)
+        /// case JPEG.ParsingError.duplicateFrameComponentIndex(_:)
+        ///     The same component key occurred more than once in the same frame header. 
+        /// - _ : JPEG.Component.Key 
+        ///     The duplicated component key.
         case duplicateFrameComponentIndex(Component.Key)
         
+        /// case JPEG.ParsingError.invalidScanHuffmanSelectorCode(_:)
+        ///     A component in a frame header segment had an invalid quantization 
+        ///     table selector code. 
+        /// - _ : Swift.UInt8  
+        ///     The selector code read from the segment.
         case invalidScanHuffmanSelectorCode(UInt8)
+        /// case JPEG.ParsingError.invalidScanHuffmanDCSelector(_:_:)
+        ///     A component in a frame header segment used a DC huffman table 
+        ///     selector which is well-formed but unavailable given the frame header coding process.
+        /// - _ : JPEG.Table.HuffmanDC.Selector 
+        ///     The huffman table selector. 
+        /// - _ : JPEG.Process 
+        ///     The coding process specified by the frame header.
         case invalidScanHuffmanDCSelector(JPEG.Table.HuffmanDC.Selector, Process)
+        /// case JPEG.ParsingError.invalidScanHuffmanACSelector(_:_:)
+        ///     A component in a frame header segment used an AC huffman table 
+        ///     selector which is well-formed but unavailable given the frame header coding process.
+        /// - _ : JPEG.Table.HuffmanAC.Selector 
+        ///     The huffman table selector. 
+        /// - _ : JPEG.Process 
+        ///     The coding process specified by the frame header.
         case invalidScanHuffmanACSelector(JPEG.Table.HuffmanAC.Selector, Process)
+        /// case JPEG.ParsingError.invalidScanComponentCount(_:_:)
+        ///     A scan header had more that the maximum allowed number of components 
+        ///     given the image coding process. 
+        /// - _ : Swift.Int 
+        ///     The number of components in the scan header. 
+        /// - _ : JPEG.Process 
+        ///     The coding process used by the image.
         case invalidScanComponentCount(Int, Process)
+        /// case JPEG.ParsingError.invalidScanProgressiveSubset(band:bits:_:)
+        ///     A scan header specified an invalid progressive frequency band 
+        ///     or bit range given the image coding process. 
+        /// - band  : (Swift.Int, Swift.Int)
+        ///     The lower and upper bounds of the frequency band read from the scan header.
+        /// - bits  : (Swift.Int, Swift.Int)
+        ///     The lower and upper bounds of the bit range read from the scan header.
+        /// - _     : JPEG.Process 
+        ///     The coding process used by the image.
         case invalidScanProgressiveSubset(band:(Int, Int), bits:(Int, Int), Process)
         
+        /// case JPEG.ParsingError.invalidHuffmanTargetCode(_:)
+        ///     A huffman table definition had an invalid huffman table 
+        ///     selector code. 
+        /// - _ : Swift.UInt8  
+        ///     The selector code read from the segment.
         case invalidHuffmanTargetCode(UInt8)
+        /// case JPEG.ParsingError.invalidHuffmanTypeCode(_:)
+        ///     A huffman table definition had an invalid type indicator code. 
+        /// - _ : Swift.UInt8  
+        ///     The type indicator code read from the segment.
         case invalidHuffmanTypeCode(UInt8)
+        /// case JPEG.ParsingError.invalidHuffmanTable
+        ///     A huffman table definition did not define a valid binary tree.
         case invalidHuffmanTable
         
+        /// case JPEG.ParsingError.invalidQuantizationTargetCode(_:)
+        ///     A quantization table definition had an invalid quantization table 
+        ///     selector code. 
+        /// - _ : Swift.UInt8  
+        ///     The selector code read from the segment.
         case invalidQuantizationTargetCode(UInt8)
+        /// case JPEG.ParsingError.invalidQuantizationPrecisionCode(_:)
+        ///     A quantization table definition had an invalid precision indicator code. 
+        /// - _ : Swift.UInt8  
+        ///     The precision indicator code read from the segment.
         case invalidQuantizationPrecisionCode(UInt8)
         
         static 
@@ -202,12 +323,17 @@ extension JPEG
                 return .extraneousMarkerSegmentData(marker, count, expected: expected)
             }
         }
-        
+        /// static var JPEG.ParsingError.namespace: Swift.String { get }
+        /// :   JPEG.Error 
+        ///     Returns the string `"parsing error"`.
         public static 
         var namespace:String 
         {
             "parsing error" 
         }
+        /// var JPEG.ParsingError.message         : Swift.String { get }
+        /// :   JPEG.Error 
+        ///     Returns a basic description of this parsing error.
         public 
         var message:String 
         {
@@ -269,6 +395,9 @@ extension JPEG
                 return "invalid quantization table precision specifier"
             }
         }
+        /// var JPEG.ParsingError.details         : Swift.String? { get }
+        /// :   JPEG.Error 
+        ///     Returns a detailed description of this parsing error, if available.
         public 
         var details:String? 
         {
@@ -352,46 +481,198 @@ extension JPEG
             }
         }
     }
+    /// enum JPEG.DecodingError
+    /// :   JPEG.Error 
+    ///     A decoding error.
+    /// #  [See also](error-types)
+    /// ## (error-types)
+    /// ## (error-handling)
     public 
     enum DecodingError:JPEG.Error 
     {
+        /// case JPEG.DecodingError.truncatedEntropyCodedSegment
+        ///     An entropy-coded segment contained less than the expected amount of data.
         case truncatedEntropyCodedSegment
         
+        /// case JPEG.DecodingError.invalidRestartPhase(_:expected:)
+        ///     A restart marker appeared out-of-phase. 
+        /// 
+        ///     Restart markers should cycle from 0 to 7, in that order.
+        /// - _         : Swift.Int 
+        ///     The phase read from the restart marker. 
+        /// - expected  : Swift.Int 
+        ///     The expected phase, which is one greater than the phase of the 
+        ///     last-encountered restart marker (modulo 8), or 0 if this is the 
+        ///     first restart marker in the entropy-coded segment.
         case invalidRestartPhase(Int, expected:Int)
+        /// case JPEG.DecodingError.missingRestartIntervalSegment
+        ///     A restart marker appeared, but no restart interval was ever defined, 
+        ///     or restart markers were disabled.
         case missingRestartIntervalSegment
         
+        /// case JPEG.DecodingError.invalidSpectralSelectionProgression(_:_:)
+        ///     The first scan for a component encoded a frequency band that 
+        ///     did not include the DC coefficient.
+        /// - _ : Swift.Range<Swift.Int> 
+        ///     The frequency band encoded by the scan.
+        /// - _ : JPEG.Component.Key 
+        ///     The component key of the invalidated color channel.
         case invalidSpectralSelectionProgression(Range<Int>, Component.Key)
+        /// case JPEG.DecodingError.invalidSuccessiveApproximationProgression(_:_:z:_:)
+        ///     A scan did not follow the correct successive approximation sequence 
+        ///     for at least one frequency coefficient.
+        /// 
+        ///     Successive approximation must refine bits starting from the most-significant 
+        ///     and going towards the least-significant, only the initial scan 
+        ///     for each coefficient can encode more than one bit at a time. 
+        /// - _ : Swift.Range<Swift.Int>
+        ///     The bit range encoded by the scan. 
+        /// - _ : Swift.Int 
+        ///     The index of the least-significant bit encoded so far for the coefficient `z`. 
+        /// - z : Swift.Int 
+        ///     The zigzag index of the coefficient. 
+        /// - _ : JPEG.Component.Key 
+        ///     The component key of the invalidated color channel.
         case invalidSuccessiveApproximationProgression(Range<Int>, Int, z:Int, Component.Key)
         
+        /// case JPEG.DecodingError.invalidCompositeValue(_:expected:)
+        ///     The decoder decoded an out-of-range composite value. 
+        /// 
+        ///     This error occurs when a refining AC scan encodes any composite 
+        ///     value that is not –1, 0, or +1, because refining scans can only 
+        ///     refine one bit at a time.
+        /// - _         : Swift.Int16 
+        ///     The decoded composite value.
+        /// - expected  : Swift.ClosedRange<Swift.Int> 
+        ///     The expected range for the composite value.
         case invalidCompositeValue(Int16, expected:ClosedRange<Int>)
+        /// case JPEG.DecodingError.invalidCompositeBlockRun(_:expected:)
+        ///     The decoder decoded an out-of-range end-of-band/end-of-block run count. 
+        /// 
+        ///     This error occurs when a sequential scan tries to encode an end-of-band
+        ///     run, which is a progressive coding process concept only. Sequential 
+        ///     scans can only end-of-block runs of length 1.
+        /// - _         : Swift.Int16 
+        ///     The decoded end-of-band/end-of-block run count.
+        /// - expected  : Swift.ClosedRange<Swift.Int> 
+        ///     The expected range for the end-of-band/end-of-block run count.
         case invalidCompositeBlockRun(Int, expected:ClosedRange<Int>)
         
+        /// case JPEG.DecodingError.undefinedScanComponentReference(_:_:)
+        ///     A scan encoded a component with a key that was not one of the 
+        ///     resident components declared in the frame header.
+        /// - _ : JPEG.Component.Key 
+        ///     The undefined component key. 
+        /// - _ : Swift.Set<JPEG.Component.Key>
+        ///     The set of defined resident component keys.
         case undefinedScanComponentReference(Component.Key, Set<Component.Key>)
+        /// case JPEG.DecodingError.invalidScanSamplingVolume(_:)
+        ///     An interleaved scan had a total component sampling volume greater 
+        ///     than 10.
+        /// 
+        ///     The total sampling volume is the sum of the products of the sampling 
+        ///     factors of each component encoded by the scan.
+        /// - _ : Swift.Int 
+        ///     The total sampling volume of the scan components.
         case invalidScanSamplingVolume(Int)
+        /// case JPEG.DecodingError.undefinedScanHuffmanDCReference(_:)
+        ///     A DC huffman table selector in a scan referenced a table 
+        ///     slot with no bound table.
+        /// - _ : JPEG.Table.HuffmanDC.Selector 
+        ///     The table selector.
         case undefinedScanHuffmanDCReference(Table.HuffmanDC.Selector)
+        /// case JPEG.DecodingError.undefinedScanHuffmanACReference(_:)
+        ///     An AC huffman table selector in a scan referenced a table 
+        ///     slot with no bound table.
+        /// - _ : JPEG.Table.HuffmanAC.Selector 
+        ///     The table selector.
         case undefinedScanHuffmanACReference(Table.HuffmanAC.Selector)
+        /// case JPEG.DecodingError.undefinedScanQuantizationReference(_:)
+        ///     A quantization table selector in the first scan for a particular 
+        ///     component referenced a table slot with no bound table.
+        /// - _ : JPEG.Table.Quantization.Selector 
+        ///     The table selector.
         case undefinedScanQuantizationReference(Table.Quantization.Selector)
+        /// case JPEG.DecodingError.invalidScanQuantizationPrecision(_:)
+        ///     A quantization table had the wrong precision mode for the image 
+        ///     color format. 
+        /// 
+        ///     Only images with a bit depth greater than 8 should use a 16-bit 
+        ///     quantization table.
+        /// - _ : JPEG.Table.Quantization.Precision 
+        ///     The precision mode of the quantization table.
         case invalidScanQuantizationPrecision(Table.Quantization.Precision)
         
+        /// case JPEG.DecodingError.missingStartOfImage(_:)
+        ///     The first marker segment in the image was not a start-of-image marker. 
+        /// - _ : JPEG.Marker 
+        ///     The type indicator of the first encountered marker segment. 
         case missingStartOfImage(Marker)
+        /// case JPEG.DecodingError.duplicateStartOfImage 
+        ///     The decoder encountered more than one start-of-image marker.
         case duplicateStartOfImage
+        /// case JPEG.DecodingError.duplicateFrameHeaderSegment 
+        ///     The decoder encountered more than one frame header segment. 
+        ///     
+        ///     JPEG files using the hierarchical coding process can encode more 
+        ///     than one frame header. However, this coding process is not currently 
+        ///     supported.
         case duplicateFrameHeaderSegment
+        /// case JPEG.DecodingError.prematureScanHeaderSegment 
+        ///     The decoder encountered a scan header segment before a frame header 
+        ///     segment.
         case prematureScanHeaderSegment
+        /// case JPEG.DecodingError.missingHeightRedefinitionSegment 
+        ///     The decoder did not encounter the height redefinition segment that 
+        ///     must follow the first scan of an image with a declared height of 0.
         case missingHeightRedefinitionSegment
+        /// case JPEG.DecodingError.prematureHeightRedefinitionSegment 
+        ///     The decoder encountered a height redefinition segment before the 
+        ///     first image scan.
         case prematureHeightRedefinitionSegment
+        /// case JPEG.DecodingError.unexpectedHeightRedefinitionSegment 
+        ///     The decoder encountered a height redefinition segment after, but 
+        ///     not immediately after the first image scan.
         case unexpectedHeightRedefinitionSegment
-        case prematureEntropyCodedSegment
+        /// case JPEG.DecodingError.unexpectedRestart 
+        ///     The decoder encountered a restart marker outside of an entropy-coded 
+        ///     segment.
         case unexpectedRestart
+        /// case JPEG.DecodingError.prematureEndOfImage 
+        ///     The decoder encountered an end-of-image marker before encountering 
+        ///     a frame header segment.
         case prematureEndOfImage
         
+        /// case JPEG.DecodingError.unsupportedFrameCodingProcess(_:)
+        ///     The image coding process was anything other than 
+        ///     [`(Process).baseline`], or [`(Process).extended(coding:differential:)`] 
+        ///     and [`(Process).progressive(coding:differential:)`] with [`(Process.Coding).huffman`]
+        ///     coding and `differential` set to `false`.
+        /// - _ : JPEG.Process 
+        ///     The coding process used by the image.
         case unsupportedFrameCodingProcess(Process)
+        /// case JPEG.DecodingError.unrecognizedColorFormat(_:_:_:) 
+        ///     A [`(Format).recognize(_:precision:)`] implementation failed to 
+        ///     recognize the component set and bit precision in a frame header.
+        /// - _ : Swift.Set<JPEG.Component.Key>
+        ///     The set of resident component keys read from the frame header.
+        /// - _ : Swift.Int 
+        ///     The bit precision read from the frame header.
+        /// - _ : Swift.Any.Type 
+        ///     The [`Format`] type that tried to detect the color format.
         case unrecognizedColorFormat(Set<Component.Key>, Int, Any.Type)
         
+        /// static var JPEG.DecodingError.namespace: Swift.String { get }
+        /// :   JPEG.Error 
+        ///     Returns the string `"decoding error"`.
         public static 
         var namespace:String 
         {
             "decoding error" 
         }
+        /// var JPEG.DecodingError.message        : Swift.String { get }
+        /// :   JPEG.Error 
+        ///     Returns a basic description of this decoding error.
         public 
         var message:String 
         {
@@ -442,8 +723,6 @@ extension JPEG
                 return "premature height redefinition segment"
             case .unexpectedHeightRedefinitionSegment:
                 return "unexpected height redefinition segment"
-            case .prematureEntropyCodedSegment:
-                return "premature entropy coded segment"
             case .unexpectedRestart:
                 return "unexpected restart marker"
             case .prematureEndOfImage:
@@ -455,6 +734,9 @@ extension JPEG
                 return "unrecognized color format"
             }
         }
+        /// var JPEG.DecodingError.details        : Swift.String? { get }
+        /// :   JPEG.Error 
+        ///     Returns a detailed description of this decoding error, if available.
         public 
         var details:String? 
         {
@@ -503,8 +785,6 @@ extension JPEG
                 return "define height segment must occur immediately after first scan"
             case .prematureHeightRedefinitionSegment, .unexpectedHeightRedefinitionSegment:
                 return "define height segment can only occur immediately after first scan"
-            case .prematureEntropyCodedSegment:
-                return "entropy coded segment must occur immediately after scan header"
             case .unexpectedRestart:
                 return "restart marker can only follow an entropy-coded segment"
             case .prematureEndOfImage:
