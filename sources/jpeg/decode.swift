@@ -4195,6 +4195,14 @@ extension JPEG.Data.Rectangular
 // staged APIs 
 extension JPEG.Data.Spectral 
 {
+    /// static func JPEG.Data.Spectral.decompress<Source>(stream:) 
+    /// throws 
+    /// where Source:JPEG.Bytestream.Source 
+    ///     Decompresses a spectral image from the given data source.
+    /// - stream    : inout Source 
+    ///     A bytestream source.
+    /// - ->        : Self
+    ///     The decompressed image.
     public static 
     func decompress<Source>(stream:inout Source) throws -> Self
         where Source:JPEG.Bytestream.Source 
@@ -4204,6 +4212,18 @@ extension JPEG.Data.Spectral
 }
 extension JPEG.Data.Planar 
 {
+    /// static func JPEG.Data.Planar.decompress<Source>(stream:) 
+    /// throws 
+    /// where Source:JPEG.Bytestream.Source 
+    ///     Decompresses a planar image from the given data source.
+    /// 
+    ///     This function is a convenience function which calls [`Spectral.decompress(stream:)`] 
+    ///     to obtain a spectral image, and then calls [`(Spectral).idct()`] on the 
+    ///     output to return a planar image.
+    /// - stream    : inout Source 
+    ///     A bytestream source.
+    /// - ->        : Self
+    ///     The decompressed image.
     public static 
     func decompress<Source>(stream:inout Source) throws -> Self
         where Source:JPEG.Bytestream.Source 
@@ -4214,11 +4234,28 @@ extension JPEG.Data.Planar
 }
 extension JPEG.Data.Rectangular 
 {
+    /// static func JPEG.Data.Rectangular.decompress<Source>(stream:cosite:) 
+    /// throws 
+    /// where Source:JPEG.Bytestream.Source 
+    ///     Decompresses a rectangular image from the given data source.
+    /// 
+    ///     This function is a convenience function which calls [`Planar.decompress(stream:)`] 
+    ///     to obtain a planar image, and then calls [`(Planar).interleaved(cosite:)`] 
+    ///     on the output to return a rectangular image.
+    /// - stream    : inout Source 
+    ///     A bytestream source.
+    /// - cosited : Swift.Bool 
+    ///     The upsampling method to use. Setting this parameter to `true` co-sites 
+    ///     the samples; setting it to `false` centers them instead.
+    /// 
+    ///     The default value is `false`.
+    /// - ->        : Self
+    ///     The decompressed image.
     public static 
-    func decompress<Source>(stream:inout Source) throws -> Self
+    func decompress<Source>(stream:inout Source, cosite cosited:Bool = false) throws -> Self
         where Source:JPEG.Bytestream.Source 
     {
         let planar:JPEG.Data.Planar<Format> = try .decompress(stream: &stream) 
-        return planar.interleaved()
+        return planar.interleaved(cosite: cosited)
     }
 }

@@ -1,15 +1,27 @@
+/// protocol JPEG.Error
+/// :   Swift.Error 
+///     Functionality common to all library error types.
 public 
 protocol _JPEGError:Swift.Error 
 {
+    /// static var JPEG.Error.namespace : Swift.String { get }
+    /// required 
+    ///     The human-readable namespace for errors of this type.
     static 
     var namespace:String 
     {
         get 
     }
+    /// var JPEG.Error.message          : Swift.String { get }
+    /// required 
+    ///     A basic description of this error instance.
     var message:String 
     {
         get 
     }
+    /// var JPEG.Error.details          : Swift.String? { get }
+    /// required 
+    ///     A detailed description of this error instance, if available.
     var details:String? 
     {
         get 
@@ -19,23 +31,59 @@ extension JPEG
 {
     public 
     typealias Error = _JPEGError
+    /// enum JPEG.LexingError
+    /// :   JPEG.Error 
+    ///     A lexing error.
     public 
     enum LexingError:JPEG.Error
     {
+        /// case JPEG.LexingError.truncatedMarkerSegmentType 
+        ///     The lexer encountered end-of-stream while lexing a marker 
+        ///     segment type indicator.
         case truncatedMarkerSegmentType
+        /// case JPEG.LexingError.truncatedMarkerSegmentHeader
+        ///     The lexer encountered end-of-stream while lexing a marker 
+        ///     segment length field.
         case truncatedMarkerSegmentHeader
+        /// case JPEG.LexingError.truncatedMarkerSegmentBody(expected:)
+        ///     The lexer encountered end-of-stream while lexing a marker 
+        ///     segment body.
+        /// - expected:Swift.Int 
+        ///     The number of bytes the lexer was expecting to read.
         case truncatedMarkerSegmentBody(expected:Int)
+        /// case JPEG.LexingError.truncatedEntropyCodedSegment
+        ///     The lexer encountered end-of-stream while lexing an entropy-coded 
+        ///     segment, usually because it was expecting a subsequent marker segment.
         case truncatedEntropyCodedSegment
-        
+        /// case JPEG.LexingError.invalidMarkerSegmentLength(_:)
+        ///     The lexer read a marker segment length field, but the value did 
+        ///     not make sense.
+        /// - _ :Swift.Int 
+        ///     The value that the lexer read from the marker segment length field.
         case invalidMarkerSegmentLength(Int)
+        /// case JPEG.LexingError.invalidMarkerSegmentPrefix(_:)
+        ///     The lexer encountered a prefixed entropy-coded segment where it 
+        ///     was expecting none.
+        /// - _ :Swift.UInt8 
+        ///     The first invalid byte encountered by the lexer.
         case invalidMarkerSegmentPrefix(UInt8)
+        /// case JPEG.LexingError.invalidMarkerSegmentPrefix(_:)
+        ///     The lexer encountered a marker segment with a reserved type indicator 
+        ///     code.
+        /// - _ :Swift.UInt8 
+        ///     The invalid type indicator code encountered by the lexer.
         case invalidMarkerSegmentType(UInt8)
-        
+        /// static var JPEG.LexingError.namespace : Swift.String { get }
+        /// :   JPEG.Error 
+        ///     Returns the string `"lexing error"`.
         public static 
         var namespace:String 
         {
             "lexing error" 
         }
+        /// var JPEG.LexingError.message          : Swift.String { get }
+        /// :   JPEG.Error 
+        ///     Returns a basic description of this lexing error.
         public 
         var message:String 
         {
@@ -58,6 +106,9 @@ extension JPEG
                 return "invalid marker segment type code"
             } 
         }
+        /// var JPEG.LexingError.details          : Swift.String? { get }
+        /// :   JPEG.Error 
+        ///     Returns a detailed description of this lexing error, if available.
         public 
         var details:String? 
         {
@@ -81,10 +132,29 @@ extension JPEG
             } 
         }
     }
+    /// enum JPEG.ParsingError
+    /// :   JPEG.Error 
+    ///     A parsing error.
     public 
     enum ParsingError:JPEG.Error 
     {
+        /// case JPEG.ParsingError.truncatedMarkerSegmentBody(_:_:expected:) 
+        ///     A marker segment contained less than the expected amount of data.
+        /// - _         : JPEG.Marker 
+        ///     The marker segment type.
+        /// - _         : Swift.Int 
+        ///     The size of the marker segment, in bytes.
+        /// - expected  : Swift.ClosedRange<Swift.Int> 
+        ///     The range of marker segment sizes that was expected, in bytes.
         case truncatedMarkerSegmentBody(Marker, Int, expected:ClosedRange<Int>)
+        /// case JPEG.ParsingError.extraneousMarkerSegmentData(_:_:expected:) 
+        ///     A marker segment contained more than the expected amount of data.
+        /// - _         : JPEG.Marker 
+        ///     The marker segment type.
+        /// - _         : Swift.Int 
+        ///     The size of the marker segment, in bytes.
+        /// - expected  : Swift.Int
+        ///     The amount of data that was expected, in bytes.
         case extraneousMarkerSegmentData(Marker, Int, expected:Int)
         
         case invalidJFIFSignature([UInt8])

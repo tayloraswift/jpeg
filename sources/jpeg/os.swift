@@ -241,7 +241,7 @@ extension JPEG.Data.Planar
 extension JPEG.Data.Rectangular 
 {
     public static 
-    func decompress(path:String) throws -> Self? 
+    func decompress(path:String, cosite cosited:Bool = false) throws -> Self? 
     {
         guard let planar:JPEG.Data.Planar<Format> = try .decompress(path: path) 
         else 
@@ -249,7 +249,7 @@ extension JPEG.Data.Rectangular
             return nil 
         }
         
-        return planar.interleaved()
+        return planar.interleaved(cosite: cosited)
     }
     public 
     func compress(path:String, quanta:[JPEG.Table.Quantization.Key: [UInt16]]) throws 

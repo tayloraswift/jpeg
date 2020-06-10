@@ -560,125 +560,48 @@ extension Page
         }
     }
     
-    func attachTopics<C>(children:C, global:[String: [TopicSymbol]]) 
-        where C:Collection, C.Element == PageTree.Node 
+    enum ParameterScheme 
     {
-        for i:Int in self.topics.indices 
+        case `subscript`
+        case function 
+        case associatedValues 
+        
+        var delimiter:(String, String) 
         {
-            self.topics[i].symbols.append(contentsOf: 
-            global[self.topics[i].key, default: []].filter 
+            switch self 
             {
-                $0.signature != self.signature
-            })
-        }
-        let seen:Set<String> = .init(self.topics.flatMap{ $0.symbols.map(\.url) })
-        var topics: 
-        (
-            enumerations        :[TopicSymbol],
-            structures          :[TopicSymbol],
-            classes             :[TopicSymbol],
-            protocols           :[TopicSymbol],
-            typealiases         :[TopicSymbol],
-            cases               :[TopicSymbol],
-            initializers        :[TopicSymbol],
-            typeMethods         :[TopicSymbol],
-            instanceMethods     :[TopicSymbol],
-            typeProperties      :[TopicSymbol],
-            instanceProperties  :[TopicSymbol],
-            associatedtypes     :[TopicSymbol],
-            subscripts          :[TopicSymbol]
-        )
-        topics = ([], [], [], [], [], [], [], [], [], [], [], [], [])
-        for binding:Binding in 
-            (children.flatMap
-            { 
-                $0.payloads.compactMap
-                { 
-                    if case .binding(let binding) = $0 
-                    {
-                        return binding 
-                    }
-                    else 
-                    {
-                        return nil 
-                    }
-                } 
-            }.sorted{ $0.page.name < $1.page.name })
-        {
-            guard !seen.contains(binding.url)
-            else 
-            {
-                continue 
-            }
-            
-            let symbol:TopicSymbol = 
-            (
-                binding.page.signature, 
-                binding.url, 
-                binding.page.blurb, 
-                binding.page.discussion.required
-            )
-            switch binding.page.label 
-            {
-            case .enumeration, .genericEnumeration:
-                topics.enumerations.append(symbol)
-            case .structure, .genericStructure:
-                topics.structures.append(symbol)
-            case .class, .genericClass:
-                topics.classes.append(symbol)
-            case .protocol:
-                topics.protocols.append(symbol)
-            case .typealias:
-                topics.typealiases.append(symbol)
-            
-            case .enumerationCase:
-                topics.cases.append(symbol)
-            case .initializer, .genericInitializer:
-                topics.initializers.append(symbol)
-            case .staticMethod, .genericStaticMethod:
-                topics.typeMethods.append(symbol)
-            case .instanceMethod, .genericInstanceMethod:
-                topics.instanceMethods.append(symbol)
-            case .staticProperty:
-                topics.typeProperties.append(symbol)
-            case .instanceProperty:
-                topics.instanceProperties.append(symbol)
-            case .associatedtype:
-                topics.associatedtypes.append(symbol)
             case .subscript:
-                topics.subscripts.append(symbol)
+                return ("[", "]")
+            case .function, .associatedValues:
+                return ("(", ")")
             }
         }
         
-        for builtin:(topic:String, symbols:[TopicSymbol]) in 
-        [
-            (topic: "Enumeration cases",    symbols: topics.cases), 
-            (topic: "Associatedtypes",      symbols: topics.associatedtypes), 
-            (topic: "Initializers",         symbols: topics.initializers), 
-            (topic: "Subscripts",           symbols: topics.subscripts), 
-            (topic: "Type properties",      symbols: topics.typeProperties), 
-            (topic: "Instance properties",  symbols: topics.instanceProperties), 
-            (topic: "Type methods",         symbols: topics.typeMethods), 
-            (topic: "Instance methods",     symbols: topics.instanceMethods), 
-            (topic: "Enumerations",         symbols: topics.enumerations), 
-            (topic: "Structures",           symbols: topics.structures), 
-            (topic: "Classes",              symbols: topics.classes), 
-            (topic: "Protocols",            symbols: topics.protocols), 
-            (topic: "Typealiases",          symbols: topics.typealiases), 
-        ]
-            where !builtin.symbols.isEmpty
+        func names(_ label:String, _ name:String) -> [String] 
         {
-            self.topics.append((builtin.topic, "$builtin", builtin.symbols))
-        }
-        
-        // move 'see also' to the end 
-        if let i:Int = (self.topics.firstIndex{ $0.topic.lowercased() == "see also" })
-        {
-            let seealso:Topic = self.topics.remove(at: i)
-            self.topics.append(seealso)
+            switch self 
+            {
+            case .subscript:
+                switch (label, name) 
+                {
+                case ("_",             "_"):
+                    return ["_"]
+                case ("_",       let inner):
+                    return [inner]
+                case (let outer, let inner):
+                    return [outer, inner]
+                }
+            case .function:
+                return label == name ? [label] : [label, name] 
+            case .associatedValues:
+                if label != name 
+                {
+                    Swift.print("warning: enumeration case cannot have different labels '\(label)', '\(name)'")
+                }
+                return label == "_" ? [] : [label]
+            }
         }
     }
-    
     static 
     func print(wheres fields:Fields, declaration:inout [Declaration.Token]) 
     {
@@ -721,7 +644,7 @@ extension Page
     }
     static 
     func print(function fields:Fields, labels:[(name:String, variadic:Bool)], 
-        delimiters:(Character, Character),
+        scheme:ParameterScheme,
         signature:inout [Signature.Token], 
         declaration:inout [Declaration.Token], 
         locals:Set<String> = []) 
@@ -732,7 +655,7 @@ extension Page
             fatalError("warning: function/subscript '\(signature)' has \(labels.count) labels, but \(fields.parameters.count) parameters")
         }
         
-        signature.append(.punctuation(.init(delimiters.0)))
+        signature.append(.punctuation(scheme.delimiter.0))
         declaration.append(.punctuation("("))
         
         var interior:(signature:[[Page.Signature.Token]], declaration:[[Page.Declaration.Token]]) = 
@@ -752,29 +675,15 @@ extension Page
                 signature.append(.punctuation(":"))
             }
             
-            let names:[String] 
-            if delimiters == ("[", "]") 
+            let names:[String] = scheme.names(label, name)
+            if !names.isEmpty 
             {
-                switch (label, name) 
+                declaration.append(contentsOf: names.map 
                 {
-                case ("_",             "_"):
-                    names = ["_"]
-                case ("_",       let inner):
-                    names = [inner]
-                case (let outer, let inner):
-                    names = [outer, inner]
-                }
+                    [$0 == "_" ? .keyword($0) : .identifier($0)]
+                }.joined(separator: [.whitespace]))
+                declaration.append(.punctuation(":"))
             }
-            else 
-            {
-                names = label == name ? [label] : [label, name]
-            }
-            declaration.append(contentsOf: names.map 
-            {
-                [$0 == "_" ? .keyword($0) : .identifier($0)]
-            }.joined(separator: [.whitespace]))
-            
-            declaration.append(.punctuation(":"))
             for attribute:Symbol.Attribute in parameter.attributes
             {
                 declaration.append(.keyword("\(attribute)"))
@@ -808,7 +717,7 @@ extension Page
         declaration.append(contentsOf: 
             interior.declaration.joined(separator: [.punctuation(","), .breakableWhitespace]))
         
-        signature.append(.punctuation(.init(delimiters.1)))
+        signature.append(.punctuation(scheme.delimiter.1))
         declaration.append(.punctuation(")"))
         
         if let `throws`:Symbol.ThrowsField = fields.throws
@@ -975,7 +884,7 @@ extension Page.Binding
         var signature:[Page.Signature.Token]        =      [.highlight("subscript")]
         
         Page.print(function: fields, 
-            labels: header.labels.map{ ($0, false) }, delimiters: ("[", "]"), 
+            labels: header.labels.map{ ($0, false) }, scheme: .subscript, 
             signature: &signature, declaration: &declaration)
         
         declaration.append(.breakableWhitespace)
@@ -1010,11 +919,6 @@ extension Page.Binding
         -> Self 
     {
         let fields:Page.Fields = .init(fields, order: order)
-        if !fields.wheres.isEmpty 
-        {
-            print("warning: where fields are ignored in a function doccoment")
-        }
-        
         var declaration:[Page.Declaration.Token] = Page.Declaration.tokenize(fields.attributes)
         
         let basename:String = header.identifiers[header.identifiers.endIndex - 1]
@@ -1096,7 +1000,8 @@ extension Page.Binding
         }
         else 
         {
-            Page.print(function: fields, labels: header.labels, delimiters: ("(", ")"), 
+            Page.print(function: fields, labels: header.labels, 
+                scheme: header.keyword == .case ? .associatedValues : .function, 
                 signature: &signature, declaration: &declaration, locals: .init(header.generics))
             name    = "\(basename)(\(header.labels.map{ "\($0.variadic && $0.name == "_" ? "" : $0.name)\($0.variadic ? "..." : ""):" }.joined()))" 
         }
@@ -1406,6 +1311,125 @@ extension Page.Binding
             path:           header.identifiers)
         return .init(page, locals: [], keys: fields.keys, urlpattern: urlpattern)
     }
+    
+    func attachTopics<C>(children:C, global:[String: [Page.TopicSymbol]]) 
+        where C:Collection, C.Element == PageTree.Node 
+    {
+        for i:Int in self.page.topics.indices 
+        {
+            self.page.topics[i].symbols.append(contentsOf: 
+            global[self.page.topics[i].key, default: []].filter 
+            {
+                $0.url != self.url
+            })
+        }
+        let seen:Set<String> = .init(self.page.topics.flatMap{ $0.symbols.map(\.url) })
+        var topics: 
+        (
+            enumerations        :[Page.TopicSymbol],
+            structures          :[Page.TopicSymbol],
+            classes             :[Page.TopicSymbol],
+            protocols           :[Page.TopicSymbol],
+            typealiases         :[Page.TopicSymbol],
+            cases               :[Page.TopicSymbol],
+            initializers        :[Page.TopicSymbol],
+            typeMethods         :[Page.TopicSymbol],
+            instanceMethods     :[Page.TopicSymbol],
+            typeProperties      :[Page.TopicSymbol],
+            instanceProperties  :[Page.TopicSymbol],
+            associatedtypes     :[Page.TopicSymbol],
+            subscripts          :[Page.TopicSymbol]
+        )
+        topics = ([], [], [], [], [], [], [], [], [], [], [], [], [])
+        for binding:Self in 
+            (children.flatMap
+            { 
+                $0.payloads.compactMap
+                { 
+                    if case .binding(let binding) = $0 
+                    {
+                        return binding 
+                    }
+                    else 
+                    {
+                        return nil 
+                    }
+                } 
+            }.sorted{ $0.page.name < $1.page.name })
+        {
+            guard !seen.contains(binding.url)
+            else 
+            {
+                continue 
+            }
+            
+            let symbol:Page.TopicSymbol = 
+            (
+                binding.page.signature, 
+                binding.url, 
+                binding.page.blurb, 
+                binding.page.discussion.required
+            )
+            switch binding.page.label 
+            {
+            case .enumeration, .genericEnumeration:
+                topics.enumerations.append(symbol)
+            case .structure, .genericStructure:
+                topics.structures.append(symbol)
+            case .class, .genericClass:
+                topics.classes.append(symbol)
+            case .protocol:
+                topics.protocols.append(symbol)
+            case .typealias:
+                topics.typealiases.append(symbol)
+            
+            case .enumerationCase:
+                topics.cases.append(symbol)
+            case .initializer, .genericInitializer:
+                topics.initializers.append(symbol)
+            case .staticMethod, .genericStaticMethod:
+                topics.typeMethods.append(symbol)
+            case .instanceMethod, .genericInstanceMethod:
+                topics.instanceMethods.append(symbol)
+            case .staticProperty:
+                topics.typeProperties.append(symbol)
+            case .instanceProperty:
+                topics.instanceProperties.append(symbol)
+            case .associatedtype:
+                topics.associatedtypes.append(symbol)
+            case .subscript:
+                topics.subscripts.append(symbol)
+            }
+        }
+        
+        for builtin:(topic:String, symbols:[Page.TopicSymbol]) in 
+        [
+            (topic: "Enumeration cases",    symbols: topics.cases), 
+            (topic: "Associatedtypes",      symbols: topics.associatedtypes), 
+            (topic: "Initializers",         symbols: topics.initializers), 
+            (topic: "Subscripts",           symbols: topics.subscripts), 
+            (topic: "Type properties",      symbols: topics.typeProperties), 
+            (topic: "Instance properties",  symbols: topics.instanceProperties), 
+            (topic: "Type methods",         symbols: topics.typeMethods), 
+            (topic: "Instance methods",     symbols: topics.instanceMethods), 
+            (topic: "Enumerations",         symbols: topics.enumerations), 
+            (topic: "Structures",           symbols: topics.structures), 
+            (topic: "Classes",              symbols: topics.classes), 
+            (topic: "Protocols",            symbols: topics.protocols), 
+            (topic: "Typealiases",          symbols: topics.typealiases), 
+        ]
+            where !builtin.symbols.isEmpty
+        {
+            self.page.topics.append((builtin.topic, "$builtin", builtin.symbols))
+        }
+        
+        // move 'see also' to the end 
+        if let i:Int = (self.page.topics.firstIndex{ $0.topic.lowercased() == "see also" })
+        {
+            let seealso:Page.Topic = self.page.topics.remove(at: i)
+            self.page.topics.append(seealso)
+        }
+    }
 }
 
 struct PageTree 
@@ -1647,7 +1671,7 @@ extension PageTree
             {
                 if case .binding(let binding) = payload 
                 {
-                    binding.page.attachTopics(children: node.children.values, global: global)
+                    binding.attachTopics(children: node.children.values, global: global)
                 }
             }
         }

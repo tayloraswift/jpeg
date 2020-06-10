@@ -209,13 +209,23 @@ extension Page.Signature
                 }
             }
             
-            grouped.append(.init("span", ["class": "signature-group"], content: group.map(HTML.Tag.Content.child(_:)) + [.character(" ")]))
+            let content:[HTML.Tag.Content] 
+            if grouped.isEmpty 
+            {
+                content = group.map(HTML.Tag.Content.child(_:))
+            }
+            else 
+            {
+                content = [.character(" ")] + group.map(HTML.Tag.Content.child(_:))
+            }
+            grouped.append(.init("span", ["class": "signature-group"], content: content))
             
             while i < tokens.endIndex, case .whitespace = tokens[i]
             {
                 i += 1
             }
         }
+        
         return grouped 
     }
 }
