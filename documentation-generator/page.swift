@@ -38,6 +38,9 @@ class Page
         }
         
         static 
+        let metatype:Self = .apple(url: "https://docs.swift.org/swift-book/ReferenceManual/Types.html#ID455")
+        
+        static 
         func link<T>(_ components:[(String, T)]) -> [(component:(String, T), link:Link)]
         {
             let scan:[(component:(String, T), accumulated:[String])] = components.enumerated().map 
@@ -59,7 +62,7 @@ class Page
                 {
                     ($0.component, .unresolved(path: $0.accumulated))
                 } + 
-                [(last, .apple(url: "https://docs.swift.org/swift-book/ReferenceManual/Types.html#ID455"))]
+                [(last, Self.metatype)]
             }
             else 
             {
@@ -140,11 +143,18 @@ class Page
                         return tokens 
                     }
                 }
-                else if identifiers.count == 1, 
-                    identifiers[0].generics.isEmpty, 
-                    locals.contains(identifiers[0].identifier) 
+                else if let first:String = identifiers.first?.identifier, 
+                    locals.contains(first), 
+                    identifiers.allSatisfy(\.generics.isEmpty) 
                 {
-                    return [.identifier(identifiers[0].identifier)]
+                    if identifiers.count == 2, identifiers[1].identifier == "Type"
+                    {
+                        return [.identifier(identifiers[0].identifier), .punctuation("."), .type("Type", Link.metatype)]
+                    }
+                    else 
+                    {
+                        return .init(identifiers.map{ [.identifier($0.identifier)] }.joined(separator: [.punctuation(".")]))
+                    }
                 }
                 
                 return .init(Link.link(identifiers.map{ ($0.identifier, $0.generics) }).map 
@@ -670,6 +680,46 @@ extension Page
     }
     
     static 
+    func print(wheres fields:Fields, declaration:inout [Declaration.Token]) 
+    {
+        guard !fields.wheres.isEmpty 
+        else 
+        {
+            return 
+        }
+        declaration.append(.breakableWhitespace)
+        declaration.append(.keyword("where"))
+        declaration.append(.whitespace)
+        declaration.append(contentsOf: fields.wheres.map 
+        {
+            (where:Symbol.WhereField) -> [Page.Declaration.Token] in 
+            var tokens:[Page.Declaration.Token] = []
+            // strip links from lhs
+            tokens.append(contentsOf: Page.Declaration.tokenize(`where`.lhs).map 
+            {
+                if case .type(let string, _) = $0 
+                {
+                    return .identifier(string)
+                }
+                else 
+                {
+                    return $0
+                }
+            })
+            switch `where`.relation
+            {
+            case .conforms:
+                tokens.append(.punctuation(":"))
+            case .equals:
+                tokens.append(.whitespace)
+                tokens.append(.punctuation("=="))
+                tokens.append(.whitespace)
+            }
+            tokens.append(contentsOf: Page.Declaration.tokenize(`where`.rhs))
+            return tokens
+        }.joined(separator: [.punctuation(","), .breakableWhitespace]))
+    }
+    static 
     func print(function fields:Fields, labels:[(name:String, variadic:Bool)], 
         delimiters:(Character, Character),
         signature:inout [Signature.Token], 
@@ -1051,6 +1101,8 @@ extension Page.Binding
             name    = "\(basename)(\(header.labels.map{ "\($0.variadic && $0.name == "_" ? "" : $0.name)\($0.variadic ? "..." : ""):" }.joined()))" 
         }
         
+        Page.print(wheres: fields, declaration: &declaration) 
+        
         let page:Page = .init(label: label, name: name, 
             signature:      signature, 
             declaration:    declaration, 
@@ -1235,38 +1287,7 @@ extension Page.Binding
             inheritances = []
         }
         
-        if !fields.wheres.isEmpty 
-        {
-            declaration.append(.breakableWhitespace)
-            declaration.append(.keyword("where"))
-            declaration.append(.whitespace)
-            declaration.append(contentsOf: fields.wheres.map 
-            {
-                (where:Symbol.WhereField) -> [Page.Declaration.Token] in 
-                var tokens:[Page.Declaration.Token] = []
-                // strip links from lhs
-                tokens.append(contentsOf: Page.Declaration.tokenize(`where`.lhs).map 
-                {
-                    if case .type(let string, _) = $0 
-                    {
-                        return .identifier(string)
-                    }
-                    else 
-                    {
-                        return $0
-                    }
-                })
-                switch `where`.relation
-                {
-                case .conforms:
-                    tokens.append(.punctuation(":"))
-                case .equals:
-                    tokens.append(.punctuation("=="))
-                }
-                tokens.append(contentsOf: Page.Declaration.tokenize(`where`.rhs))
-                return tokens
-            }.joined(separator: [.punctuation(","), .breakableWhitespace]))
-        }
+        Page.print(wheres: fields, declaration: &declaration) 
         
         let page:Page = .init(label: label, name: name, 
             signature:      signature, 
