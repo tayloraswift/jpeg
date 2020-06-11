@@ -448,7 +448,14 @@ extension Array:Parseable where Element:Parseable
     static 
     func parse(_ tokens:[Character]) -> Self 
     {
-        var c:Int = tokens.startIndex
+        var c:Int = tokens.startIndex 
+        defer 
+        {
+            if c != tokens.endIndex 
+            {
+                print("warning: did not fully parse '\(String.init(tokens.prefix(32)))' (\(c) of \(tokens.count) characters)")
+            }
+        }
         return Self.parse(tokens, position: &c)
     }
 }
@@ -786,7 +793,7 @@ enum Symbol
         }
     }
     
-    // MemberField         ::= <MemberKeyword> <Whitespace> <Identifiers> <Whitespace> ? ':' <Whitespace> ? <Type> <Whitespace> ? <MemberMutability> ? <Endline> 
+    // MemberField         ::= <MemberKeyword> <Whitespace> <Identifiers> ( <Whitespace> ? ':' <Whitespace> ? <Type> ) ? ( <Whitespace> ? <MemberMutability> ) ? <Endline> 
     // MemberKeyword       ::= 'let'
     //                       | 'var'
     //                       | 'static' <Whitespace> 'let'
@@ -797,7 +804,7 @@ enum Symbol
     {
         let keyword:Symbol.MemberKeyword
         let identifiers:[String]
-        let type:Symbol.SwiftType
+        let type:Symbol.SwiftType?
         let mutability:Symbol.MemberMutability?
             
         static 
@@ -806,17 +813,15 @@ enum Symbol
             let keyword:Symbol.MemberKeyword            = try .parse(tokens, position: &position), 
                 _:Symbol.Whitespace                     = try .parse(tokens, position: &position),
                 identifiers:Symbol.Identifiers          = try .parse(tokens, position: &position),
-                _:Symbol.Whitespace?                    =     .parse(tokens, position: &position),
-                _:Token.Colon                           = try .parse(tokens, position: &position),
-                _:Symbol.Whitespace?                    =     .parse(tokens, position: &position),
-                type:Symbol.SwiftType                   = try .parse(tokens, position: &position),
-                _:Symbol.Whitespace?                    =     .parse(tokens, position: &position),
-                mutability:Symbol.MemberMutability?     =     .parse(tokens, position: &position),
+                type:List<Symbol.Whitespace?, List<Token.Colon, List<Symbol.Whitespace?, Symbol.SwiftType>>>? = 
+                                                              .parse(tokens, position: &position),
+                mutability:List<Symbol.Whitespace?, Symbol.MemberMutability>? = 
+                                                              .parse(tokens, position: &position),
                 _:Symbol.Endline                        = try .parse(tokens, position: &position)
             return .init(keyword: keyword, 
                 identifiers:    identifiers.identifiers, 
-                type:           type,
-                mutability:     mutability)
+                type:           type?.body.body.body,
+                mutability:     mutability?.body)
         }
         
         var description:String 
@@ -826,7 +831,7 @@ enum Symbol
             {
                 keyword     : \(self.keyword)
                 identifiers : \(self.identifiers)
-                type        : \(self.type)
+                type        : \(self.type.map(String.init(describing:)) ?? "")
                 mutability  : \(self.mutability.map(String.init(describing:)) ?? "")
             }
             """
@@ -1355,41 +1360,12 @@ enum Symbol
             """
         }
     }
-    // AssociatedtypeField ::= 'associatedtype' <Whitespace> <Identifiers> <Endline>
-    struct AssociatedtypeField:Parseable, CustomStringConvertible
+    
+    // ConformanceField    ::= ':' <Whitespace> ? <Identifiers> ( <Whitespace> ? '&' <Whitespace> ? <Identifiers> ) * ( <Whitespace> <WhereClauses> ) ? <Endline>
+    struct ConformanceField:Parseable, CustomStringConvertible
     {
-        struct Associatedtype:Parseable.Terminal 
-        {
-            static 
-            let token:String = "associatedtype"
-        }
-        
-        let identifiers:[String]
-        
-        static 
-        func parse(_ tokens:[Character], position:inout Int) throws -> Self
-        {
-            let _:Associatedtype                = try .parse(tokens, position: &position), 
-                _:Symbol.Whitespace             = try .parse(tokens, position: &position), 
-                identifiers:Symbol.Identifiers  = try .parse(tokens, position: &position), 
-                _:Symbol.Endline                = try .parse(tokens, position: &position)
-            return .init(identifiers: identifiers.identifiers)
-        }
-        
-        var description:String 
-        {
-            """
-            AssociatedtypeField 
-            {
-                identifiers  : \(self.identifiers)
-            }
-            """
-        }
-    }
-    // AnnotationField     ::= ':' <Whitespace> ? <Identifiers> <Whitespace> ? ( '&' <Whitespace> ? <Identifiers> <Whitespace> ? ) * '\n'
-    struct AnnotationField:Parseable, CustomStringConvertible
-    {
-        let annotations:[[String]]
+        let conformances:[[String]]
+        let conditions:[WhereClause]
         
         static 
         func parse(_ tokens:[Character], position:inout Int) throws -> Self
@@ -1397,28 +1373,74 @@ enum Symbol
             let _:Token.Colon               = try .parse(tokens, position: &position), 
                 _:Symbol.Whitespace?        =     .parse(tokens, position: &position), 
                 head:Symbol.Identifiers     = try .parse(tokens, position: &position), 
-                _:Symbol.Whitespace?        =     .parse(tokens, position: &position), 
-                body:[List<Token.Ampersand, List<Symbol.Whitespace?, List<Symbol.Identifiers, Symbol.Whitespace?>>>] =
+                body:[List<Symbol.Whitespace?, List<Token.Ampersand, List<Symbol.Whitespace?, Symbol.Identifiers>>>] =
                                                   .parse(tokens, position: &position),
-                _:Token.Newline             = try .parse(tokens, position: &position)
-            return .init(annotations: ([head] + body.map(\.body.body.head)).map(\.identifiers))
+                conditions:List<Symbol.Whitespace, Symbol.WhereClauses>? = 
+                                                  .parse(tokens, position: &position),
+                _:Symbol.Endline            = try .parse(tokens, position: &position)
+            return .init(conformances: ([head.identifiers] + body.map(\.body.body.body.identifiers)), 
+                conditions: conditions?.body.clauses ?? [])
         }
         
         var description:String 
         {
             """
-            AnnotationField 
+            ConformanceField 
             {
-                annotations  : \(self.annotations)
+                conformances  : \(self.conformances)
+                conditions    : \(self.conditions)
             }
             """
         }
     }
     
-    // WhereField          ::= 'where' <Whitespace> <Identifiers> <Whitespace> ? <WhereRelation> <Whitespace> ? <Identifiers> <Endline>
-    // WhereRelation       ::= ':' 
-    //                       | '=='
-    struct WhereField:Parseable, CustomStringConvertible
+    //  ImplementationField ::= '?:' <Whitespace> ? <Identifiers> ( <Whitespace> <WhereClauses> ) ? <Endline>
+    struct ImplementationField:Parseable 
+    {
+        let conformance:[String]
+        let conditions:[WhereClause]
+        
+        static 
+        func parse(_ tokens:[Character], position:inout Int) throws -> Self
+        {
+            let _:List<Token.Question, Token.Colon> = try .parse(tokens, position: &position), 
+                _:Symbol.Whitespace?                =     .parse(tokens, position: &position), 
+                conformance:Symbol.Identifiers      = try .parse(tokens, position: &position), 
+                conditions:List<Symbol.Whitespace, Symbol.WhereClauses>? = 
+                                                          .parse(tokens, position: &position), 
+                _:Symbol.Endline                    = try .parse(tokens, position: &position)
+            return .init(conformance: conformance.identifiers, conditions: conditions?.body.clauses ?? [])
+        }
+    }
+    
+    //  ConstraintsField    ::= <WhereClauses> <Endline>
+    //  WhereClauses        ::= 'where' <Whitespace> <WhereClause> ( <Whitespace> ? ',' <Whitespace> ? <WhereClause> ) * 
+    //  WhereClause         ::= <Identifiers> <Whitespace> ? <WhereRelation> <Whitespace> ? <Identifiers> ( <Whitespace> ? '&' <Whitespace> ? <Identifiers> ) *
+    //  WhereRelation       ::= ':' 
+    //                        | '=='
+    struct ConstraintsField:Parseable, CustomStringConvertible
+    {
+        let clauses:[WhereClause]
+        
+        static 
+        func parse(_ tokens:[Character], position:inout Int) throws -> Self
+        {
+            let clauses:Symbol.WhereClauses = try .parse(tokens, position: &position), 
+                _:Symbol.Endline            = try .parse(tokens, position: &position)
+            return .init(clauses: clauses.clauses)
+        }
+        
+        var description:String 
+        {
+            """
+            ConstraintsField 
+            {
+                constraint  : \(self.clauses.map(\.description).joined(separator: ", "))
+            }
+            """
+        }
+    }
+    struct WhereClauses:Parseable 
     {
         struct Where:Parseable.Terminal 
         {
@@ -1426,32 +1448,42 @@ enum Symbol
             let token:String = "where"
         }
         
-        let lhs:[String], 
-            rhs:[String], 
-            relation:Symbol.WhereRelation 
+        let clauses:[WhereClause]
         
         static 
         func parse(_ tokens:[Character], position:inout Int) throws -> Self
         {
             let _:Where                 = try .parse(tokens, position: &position), 
                 _:Symbol.Whitespace     = try .parse(tokens, position: &position), 
-                lhs:Symbol.Identifiers  = try .parse(tokens, position: &position), 
-                _:Symbol.Whitespace?    =     .parse(tokens, position: &position), 
-                relation:Symbol.WhereRelation = try .parse(tokens, position: &position), 
-                _:Symbol.Whitespace?    =     .parse(tokens, position: &position), 
-                rhs:Symbol.Identifiers  = try .parse(tokens, position: &position),
-                _:Symbol.Endline        = try .parse(tokens, position: &position)
-            return .init(lhs: lhs.identifiers, rhs: rhs.identifiers, relation: relation)
+                head:Symbol.WhereClause = try .parse(tokens, position: &position),
+                body:[List<Symbol.Whitespace?, List<Token.Comma, List<Symbol.Whitespace?, Symbol.WhereClause>>>] = 
+                                              .parse(tokens, position: &position)
+            return .init(clauses: [head] + body.map(\.body.body.body))
+        }
+    }
+    struct WhereClause:Parseable, CustomStringConvertible
+    {
+        let subject:[String], 
+            relation:WhereRelation, 
+            object:[[String]]
+            
+        static 
+        func parse(_ tokens:[Character], position:inout Int) throws -> Self
+        {
+            let subject:Symbol.Identifiers      = try .parse(tokens, position: &position), 
+                _:Symbol.Whitespace?            =     .parse(tokens, position: &position), 
+                relation:Symbol.WhereRelation   = try .parse(tokens, position: &position), 
+                _:Symbol.Whitespace?            =     .parse(tokens, position: &position), 
+                head:Symbol.Identifiers         = try .parse(tokens, position: &position),
+                body:[List<Symbol.Whitespace?, List<Token.Ampersand, List<Symbol.Whitespace?, Symbol.Identifiers>>>] = 
+                                                      .parse(tokens, position: &position)
+            return .init(subject: subject.identifiers, relation: relation, 
+                object: [head.identifiers] + body.map(\.body.body.body.identifiers))
         }
         
         var description:String 
         {
-            """
-            WhereField 
-            {
-                constraint  : \(self.lhs) \(self.relation) \(self.rhs)
-            }
-            """
+            "\(self.subject.joined(separator: "."))\(self.relation == .equals ? " == " : ":")\(object.map{ $0.joined(separator: ".") }.joined(separator: " & "))"
         }
     }
     enum WhereRelation:Parseable
@@ -1477,12 +1509,12 @@ enum Symbol
         }
     }
     
-    // AttributeField      ::= '@' <Whitespace> ? <DeclarationAttribute> 
-    // DeclarationAttribute::= 'frozen' <Endline>
-    //                       | 'inlinable' <Endline>
-    //                       | 'propertyWrapper' <Endline>
-    //                       | 'specialized' <Whitespace> <WhereField>
-    //                       | ':'  <Whitespace> ? <Type> <Endline> 
+    //  AttributeField      ::= '@' <Whitespace> ? <DeclarationAttribute> <Endline>
+    //  DeclarationAttribute::= 'frozen'
+    //                        | 'inlinable'
+    //                        | 'propertyWrapper'
+    //                        | 'specialized' <Whitespace> <WhereClauses>
+    //                        | ':'  <Whitespace> ? <Type>
     enum AttributeField:Parseable
     {
         struct Frozen:Parseable.Terminal 
@@ -1509,7 +1541,7 @@ enum Symbol
         case frozen 
         case inlinable 
         case wrapper
-        case specialized(Symbol.WhereField)
+        case specialized(Symbol.WhereClauses)
         case wrapped(Symbol.SwiftType)
         
         static 
@@ -1518,28 +1550,28 @@ enum Symbol
             let _:Token.At              = try .parse(tokens, position: &position), 
                 _:Symbol.Whitespace?    =     .parse(tokens, position: &position)
             
-            if      let _:Frozen = .parse(tokens, position: &position)
+            if      let _:List<Frozen, Symbol.Endline> = .parse(tokens, position: &position)
             {
                 return .frozen
             }
-            else if let _:Inlinable = .parse(tokens, position: &position)
+            else if let _:List<Inlinable, Symbol.Endline> = .parse(tokens, position: &position)
             {
                 return .inlinable 
             }
-            else if let _:PropertyWrapper = 
+            else if let _:List<PropertyWrapper, Symbol.Endline> = 
                 .parse(tokens, position: &position)
             {
                 return .wrapper 
             }
-            else if let specialized:List<Specialized, List<Symbol.Whitespace, Symbol.WhereField>> = 
+            else if let specialized:List<Specialized, List<Symbol.Whitespace, List<Symbol.WhereClauses, Symbol.Endline>>> = 
                 .parse(tokens, position: &position)
             {
-                return .specialized(specialized.body.body)
+                return .specialized(specialized.body.body.head)
             }
-            else if let wrapped:List<Token.Colon, List<Symbol.Whitespace?, Symbol.SwiftType>> = 
+            else if let wrapped:List<Token.Colon, List<Symbol.Whitespace?, List<Symbol.SwiftType, Symbol.Endline>>> = 
                 .parse(tokens, position: &position)
             {
-                return .wrapped(wrapped.body.body) 
+                return .wrapped(wrapped.body.body.head) 
             }
             else 
             {
@@ -1614,11 +1646,11 @@ enum Symbol
         static 
         func parse(_ tokens:[Character], position:inout Int) throws -> Self
         {
-            if      let _:Token.Throws = .parse(tokens, position: &position)
+            if      let _:List<Token.Throws, Symbol.Endline> = .parse(tokens, position: &position)
             {
                 return .throws
             }
-            else if let _:Token.Rethrows = .parse(tokens, position: &position)
+            else if let _:List<Token.Rethrows, Symbol.Endline> = .parse(tokens, position: &position)
             {
                 return .rethrows
             }
@@ -1650,11 +1682,11 @@ enum Symbol
         static 
         func parse(_ tokens:[Character], position:inout Int) throws -> Self
         {
-            if      let _:Required = .parse(tokens, position: &position)
+            if      let _:List<Required, Symbol.Endline> = .parse(tokens, position: &position)
             {
                 return .required
             }
-            else if let _:Defaulted = .parse(tokens, position: &position)
+            else if let _:List<Defaulted, Symbol.Endline> = .parse(tokens, position: &position)
             {
                 return .defaulted
             }
@@ -1770,10 +1802,9 @@ enum Symbol
     //                       | <MemberField>
     //                       | <TypeField>
     //                       | <TypealiasField>
-    //                       | <AssociatedtypeField>
     //                       | <AnnotationField>
     //                       | <AttributeField>
-    //                       | <WhereField>
+    //                       | <ConstraintsField>
     //                       | <ThrowsField>
     //                       | <RequirementField>
     //                       | <ParameterField>
@@ -1789,11 +1820,11 @@ enum Symbol
         case member(Symbol.MemberField) 
         case type(Symbol.TypeField) 
         case `typealias`(Symbol.TypealiasField) 
-        case `associatedtype`(Symbol.AssociatedtypeField) 
         
-        case annotation(Symbol.AnnotationField) 
+        case implementation(Symbol.ImplementationField) 
+        case conformance(Symbol.ConformanceField) 
+        case constraints(Symbol.ConstraintsField) 
         case attribute(Symbol.AttributeField) 
-        case `where`(Symbol.WhereField) 
         case `throws`(Symbol.ThrowsField) 
         case requirement(Symbol.RequirementField) 
         case parameter(Symbol.ParameterField) 
@@ -1827,21 +1858,21 @@ enum Symbol
             {
                 return .typealias(field)
             }
-            else if let field:Symbol.AssociatedtypeField = .parse(tokens, position: &position)
+            else if let field:Symbol.ImplementationField = .parse(tokens, position: &position)
             {
-                return .associatedtype(field)
+                return .implementation(field)
             }
-            else if let field:Symbol.AnnotationField = .parse(tokens, position: &position)
+            else if let field:Symbol.ConformanceField = .parse(tokens, position: &position)
             {
-                return .annotation(field)
+                return .conformance(field)
+            }
+            else if let field:Symbol.ConstraintsField = .parse(tokens, position: &position)
+            {
+                return .constraints(field)
             }
             else if let field:Symbol.AttributeField = .parse(tokens, position: &position)
             {
                 return .attribute(field)
-            }
-            else if let field:Symbol.WhereField = .parse(tokens, position: &position)
-            {
-                return .where(field)
             }
             else if let field:Symbol.ThrowsField = .parse(tokens, position: &position)
             {
@@ -1936,8 +1967,6 @@ func main(sources:[String], directory:String, urlpattern:(prefix:String, suffix:
         case .type(let header)?:
             pages.append(Page.Binding.create(header, fields: body, order: i, urlpattern: urlpattern))
         case .typealias(let header)?:
-            pages.append(Page.Binding.create(header, fields: body, order: i, urlpattern: urlpattern))
-        case .associatedtype(let header)?:
             pages.append(Page.Binding.create(header, fields: body, order: i, urlpattern: urlpattern))
         default:
             print("warning unparsed doccoment '\(String.init(doccomment))'") 

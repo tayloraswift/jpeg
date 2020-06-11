@@ -79,7 +79,7 @@ extension JPEG
         ///     The invalid type indicator code encountered by the lexer.
         case invalidMarkerSegmentType(UInt8)
         /// static var JPEG.LexingError.namespace : Swift.String { get }
-        /// :   JPEG.Error 
+        /// ?:  JPEG.Error 
         ///     Returns the string `"lexing error"`.
         public static 
         var namespace:String 
@@ -87,7 +87,7 @@ extension JPEG
             "lexing error" 
         }
         /// var JPEG.LexingError.message          : Swift.String { get }
-        /// :   JPEG.Error 
+        /// ?:  JPEG.Error 
         ///     Returns a basic description of this lexing error.
         public 
         var message:String 
@@ -112,7 +112,7 @@ extension JPEG
             } 
         }
         /// var JPEG.LexingError.details          : Swift.String? { get }
-        /// :   JPEG.Error 
+        /// ?:  JPEG.Error 
         ///     Returns a detailed description of this lexing error, if available.
         public 
         var details:String? 
@@ -324,7 +324,7 @@ extension JPEG
             }
         }
         /// static var JPEG.ParsingError.namespace: Swift.String { get }
-        /// :   JPEG.Error 
+        /// ?:  JPEG.Error 
         ///     Returns the string `"parsing error"`.
         public static 
         var namespace:String 
@@ -332,7 +332,7 @@ extension JPEG
             "parsing error" 
         }
         /// var JPEG.ParsingError.message         : Swift.String { get }
-        /// :   JPEG.Error 
+        /// ?:  JPEG.Error 
         ///     Returns a basic description of this parsing error.
         public 
         var message:String 
@@ -396,7 +396,7 @@ extension JPEG
             }
         }
         /// var JPEG.ParsingError.details         : Swift.String? { get }
-        /// :   JPEG.Error 
+        /// ?:  JPEG.Error 
         ///     Returns a detailed description of this parsing error, if available.
         public 
         var details:String? 
@@ -663,7 +663,7 @@ extension JPEG
         case unrecognizedColorFormat(Set<Component.Key>, Int, Any.Type)
         
         /// static var JPEG.DecodingError.namespace: Swift.String { get }
-        /// :   JPEG.Error 
+        /// ?:  JPEG.Error 
         ///     Returns the string `"decoding error"`.
         public static 
         var namespace:String 
@@ -671,7 +671,7 @@ extension JPEG
             "decoding error" 
         }
         /// var JPEG.DecodingError.message        : Swift.String { get }
-        /// :   JPEG.Error 
+        /// ?:  JPEG.Error 
         ///     Returns a basic description of this decoding error.
         public 
         var message:String 
@@ -735,7 +735,7 @@ extension JPEG
             }
         }
         /// var JPEG.DecodingError.details        : Swift.String? { get }
-        /// :   JPEG.Error 
+        /// ?:  JPEG.Error 
         ///     Returns a detailed description of this decoding error, if available.
         public 
         var details:String? 

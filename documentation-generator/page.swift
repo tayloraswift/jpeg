@@ -392,58 +392,81 @@ class Page
         
         self.blurb          = fields.blurb?.elements ?? [] 
         
-        let required:[Markdown.Element] 
-        switch fields.requirement 
+        let relationships:[Markdown.Element] 
+        switch label 
         {
-        case nil:
-            switch label 
+        // "Required ..."
+        case .initializer, .genericInitializer, .staticMethod, .genericStaticMethod, 
+            .instanceMethod, .genericInstanceMethod, .staticProperty, .instanceProperty, 
+            .subscript, .associatedtype, .typealias:
+            guard fields.conformances.isEmpty 
+            else 
             {
-            case .initializer, .genericInitializer, .staticMethod, .genericStaticMethod, 
-                .instanceMethod, .genericInstanceMethod, .staticProperty, .instanceProperty, 
-                .subscript, .typealias:
-                let conformances:[String] = fields.annotations.map 
+                fatalError("member '\(name)' cannot have conformances")
+            }
+            
+            if let requirement:Symbol.RequirementField = fields.requirement 
+            {
+                guard fields.implementation == nil 
+                else 
                 {
-                    if $0.annotations.count != 1 
-                    {
-                        Swift.print("warning: annotation for \(path) cannot conform to protocol conjunctions")
-                    }
-                    return "[`\($0.annotations[0].joined(separator: "."))`]"
+                    fatalError("member '\(name)' cannot have both a requirement field and implementations fields.")
                 }
                 
-                guard let first:String = conformances.first 
-                else 
+                switch requirement 
                 {
-                    fallthrough 
+                case .required:
+                    relationships = .parse("**Required.**")
+                case .defaulted:
+                    relationships = .parse("**Required.** Default implementation provided.")
                 }
-                guard let second:String = conformances.dropFirst().first 
-                else 
-                {
-                    required = .parse("Implements requirement in \(first)")
-                    break 
-                }
-                guard let last:String = conformances.dropFirst(2).last 
-                else 
-                {
-                    required = .parse("Implements requirement in \(first) and \(second)")
-                    break 
-                }
-                required = .parse("Implements requirement in \(conformances.dropLast().joined(separator: ", ")), and \(last)")
-                
-            default:
-                required = []
+            }
+            else 
+            {
+                fallthrough
             }
         
-        case .required?:
-            required = .parse("**Required.**")
-        case .defaulted?:
-            required = .parse("**Required.** Default implementation provided.")
+        // "Implements requirement in ... . Available when ... ."
+        //  or 
+        // "Conforms to ... when ... ."
+        case .enumeration, .genericEnumeration, .structure, .genericStructure, .class, .genericClass: 
+            guard fields.requirement == nil 
+            else 
+            {
+                fatalError("member '\(name)' cannot have a requirement field")
+            }
+            
+            var sentences:[String] = []
+            if let implementation:Symbol.ImplementationField = fields.implementation
+            {
+                sentences.append("Implements requirement in [`\(implementation.conformance.joined(separator: "."))`].")
+                if !implementation.conditions.isEmpty 
+                {
+                    sentences.append("Available when \(Self.prose(conditions: implementation.conditions)).")
+                }
+            }
+            // non-conditional conformances go straight into the type declaration 
+            for conformance:Symbol.ConformanceField in fields.conformances where !conformance.conditions.isEmpty 
+            {
+                let conformances:String = Self.prose(separator: ",", list: conformance.conformances.map 
+                {
+                    "[`\($0.joined(separator: "."))`]"
+                })
+                sentences.append("Conforms to \(conformances) when \(Self.prose(conditions: conformance.conditions)).")
+            }
+            
+            relationships = .parse(sentences.joined(separator: " "))
+        
+        case .protocol, .enumerationCase: 
+            relationships = [] 
         }
+        
         self.discussion     = 
         (
             fields.parameters.map{ ($0.name, $0.paragraphs.map(\.elements)) }, 
             fields.return?.paragraphs.map(\.elements) ?? [], 
             fields.discussion.map(\.elements), 
-            required
+            relationships
         )
         self.topics         = fields.topics
         self.breadcrumbs    = Link.link(path.dropLast().map{ ($0, ()) }).map 
@@ -451,6 +474,46 @@ class Page
             ($0.component.0, $0.link)
         }
         self.breadcrumb     = path[path.endIndex - 1]
+    }
+    
+    private static 
+    func prose(conditions:[Symbol.WhereClause]) -> String 
+    {
+        return Self.prose(separator: ";", list: conditions.map 
+        {
+            (clause:Symbol.WhereClause) in 
+            let relation:String 
+            switch clause.relation 
+            {
+            case .equals:
+                relation = "is"
+            case .conforms:
+                relation = "conforms to"
+            }
+            let constraints:[String] = clause.object.map{ "[`\($0.joined(separator: "."))`]" }
+            return "`\(clause.subject.joined(separator: "."))` \(relation) \(Self.prose(separator: ",", list: constraints))"
+        })
+    }
+    
+    private static 
+    func prose(separator:String, list:[String]) -> String 
+    {
+        guard let first:String = list.first 
+        else 
+        {
+            fatalError("list must have at least one element")
+        }
+        guard let second:String = list.dropFirst().first 
+        else 
+        {
+            return first 
+        }
+        guard let last:String = list.dropFirst(2).last 
+        else 
+        {
+            return "\(first) and \(second)"
+        }
+        return "\(list.dropLast().joined(separator: "\(separator) "))\(separator) and \(last)"
     }
 }
 extension Page 
@@ -605,7 +668,7 @@ extension Page
     static 
     func print(wheres fields:Fields, declaration:inout [Declaration.Token]) 
     {
-        guard !fields.wheres.isEmpty 
+        guard let constraints:Symbol.ConstraintsField = fields.constraints 
         else 
         {
             return 
@@ -613,12 +676,12 @@ extension Page
         declaration.append(.breakableWhitespace)
         declaration.append(.keyword("where"))
         declaration.append(.whitespace)
-        declaration.append(contentsOf: fields.wheres.map 
+        declaration.append(contentsOf: constraints.clauses.map 
         {
-            (where:Symbol.WhereField) -> [Page.Declaration.Token] in 
+            (clause:Symbol.WhereClause) -> [Page.Declaration.Token] in 
             var tokens:[Page.Declaration.Token] = []
             // strip links from lhs
-            tokens.append(contentsOf: Page.Declaration.tokenize(`where`.lhs).map 
+            tokens.append(contentsOf: Page.Declaration.tokenize(clause.subject).map 
             {
                 if case .type(let string, _) = $0 
                 {
@@ -629,7 +692,7 @@ extension Page
                     return $0
                 }
             })
-            switch `where`.relation
+            switch clause.relation
             {
             case .conforms:
                 tokens.append(.punctuation(":"))
@@ -638,7 +701,8 @@ extension Page
                 tokens.append(.punctuation("=="))
                 tokens.append(.whitespace)
             }
-            tokens.append(contentsOf: Page.Declaration.tokenize(`where`.rhs))
+            tokens.append(contentsOf: clause.object.map(Page.Declaration.tokenize(_:))
+                .joined(separator: [.whitespace, .punctuation("&"), .whitespace]))
             return tokens
         }.joined(separator: [.punctuation(","), .breakableWhitespace]))
     }
@@ -747,9 +811,10 @@ extension Page
 {
     struct Fields
     {
-        let annotations:[Symbol.AnnotationField], 
+        let conformances:[Symbol.ConformanceField], 
+            implementation:Symbol.ImplementationField?, 
+            constraints:Symbol.ConstraintsField?, 
             attributes:[Symbol.AttributeField], 
-            wheres:[Symbol.WhereField], 
             paragraphs:[Symbol.ParagraphField],
             `throws`:Symbol.ThrowsField?, 
             requirement:Symbol.RequirementField?
@@ -769,26 +834,39 @@ extension Page
         
         init<S>(_ fields:S, order:Int) where S:Sequence, S.Element == Symbol.Field 
         {
-            var annotations:[Symbol.AnnotationField]    = [], 
-                attributes:[Symbol.AttributeField]      = [], 
-                wheres:[Symbol.WhereField]              = [], 
-                paragraphs:[Symbol.ParagraphField]      = [],
-                topics:[Symbol.TopicField]              = [], 
-                keys:[Symbol.TopicElementField]         = []
+            var conformances:[Symbol.ConformanceField]          = [], 
+                attributes:[Symbol.AttributeField]              = [], 
+                paragraphs:[Symbol.ParagraphField]              = [],
+                topics:[Symbol.TopicField]                      = [], 
+                keys:[Symbol.TopicElementField]                 = []
             var `throws`:Symbol.ThrowsField?, 
-                requirement:Symbol.RequirementField?
+                requirement:Symbol.RequirementField?, 
+                constraints:Symbol.ConstraintsField?,
+                implementation:Symbol.ImplementationField?
             var parameters:[(parameter:Symbol.ParameterField, paragraphs:[Symbol.ParagraphField])] = []
             
             for field:Symbol.Field in fields
             {
                 switch field 
                 {
-                case .annotation    (let field):
-                    annotations.append(field)
                 case .attribute     (let field):
                     attributes.append(field)
-                case .where         (let field):
-                    wheres.append(field)
+                case .conformance   (let field):
+                    conformances.append(field)
+                case .implementation(let field):
+                    guard implementation == nil 
+                    else 
+                    {
+                        fatalError("only one implementation field per doccomnent allowed")
+                    }
+                    implementation = field
+                case .constraints   (let field):
+                    guard constraints == nil 
+                    else 
+                    {
+                        fatalError("only one constraints field per doccomnent allowed")
+                    }
+                    constraints = field
                 case .paragraph     (let field):
                     if parameters.isEmpty 
                     {
@@ -822,7 +900,7 @@ extension Page
                     }
                     requirement = field 
                 
-                case .subscript, .function, .member, .type, .typealias, .associatedtype:
+                case .subscript, .function, .member, .type, .typealias:
                     fatalError("only one header field per doccomnent allowed")
                     
                 case .separator:
@@ -830,15 +908,16 @@ extension Page
                 }
             }
             
-            self.annotations    = annotations
-            self.attributes     = attributes
-            self.wheres         = wheres
-            self.paragraphs     = paragraphs
-            self.throws         = `throws`
-            self.requirement    = requirement
+            self.conformances       = conformances
+            self.implementation     = implementation
+            self.constraints        = constraints
+            self.attributes         = attributes
+            self.paragraphs         = paragraphs
+            self.throws             = `throws`
+            self.requirement        = requirement
             
-            self.keys           = .init(keys.map{ .init($0, order: order) })
-            self.topics         = topics.map{ ($0.display, $0.key, []) }
+            self.keys               = .init(keys.map{ .init($0, order: order) })
+            self.topics             = topics.map{ ($0.display, $0.key, []) }
             
             if  let (last, paragraphs):(Symbol.ParameterField, [Symbol.ParagraphField]) = 
                 parameters.last, 
@@ -872,7 +951,7 @@ extension Page.Binding
         -> Self
     {
         let fields:Page.Fields = .init(fields, order: order)
-        if !fields.wheres.isEmpty 
+        if fields.constraints != nil 
         {
             print("warning: where fields are ignored in a subscript doccoment")
         }
@@ -1022,7 +1101,7 @@ extension Page.Binding
         -> Self
     {
         let fields:Page.Fields = .init(fields, order: order)
-        if !fields.wheres.isEmpty 
+        if fields.constraints != nil 
         {
             print("warning: where fields are ignored in a member doccoment")
         }
@@ -1058,43 +1137,64 @@ extension Page.Binding
             label    = .associatedtype 
             keywords = ["associatedtype"]
         }
-        let type:[Page.Declaration.Token] = Page.Declaration.tokenize(header.type)
-        let signature:[Page.Signature.Token] = keywords.flatMap 
-        {
-            [.text($0), .whitespace]
-        }
-        + 
-        [.highlight(name), .punctuation(":")]
-        + 
-        Page.Signature.convert(type)
         
-        declaration.append(contentsOf: keywords.flatMap
+        let signature:[Page.Signature.Token]
+        switch (header.type, header.mutability) 
         {
-            [.keyword($0), .breakableWhitespace]
-        })
-        declaration.append(.identifier(name))
-        declaration.append(.punctuation(":"))
-        declaration.append(contentsOf: type)
-        if let mutability:Symbol.MemberMutability = header.mutability 
-        {
-            declaration.append(.breakableWhitespace)
-            declaration.append(.punctuation("{"))
-            declaration.append(.whitespace)
-            declaration.append(.keyword("get"))
-            switch mutability 
+        case (nil, _?):
+            fatalError("cannot have mutability annotation and no type annotation")
+        case (nil, nil):
+            guard label == .associatedtype 
+            else 
             {
-            case .get:
-                break 
-            case .nonmutatingset:
-                declaration.append(.whitespace)
-                declaration.append(.keyword("nonmutating"))
-                fallthrough
-            case .getset:
-                declaration.append(.whitespace)
-                declaration.append(.keyword("set"))
+                fatalError("only associatedtype members can omit type annotation")
             }
-            declaration.append(.whitespace)
-            declaration.append(.punctuation("}"))
+            
+            signature   = [.text("associatedtype"), .whitespace, .highlight(name)]
+            declaration.append(.keyword("associatedtype"))
+            declaration.append(.breakableWhitespace)
+            declaration.append(.identifier(name))
+        
+        case (let type?, _):
+            let type:[Page.Declaration.Token] = Page.Declaration.tokenize(type)
+            signature = keywords.flatMap 
+            {
+                [.text($0), .whitespace]
+            }
+            + 
+            [.highlight(name), .punctuation(":")]
+            + 
+            Page.Signature.convert(type)
+            
+            declaration.append(contentsOf: keywords.flatMap
+            {
+                [.keyword($0), .breakableWhitespace]
+            })
+            declaration.append(.identifier(name))
+            declaration.append(.punctuation(":"))
+            declaration.append(contentsOf: type)
+            
+            if let mutability:Symbol.MemberMutability = header.mutability 
+            {
+                declaration.append(.breakableWhitespace)
+                declaration.append(.punctuation("{"))
+                declaration.append(.whitespace)
+                declaration.append(.keyword("get"))
+                switch mutability 
+                {
+                case .get:
+                    break 
+                case .nonmutatingset:
+                    declaration.append(.whitespace)
+                    declaration.append(.keyword("nonmutating"))
+                    fallthrough
+                case .getset:
+                    declaration.append(.whitespace)
+                    declaration.append(.keyword("set"))
+                }
+                declaration.append(.whitespace)
+                declaration.append(.punctuation("}"))
+            }
         }
         
         let page:Page       = .init(label: label, name: name, 
@@ -1175,22 +1275,21 @@ extension Page.Binding
             declaration.append(.punctuation(">"))
         }
         
-        let inheritances:[[String]]
-        if !fields.annotations.isEmpty 
+        // only put universal conformances in the declaration 
+        let conformances:[[[String]]] = fields.conformances.compactMap 
+        {
+            $0.conditions.isEmpty ? $0.conformances : nil 
+        }
+        if !conformances.isEmpty 
         {
             declaration.append(.punctuation(":"))
-            declaration.append(contentsOf: fields.annotations.map 
+            declaration.append(contentsOf: conformances.map 
             {
-                $0.annotations.map(Page.Declaration.tokenize(_:))
+                $0.map(Page.Declaration.tokenize(_:))
                 .joined(separator: [.punctuation("&")])
             }.joined(separator: [.punctuation(","), .breakableWhitespace]))
-            
-            inheritances = fields.annotations.flatMap(\.annotations)
         }
-        else 
-        {
-            inheritances = []
-        }
+        let inheritances:[[String]] = conformances.flatMap{ $0 }
         
         Page.print(wheres: fields, declaration: &declaration) 
         
@@ -1214,7 +1313,7 @@ extension Page.Binding
         {
             print("warning: attribute fields are ignored in an associatedtype doccoment")
         }
-        if !fields.wheres.isEmpty 
+        if fields.constraints != nil 
         {
             print("warning: where fields are ignored in an associatedtype doccoment")
         }
@@ -1257,58 +1356,6 @@ extension Page.Binding
             fields:         fields, 
             path:           header.identifiers, 
             inheritances:   inheritances)
-        return .init(page, locals: [], keys: fields.keys, urlpattern: urlpattern)
-    }
-    
-    static 
-    func create(_ header:Symbol.AssociatedtypeField, fields:ArraySlice<Symbol.Field>, 
-        order:Int, urlpattern:(prefix:String, suffix:String)) 
-        -> Self
-    {
-        let fields:Page.Fields = .init(fields, order: order)
-        if !fields.attributes.isEmpty 
-        {
-            print("warning: attribute fields are ignored in an associatedtype doccoment")
-        }
-        if !fields.wheres.isEmpty 
-        {
-            print("warning: where fields are ignored in an associatedtype doccoment")
-        }
-        if !fields.parameters.isEmpty || fields.return != nil
-        {
-            print("warning: parameter/return fields are ignored in an associatedtype doccoment")
-        }
-        if fields.throws != nil
-        {
-            print("warning: throws fields are ignored in an associatedtype doccoment")
-        }
-        
-        let name:String = header.identifiers[header.identifiers.endIndex - 1]
-        
-        var signature:[Page.Signature.Token]        = 
-            [.text("associatedtype"), .whitespace, .highlight(name)] 
-        var declaration:[Page.Declaration.Token]    = 
-            [.keyword("associatedtype"), .breakableWhitespace, .identifier(name)]
-        
-        if !fields.annotations.isEmpty 
-        {
-            signature.append(.punctuation(":"))
-            declaration.append(.punctuation(":"))
-            let annotations:[Page.Declaration.Token] = .init(fields.annotations.map 
-            {
-                $0.annotations.map(Page.Declaration.tokenize(_:))
-                .joined(separator: [.punctuation("&")])
-            }.joined(separator: [.punctuation(","), .breakableWhitespace]))
-            
-            signature.append(contentsOf: Page.Signature.convert(annotations))
-            declaration.append(contentsOf: annotations)
-        }
-        
-        let page:Page = .init(label: .associatedtype, name: name, 
-            signature:      signature, 
-            declaration:    declaration, 
-            fields:         fields, 
-            path:           header.identifiers)
         return .init(page, locals: [], keys: fields.keys, urlpattern: urlpattern)
     }
     
@@ -1626,27 +1673,9 @@ extension PageTree
     func assemble(_ pages:[Page.Binding]) 
     {
         var root:Node = .empty
-        var anchors:[String: [(rank:(Int, Int), symbol:Page.TopicSymbol)]] = [:]
-        for (order, page):(Int, Page.Binding) in pages.enumerated()
+        for page:Page.Binding in pages
         {
             root.insert(page, at: page.path[...])
-            let symbol:Page.TopicSymbol = 
-            (
-                page.page.signature, 
-                page.url, 
-                page.page.blurb,
-                page.page.discussion.required
-            )
-            for key:Page.Binding.Key in page.keys 
-            {
-                anchors[key.key, default: []].append(((key.rank, order), symbol))
-            }
-        }
-        
-        // sort anchors 
-        let global:[String: [Page.TopicSymbol]] = anchors.mapValues 
-        {
-            $0.sorted{ $0.rank < $1.rank }.map(\.symbol)
         }
         
         // attach inherited symbols 
@@ -1663,6 +1692,29 @@ extension PageTree
                 }
             }
         }
+        
+        // cannot collect anchors before resolving type links 
+        var anchors:[String: [(rank:(Int, Int), symbol:Page.TopicSymbol)]] = [:]
+        for (order, page):(Int, Page.Binding) in pages.enumerated()
+        {
+            let symbol:Page.TopicSymbol = 
+            (
+                page.page.signature, 
+                page.url, 
+                page.page.blurb,
+                page.page.discussion.required
+            )
+            for key:Page.Binding.Key in page.keys 
+            {
+                anchors[key.key, default: []].append(((key.rank, order), symbol))
+            }
+        }
+        // sort anchors 
+        let global:[String: [Page.TopicSymbol]] = anchors.mapValues 
+        {
+            $0.sorted{ $0.rank < $1.rank }.map(\.symbol)
+        }
+        
         // attach topics 
         root.traverse
         {

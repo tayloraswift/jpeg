@@ -226,12 +226,12 @@ extension JPEG.Bitstream
         struct DC:AnySymbol
         {
             /// let JPEG.Bitstream.Symbol.DC.value:Swift.UInt8
-            /// :   JPEG.Bitstream.AnySymbol
+            /// ?:  JPEG.Bitstream.AnySymbol
             ///     The raw byte value of this symbol.
             public  
             let value:UInt8 
             /// init JPEG.Bitstream.Symbol.DC.init(_:)
-            /// :   JPEG.Bitstream.AnySymbol
+            /// ?:  JPEG.Bitstream.AnySymbol
             ///     Creates a DC symbol instance.
             /// - value : Swift.UInt8 
             ///     The raw byte value of this symbol.
@@ -248,12 +248,12 @@ extension JPEG.Bitstream
         struct AC:AnySymbol
         {
             /// let JPEG.Bitstream.Symbol.AC.value:Swift.UInt8
-            /// :   JPEG.Bitstream.AnySymbol
+            /// ?:  JPEG.Bitstream.AnySymbol
             ///     The raw byte value of this symbol.
             public  
             let value:UInt8
             /// init JPEG.Bitstream.Symbol.AC.init(_:)
-            /// :   JPEG.Bitstream.AnySymbol
+            /// ?:  JPEG.Bitstream.AnySymbol
             ///     Creates an AC symbol instance.
             /// - value : Swift.UInt8 
             ///     The raw byte value of this symbol.
@@ -1707,7 +1707,7 @@ extension JPEG.Data.Spectral.Quanta
 extension JPEG.Data.Spectral.Quanta:RandomAccessCollection 
 {
     /// var JPEG.Data.Spectral.Quanta.startIndex:Swift.Int { get }
-    /// :   Swift.RandomAccessCollection
+    /// ?:  Swift.RandomAccessCollection
     ///     The index of the first quantization table in this container. 
     /// 
     ///     The default (all-zeroes) quantization table is not part of the 
@@ -1720,7 +1720,7 @@ extension JPEG.Data.Spectral.Quanta:RandomAccessCollection
         self.quanta.startIndex + 1
     }
     /// var JPEG.Data.Spectral.Quanta.endIndex:Swift.Int { get }
-    /// :   Swift.RandomAccessCollection
+    /// ?:  Swift.RandomAccessCollection
     ///     The index one greater than the index of the last quantization table 
     ///     in this container. 
     public 
@@ -1729,7 +1729,7 @@ extension JPEG.Data.Spectral.Quanta:RandomAccessCollection
         self.quanta.endIndex
     }
     /// subscript JPEG.Data.Spectral.Quanta[_:] { get set }
-    /// :   Swift.RandomAccessCollection
+    /// ?:  Swift.RandomAccessCollection
     ///     Accesses the quantization table at the given index.
     /// 
     ///     The getter and setter of this subscript yield the quantization table 
@@ -1780,7 +1780,7 @@ extension JPEG.Data.Spectral.Quanta:RandomAccessCollection
 extension JPEG.Data.Spectral:RandomAccessCollection 
 {
     /// var JPEG.Data.Spectral.startIndex:Swift.Int { get }
-    /// :   Swift.RandomAccessCollection
+    /// ?:  Swift.RandomAccessCollection
     ///     The index of the first plane in this image. 
     /// 
     ///     This index is always 0.
@@ -1790,7 +1790,7 @@ extension JPEG.Data.Spectral:RandomAccessCollection
         self.planes.startIndex
     }
     /// var JPEG.Data.Spectral.endIndex:Swift.Int { get }
-    /// :   Swift.RandomAccessCollection
+    /// ?:  Swift.RandomAccessCollection
     ///     The index one greater than the index of the last plane in this image. 
     /// 
     ///     This index is always the number of recognized components in the image’s 
@@ -1801,7 +1801,7 @@ extension JPEG.Data.Spectral:RandomAccessCollection
         self.planes.endIndex
     }
     /// subscript JPEG.Data.Spectral[_:] { get set }
-    /// :   Swift.RandomAccessCollection
+    /// ?:  Swift.RandomAccessCollection
     ///     Accesses the plane at the given index.
     /// 
     ///     The getter and setter of this subscript yield the plane 
@@ -1841,7 +1841,7 @@ extension JPEG.Data.Spectral:RandomAccessCollection
 extension JPEG.Data.Planar:RandomAccessCollection 
 {
     /// var JPEG.Data.Planar.startIndex:Swift.Int { get }
-    /// :   Swift.RandomAccessCollection
+    /// ?:  Swift.RandomAccessCollection
     ///     The index of the first plane in this image. 
     /// 
     ///     This index is always 0.
@@ -1851,7 +1851,7 @@ extension JPEG.Data.Planar:RandomAccessCollection
         self.planes.startIndex
     }
     /// var JPEG.Data.Planar.endIndex:Swift.Int { get }
-    /// :   Swift.RandomAccessCollection
+    /// ?:  Swift.RandomAccessCollection
     ///     The index one greater than the index of the last plane in this image. 
     /// 
     ///     This index is always the number of recognized components in the image’s 
@@ -1862,7 +1862,7 @@ extension JPEG.Data.Planar:RandomAccessCollection
         self.planes.endIndex
     }
     /// subscript JPEG.Data.Planar[_:] { get set }
-    /// :   Swift.RandomAccessCollection
+    /// ?:  Swift.RandomAccessCollection
     ///     Accesses the plane at the given index.
     /// 
     ///     The getter and setter of this subscript yield the plane 
@@ -4173,8 +4173,7 @@ extension JPEG.Data.Planar
 extension JPEG.Data.Rectangular 
 {
     /// func JPEG.Data.Rectangular.unpack<Color>(as:)
-    /// where Color:JPEG.Color 
-    /// where Color.Format == Format 
+    /// where Color:JPEG.Color, Color.Format == Format 
     /// @ specialized where Color == JPEG.YCbCr
     /// @ specialized where Color == JPEG.RGB
     ///     Unpacks the data in this image into pixels of the given color target.

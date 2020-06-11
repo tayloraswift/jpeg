@@ -52,8 +52,7 @@ protocol _JPEGFormat
 public 
 protocol _JPEGColor
 {
-    /// associatedtype JPEG.Color.Format   
-    /// :   JPEG.Format
+    /// associatedtype JPEG.Color.Format    : JPEG.Format
     ///     The color format associated with this color target. An image using 
     ///     any color format of this type will support rendering to this color target.
     associatedtype Format:JPEG.Format 
@@ -332,7 +331,7 @@ extension JPEG.Common:JPEG.Format
     }
     
     /// static func JPEG.Common.recognize(_:precision:)
-    /// :   JPEG.Format 
+    /// ?:  JPEG.Format 
     ///     Detects this color format, given a set of component keys and a bit depth.
     ///     
     ///     If this constructor detects a [`(Common).nonconforming3x8(_:_:_:)`] 
@@ -374,7 +373,7 @@ extension JPEG.Common:JPEG.Format
         }
     }
     /// var JPEG.Common.components  : [JPEG.Component.Key] {get}
-    /// :   JPEG.Format 
+    /// ?:  JPEG.Format 
     ///     The set of component keys for this color format. 
     /// 
     ///     If this instance is a [`(Common).nonconforming3x8(_:_:_:)`] color format,
@@ -396,7 +395,7 @@ extension JPEG.Common:JPEG.Format
         }
     }
     /// var JPEG.Common.precision   : Swift.Int {get}
-    /// :   JPEG.Format 
+    /// ?:  JPEG.Format 
     ///     The bit depth of each component in this color format. 
     /// 
     ///     This value is always 8.
@@ -459,7 +458,7 @@ extension JPEG.RGB
 extension JPEG.YCbCr:JPEG.Color 
 {
     /// static func JPEG.YCbCr.unpack(_:of:)
-    /// :   JPEG.Color
+    /// ?:  JPEG.Color
     ///     Converts the given interleaved samples into an array of YCbCr pixels.
     /// - interleaved   : [Swift.UInt16]
     ///     A flat array of interleaved component samples.
@@ -491,7 +490,7 @@ extension JPEG.YCbCr:JPEG.Color
         }
     }
     /// static func JPEG.YCbCr.pack(_:as:)
-    /// :   JPEG.Color 
+    /// ?:  JPEG.Color 
     ///     Converts the given array of YCbCr pixels into an array of interleaved samples.
     /// 
     /// - pixels        : [Self]
@@ -517,7 +516,7 @@ extension JPEG.YCbCr:JPEG.Color
 extension JPEG.RGB:JPEG.Color 
 {
     /// static func JPEG.RGB.unpack(_:of:)
-    /// :   JPEG.Color
+    /// ?:  JPEG.Color
     ///     Converts the given interleaved samples into an array of RGB pixels.
     /// - interleaved   : [Swift.UInt16]
     ///     A flat array of interleaved component samples.
@@ -549,7 +548,7 @@ extension JPEG.RGB:JPEG.Color
         }
     }
     /// static func JPEG.RGB.pack(_:as:)
-    /// :   JPEG.Color 
+    /// ?:  JPEG.Color 
     ///     Converts the given array of RGB pixels into an array of interleaved samples.
     /// 
     /// - pixels        : [Self]
@@ -963,7 +962,7 @@ extension JPEG
         struct Huffman<Symbol>:AnyTable where Symbol:Bitstream.AnySymbol
         {
             /// typealias JPEG.Table.Huffman.Delegate = Self 
-            /// :   JPEG.AnyTable
+            /// ?:  JPEG.AnyTable
             public 
             typealias Delegate = Self 
             
@@ -1014,7 +1013,7 @@ extension JPEG
             }
             
             /// typealias JPEG.Table.Quantization.Delegate = (q:Swift.Int, qi:JPEG.Table.Quantization.Key) 
-            /// :   JPEG.AnyTable
+            /// ?:  JPEG.AnyTable
             public 
             typealias Delegate = (q:Int, qi:Table.Quantization.Key)
             /// enum JPEG.Table.Quantization.Precision 
@@ -1965,12 +1964,12 @@ extension JPEG.Bitstream
 extension JPEG.Bitstream:ExpressibleByArrayLiteral 
 {
     /// init JPEG.Bitstream.init(arrayLiteral...:)
+    /// ?:  Swift.ExpressibleByArrayLiteral 
     ///     Creates a bitstream from the given array literal.
     ///
     ///     This type stores the bitstream in 16-bit atoms. If the array literal 
     ///     does not contain an even number of bytes, the last atom is padded 
     ///     with 1-bits.
-    /// :   Swift.ExpressibleByArrayLiteral 
     /// - arrayLiteral  : Swift.UInt8
     ///     The raw bytes making up the bitstream. The more significant bits in 
     ///     each byte come first in the bitstream. If the bitstream does not 
