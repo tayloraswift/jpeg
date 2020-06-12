@@ -1344,6 +1344,8 @@ extension JPEG
 {
     /// enum JPEG.Data 
     ///     A namespace for image representation types.
+    /// #  [Image representations](image-data-types)
+    /// ## (image-data-types-and-namespace)
     public 
     enum Data 
     {
@@ -1375,6 +1377,9 @@ extension JPEG.Data
     ///     The spectral representation is a lossless representation. JPEG 
     ///     images that have been decoded to this representation can be re-encoded 
     ///     without loss of information or compression.
+    /// #  [See also](image-data-types)
+    /// ## (image-data-types)
+    /// ## (image-data-types-and-namespace)
     public 
     struct Spectral<Format> where Format:JPEG.Format 
     {
@@ -1503,6 +1508,9 @@ extension JPEG.Data
     ///     transformation* to a spectral image. It can be converted back into a spectral 
     ///     image (with some floating point error) with a *forward discrete cosine 
     ///     transformation*.
+    /// #  [See also](image-data-types)
+    /// ## (image-data-types)
+    /// ## (image-data-types-and-namespace)
     public 
     struct Planar<Format> where Format:JPEG.Format
     {
@@ -1596,6 +1604,9 @@ extension JPEG.Data
     ///     giving a rectangular array of interleaved samples.
     /// 
     ///     It can be unpacked to various color targets to get a pixel color array.
+    /// #  [See also](image-data-types)
+    /// ## (image-data-types)
+    /// ## (image-data-types-and-namespace)
     public 
     struct Rectangular<Format> where Format:JPEG.Format 
     {
@@ -1944,7 +1955,7 @@ extension JPEG.Data.Rectangular
 extension JPEG.Data.Spectral.Plane 
 {
     /// var JPEG.Data.Spectral.Plane.indices    : General.Range2<Swift.Int> { get }
-    ///     A 2-dimensional index range encompassing the data units in this plane.
+    ///     A two-dimensional index range encompassing the data units in this plane.
     /// 
     ///     This index range is a [`Swift.Sequence`] which can be used to iterate 
     ///     through its index space in row-major order.
@@ -1957,7 +1968,7 @@ extension JPEG.Data.Spectral.Plane
 extension JPEG.Data.Planar.Plane 
 {
     /// var JPEG.Data.Planar.Plane.indices      : General.Range2<Swift.Int> { get }
-    ///     A 2-dimensional index range encompassing the data units in this plane.
+    ///     A two-dimensional index range encompassing the data units in this plane.
     /// 
     ///     This index range is a [`Swift.Sequence`] which can be used to iterate 
     ///     through its index space in row-major order.

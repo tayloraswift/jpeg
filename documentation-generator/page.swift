@@ -311,13 +311,26 @@ class Page
         let locals:Set<String>, 
             keys:Set<Key>
         
+        // needed to uniquify overloaded symbols
+        var uniquePath:[String] 
+        {
+            if let overload:UInt32 = self.page.overload 
+            {
+                return self.path.dropLast() + ["\(overload)-\(self.path[self.path.endIndex - 1])"]
+            }
+            else 
+            {
+                return self.path 
+            }
+        }
+        
         var url:String 
         {
-            "\(self.urlpattern.prefix)\(self.path.map(Self.escape(url:)).joined(separator: "/"))\(self.urlpattern.suffix)"
+            "\(self.urlpattern.prefix)\(self.uniquePath.map(Self.escape(url:)).joined(separator: "/"))\(self.urlpattern.suffix)"
         }
         var filepath:String 
         {
-            "\(self.path.joined(separator: "/"))"
+            "\(self.uniquePath.joined(separator: "/"))"
         }
         
         init(_ page:Page, locals:Set<String>, keys:Set<Key>, urlpattern:(prefix:String, suffix:String)) 
@@ -379,10 +392,11 @@ class Page
     var breadcrumbs:[(text:String, link:Link)], 
         breadcrumb:String 
     
-    var inheritances:[[String]]
+    var inheritances:[[String]] 
+    let overload:UInt32?
     
     init(label:Label, name:String, signature:[Signature.Token], declaration:[Declaration.Token], 
-        fields:Fields, path:[String], inheritances:[[String]] = [])
+        fields:Fields, path:[String], inheritances:[[String]] = [], overload:UInt32? = nil)
     {
         self.label          = label 
         self.name           = name 
@@ -474,6 +488,7 @@ class Page
             ($0.component.0, $0.link)
         }
         self.breadcrumb     = path[path.endIndex - 1]
+        self.overload       = overload 
     }
     
     private static 
@@ -712,7 +727,10 @@ extension Page
         signature:inout [Signature.Token], 
         declaration:inout [Declaration.Token], 
         locals:Set<String> = []) 
+        -> UInt32 
     {
+        var overload:UInt32 = 0 
+        
         guard labels.count == fields.parameters.count 
         else 
         {
@@ -772,6 +790,27 @@ extension Page
                 declaration.append(contentsOf: repeatElement(.punctuation("."), count: 3))
             }
             
+            hash:
+            if  label == "as", 
+                case .named(let identifiers) = parameter.type, 
+                let last:Symbol.TypeIdentifier = identifiers.last, 
+                last.identifier == "Type",
+                last.generics.isEmpty
+            {
+                // exempt types which use an `as:` with a generic parameter 
+                if  identifiers.count == 2, 
+                    identifiers[0].generics.isEmpty, 
+                    locals.contains(identifiers[0].identifier)
+                {
+                    break hash 
+                }
+                
+                for u:Unicode.Scalar in identifiers.map(\.description).joined().unicodeScalars
+                {
+                    overload &+= u.value
+                }
+            }
+            
             interior.signature.append(signature)
             interior.declaration.append(declaration)
         }
@@ -805,6 +844,8 @@ extension Page
             signature.append(contentsOf: Page.Signature.convert(tokens))
             declaration.append(contentsOf: tokens)
         }
+        
+        return overload 
     }
 }
 extension Page 
@@ -962,7 +1003,7 @@ extension Page.Binding
             Page.Declaration.tokenize(fields.attributes) + [  .keyword("subscript")]
         var signature:[Page.Signature.Token]        =      [.highlight("subscript")]
         
-        Page.print(function: fields, 
+        let overload:UInt32 = Page.print(function: fields, 
             labels: header.labels.map{ ($0, false) }, scheme: .subscript, 
             signature: &signature, declaration: &declaration)
         
@@ -989,7 +1030,8 @@ extension Page.Binding
             signature:      signature, 
             declaration:    declaration, 
             fields:         fields, 
-            path:           header.identifiers + [name])
+            path:           header.identifiers + [name], 
+            overload:       overload == 0 ? nil : overload)
         return .init(page, locals: [], keys: fields.keys, urlpattern: urlpattern)
     }
     static 
@@ -1072,17 +1114,24 @@ extension Page.Binding
             declaration.append(contentsOf: tokens)
         }
         
-        let name:String
+        let name:String 
+        var overload:UInt32?
         if case .enumerationCase = label, header.labels.isEmpty, fields.parameters.isEmpty 
         {
-            name    = basename
+            name        = basename
         }
         else 
         {
-            Page.print(function: fields, labels: header.labels, 
+            overload = Page.print(function: fields, labels: header.labels, 
                 scheme: header.keyword == .case ? .associatedValues : .function, 
                 signature: &signature, declaration: &declaration, locals: .init(header.generics))
             name    = "\(basename)(\(header.labels.map{ "\($0.variadic && $0.name == "_" ? "" : $0.name)\($0.variadic ? "..." : ""):" }.joined()))" 
+        }
+        
+        // enum cases, even with associated values, do not need overload hashes 
+        if case .enumerationCase = label 
+        {
+            overload = nil 
         }
         
         Page.print(wheres: fields, declaration: &declaration) 
@@ -1091,7 +1140,8 @@ extension Page.Binding
             signature:      signature, 
             declaration:    declaration, 
             fields:         fields, 
-            path:           header.identifiers.dropLast() + [name])
+            path:           header.identifiers.dropLast() + [name], 
+            overload:       overload == 0 ? nil : overload)
         return .init(page, locals: [], keys: fields.keys, urlpattern: urlpattern)
     }
     

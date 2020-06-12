@@ -335,7 +335,7 @@ extension General.Range2:Sequence where Bound:Strideable, Bound.Stride:SignedInt
     typealias Element = (x:Bound, y:Bound)
     
     /// struct General.Range2.Iterator 
-    /// ?:  Swift.Sequence where Bound:Swift.Comparable, Bound.Stride:Swift.SignedInteger
+    /// ?:  Swift.Sequence where Bound:Swift.Strideable, Bound.Stride:Swift.SignedInteger
     /// :   Swift.IteratorProtocol 
     ///     A two-dimensional range iterator.
     /// ## (general-range-types)

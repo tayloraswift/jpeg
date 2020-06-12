@@ -87,6 +87,10 @@ protocol _JPEGColor
 /// enum JPEG 
 ///     A library namespace containing all JPEG-related APIs. 
 /// #  [Color spaces](color-space-apis)
+/// #  [Image metadata](metadata-types)
+/// #  [Image tables](table-types-and-protocols)
+/// #  [Image headers](header-types-and-namespace)
+/// #  [Image representations](image-data-types-and-namespace)
 /// #  [Error handling](error-handling)
 public 
 enum JPEG 
@@ -98,6 +102,8 @@ enum JPEG
     
     /// enum JPEG.Metadata
     ///     A metadata record.
+    /// #  [Metadata types](metadata-types)
+    /// ## (metadata-types)
     public 
     enum Metadata 
     {
@@ -787,6 +793,8 @@ extension JPEG
 
 /// protocol JPEG.AnyTable
 ///     Functionality common to all table types.
+/// #  [See also](table-types-and-protocols)
+/// ## (table-types-and-protocols)
 public 
 protocol _JPEGAnyTable 
 {
@@ -807,11 +815,13 @@ protocol _JPEGAnyTable
 extension JPEG 
 {
     /// enum JPEG.Header 
-    ///     A namespace for partially-validated JPEG data structures. 
+    ///     A namespace for header types.
     /// 
     ///     In general, the fields in these types can be assumed to be valid with 
     ///     respect to the other fields in the structure, but not necessarily with 
     ///     respect to the JPEG file as a whole.
+    /// #  [Header types](header-types-and-namespace)
+    /// ## (0:header-types-and-namespace)
     public 
     enum Header 
     {
@@ -820,6 +830,7 @@ extension JPEG
         /// 
         ///     This structure is the parsed form of a [`(JPEG.Marker).height`] 
         ///     marker segment. 
+        /// ## (header-types-and-namespace)
         public 
         struct HeightRedefinition 
         {
@@ -847,6 +858,7 @@ extension JPEG
         ///     This structure is the parsed form of an [`(JPEG.Marker).interval`] 
         ///     marker segment. It can modify or clear the restart interval of an 
         ///     image.
+        /// ## (header-types-and-namespace)
         public 
         struct RestartInterval 
         {
@@ -877,6 +889,7 @@ extension JPEG
         ///     marker segment. In non-hierarchical mode images, it defines global 
         ///     image parameters. It contains some of the information needed to 
         ///     fully-define an image [`(JPEG).Layout`].
+        /// ## (1:header-types-and-namespace)
         public 
         struct Frame 
         {
@@ -910,6 +923,7 @@ extension JPEG
         ///     create the [`JPEG.Scan`] structures elsewhere in the library API.
         /// # [Creating sequential scans](scan-header-creation-sequential)
         /// # [Creating progressive scans](scan-header-creation-progressive)
+        /// ## (1:header-types-and-namespace)
         public 
         struct Scan
         {
@@ -938,6 +952,8 @@ extension JPEG
     typealias AnyTable = _JPEGAnyTable 
     /// enum JPEG.Table 
     ///     A namespace for table types.
+    /// #  [Table types](table-types-and-protocols)
+    /// ## (0:table-types-and-protocols)
     public 
     enum Table 
     {
@@ -958,6 +974,7 @@ extension JPEG
         /// where Symbol:JPEG.Bitstream.AnySymbol
         ///     A huffman table. 
         /// #  [See also](huffman-table-types)
+        /// ## (1:table-types-and-protocols)
         public 
         struct Huffman<Symbol>:AnyTable where Symbol:Bitstream.AnySymbol
         {
@@ -981,6 +998,7 @@ extension JPEG
         ///     Quantization tables store 64 coefficient quanta. The quantum values 
         ///     can be accessed using either a zigzag index with the [`(Quantization).[z:]`] 
         ///     subscript, or grid indices with the [`(Quantization).[k:h:]`] subscript.
+        /// ## (1:table-types-and-protocols)
         public 
         struct Quantization:AnyTable
         {

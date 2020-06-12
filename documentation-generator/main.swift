@@ -1988,7 +1988,7 @@ func main(sources:[String], directory:String, urlpattern:(prefix:String, suffix:
             \(page.page.html.string)
         </body>
         """
-        File.pave([directory] + page.path)
+        File.pave([directory] + page.uniquePath)
         File.save(.init(document.utf8), path: "\(directory)/\(page.filepath)/index.html")
     }
     
