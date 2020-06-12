@@ -1,7 +1,7 @@
 // binary utilities 
 
 /// protocol JPEG.Bytestream.Source 
-///     A bytestream source.
+///     A source bytestream.
 /// 
 ///     To implement a custom data source type, conform it to this protocol by 
 ///     implementing [`(Source).read(count:)`]. It can 
@@ -11,7 +11,7 @@ protocol _JPEGBytestreamSource
 {
     /// mutating func JPEG.Bytestream.Source.read(count:)
     /// required 
-    ///     Attempts to read and return the given number of bytes from the stream.
+    ///     Attempts to read and return the given number of bytes from this stream.
     /// 
     ///     A successful call to this function should affect the bytestream state 
     ///     such that subsequent calls should pick up where the last call left off.
@@ -54,7 +54,7 @@ extension JPEG.Bytestream.Source
     {
         switch type 
         {
-        case .start, .end:
+        case .start, .end, .restart:
             return []
         default:
             guard let header:[UInt8] = self.read(count: 2)
@@ -173,16 +173,7 @@ extension JPEG.Bytestream.Source
                 throw JPEG.LexingError.invalidMarkerSegmentType(byte)
             }
             
-            // some markers have no bodies 
-            switch marker 
-            {
-            case .start, .end, .restart:
-                return (ecs, (marker, []))
-            default:
-                let data:[UInt8] = try self.tail(type: marker)
-                return (ecs, (marker, data))
-            }
-                
+            return (ecs, (marker, try self.tail(type: marker)))
         }
         
         throw JPEG.LexingError.truncatedEntropyCodedSegment
@@ -448,7 +439,7 @@ extension JPEG.Table.Quantization
 }
 extension JPEG.Table 
 {
-    /// static func JPEG.Table.parse(_:as:)
+    /// static func JPEG.Table.parse(huffman:)
     /// throws 
     ///     Parses a [`(Marker).huffman`] segment into huffman tables.
     /// 
@@ -456,13 +447,10 @@ extension JPEG.Table
     ///     will throw a [`(JPEG).ParsingError`].
     /// - data  : [Swift.UInt8]
     ///     The segment data to parse.
-    /// - _     : (HuffmanDC.Type, HuffmanAC.Type)
-    ///     This parameter must always be set to `(`[`(Table).HuffmanDC`self`]`, `[`(Table).HuffmanAC`self`]`)`
     /// - ->    : (dc:[HuffmanDC], ac:[HuffmanAC]) 
     ///     The parsed DC and AC huffman tables.
     public static 
-    func parse(_ data:[UInt8], as _:(HuffmanDC.Type, HuffmanAC.Type)) 
-        throws -> (dc:[HuffmanDC], ac:[HuffmanAC]) 
+    func parse(huffman data:[UInt8]) throws -> (dc:[HuffmanDC], ac:[HuffmanAC]) 
     {
         var tables:(dc:[HuffmanDC], ac:[HuffmanAC]) = ([], [])
         
@@ -544,7 +532,7 @@ extension JPEG.Table
         
         return tables
     }
-    /// static func JPEG.Table.parse(_:as:)
+    /// static func JPEG.Table.parse(quantization:)
     /// throws 
     ///     Parses a [`(Marker).quantization`] segment into huffman tables.
     /// 
@@ -552,13 +540,10 @@ extension JPEG.Table
     ///     will throw a [`(JPEG).ParsingError`].
     /// - data  : [Swift.UInt8]
     ///     The segment data to parse.
-    /// - _     : Quantization.Type
-    ///     This parameter must always be set to [`(Table).Quantization`self`].
     /// - ->    : [Quantization] 
     ///     The parsed quantization tables.
     public static 
-    func parse(_ data:[UInt8], as: Quantization.Type) 
-        throws -> [Quantization] 
+    func parse(quantization data:[UInt8]) throws -> [Quantization] 
     {
         var tables:[Quantization] = []
         
@@ -3697,14 +3682,13 @@ extension JPEG.Context
                 break definitions
             
             case .quantization:
-                let parsed:[JPEG.Table.Quantization] = try JPEG.Table.parse(marker.data, 
-                    as: JPEG.Table.Quantization.self)
+                let parsed:[JPEG.Table.Quantization] = 
+                    try JPEG.Table.parse(quantization: marker.data)
                 quanta.append(contentsOf: parsed)
             
             case .huffman:
                 let parsed:(dc:[JPEG.Table.HuffmanDC], ac:[JPEG.Table.HuffmanAC]) = 
-                    try JPEG.Table.parse(marker.data, 
-                        as: (JPEG.Table.HuffmanDC.self, JPEG.Table.HuffmanAC.self))
+                    try JPEG.Table.parse(huffman: marker.data)
                 dc.append(contentsOf: parsed.dc)
                 ac.append(contentsOf: parsed.ac)
             
@@ -3776,15 +3760,14 @@ extension JPEG.Context
             
             case .quantization:
                 for table:JPEG.Table.Quantization in 
-                    try JPEG.Table.parse(marker.data, as: JPEG.Table.Quantization.self)
+                    try JPEG.Table.parse(quantization: marker.data)
                 {
                     try context.push(quanta: table)
                 }
             
             case .huffman:
                 let parsed:(dc:[JPEG.Table.HuffmanDC], ac:[JPEG.Table.HuffmanAC]) = 
-                    try JPEG.Table.parse(marker.data, 
-                        as: (JPEG.Table.HuffmanDC.self, JPEG.Table.HuffmanAC.self))
+                    try JPEG.Table.parse(huffman: marker.data)
                 for table:JPEG.Table.HuffmanDC in parsed.dc 
                 {
                     context.push(dc: table)
@@ -4210,7 +4193,7 @@ extension JPEG.Data.Spectral
     /// where Source:JPEG.Bytestream.Source 
     ///     Decompresses a spectral image from the given data source.
     /// - stream    : inout Source 
-    ///     A bytestream source.
+    ///     A source bytestream.
     /// - ->        : Self
     ///     The decompressed image.
     public static 
@@ -4231,7 +4214,7 @@ extension JPEG.Data.Planar
     ///     to obtain a spectral image, and then calls [`(Spectral).idct()`] on the 
     ///     output to return a planar image.
     /// - stream    : inout Source 
-    ///     A bytestream source.
+    ///     A source bytestream.
     /// - ->        : Self
     ///     The decompressed image.
     public static 
@@ -4253,7 +4236,7 @@ extension JPEG.Data.Rectangular
     ///     to obtain a planar image, and then calls [`(Planar).interleaved(cosite:)`] 
     ///     on the output to return a rectangular image.
     /// - stream    : inout Source 
-    ///     A bytestream source.
+    ///     A source bytestream.
     /// - cosited : Swift.Bool 
     ///     The upsampling method to use. Setting this parameter to `true` co-sites 
     ///     the samples; setting it to `false` centers them instead.

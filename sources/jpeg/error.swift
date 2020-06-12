@@ -798,3 +798,132 @@ extension JPEG
         }
     }
 }
+
+extension JPEG 
+{
+    /// enum JPEG.FormattingError
+    /// :   JPEG.Error 
+    ///     A formatting error.
+    /// #  [See also](error-types)
+    /// ## (error-types)
+    /// ## (error-handling)
+    public 
+    enum FormattingError:JPEG.Error 
+    {
+        /// case JPEG.FormattingError.invalidDestination 
+        ///     The formatter could not write data to its destination stream.
+        case invalidDestination
+        /// static var JPEG.FormattingError.namespace: Swift.String { get }
+        /// ?:  JPEG.Error 
+        ///     Returns the string `"formatting error"`.
+        public static 
+        var namespace:String 
+        {
+            "formatting error"
+        }
+        /// var JPEG.FormattingError.message        : Swift.String { get }
+        /// ?:  JPEG.Error 
+        ///     Returns a basic description of this formatting error.
+        public 
+        var message:String 
+        {
+            switch self 
+            {
+            case .invalidDestination:
+                return "failed to write to destination"
+            } 
+        }
+        /// var JPEG.FormattingError.details        : Swift.String? { get }
+        /// ?:  JPEG.Error 
+        ///     Returns a detailed description of this formatting error, if available.
+        public 
+        var details:String? 
+        {
+            switch self 
+            {
+            case .invalidDestination:
+                return nil
+            } 
+        }
+    }
+    /// enum JPEG.SerializingError
+    /// :   JPEG.Error 
+    ///     A serializing error.
+    /// 
+    ///     This enumeration currently has no cases.
+    /// #  [See also](error-types)
+    /// ## (error-types)
+    /// ## (error-handling)
+    public 
+    enum SerializingError:JPEG.Error 
+    {
+        /// static var JPEG.SerializingError.namespace: Swift.String { get }
+        /// ?:  JPEG.Error 
+        ///     Returns the string `"serializing error"`.
+        public static 
+        var namespace:String 
+        {
+            "serializing error"
+        }
+        /// var JPEG.SerializingError.message       : Swift.String { get }
+        /// ?:  JPEG.Error 
+        ///     Returns a basic description of this serializing error.
+        public 
+        var message:String 
+        {
+            switch self 
+            {
+            } 
+        }
+        /// var JPEG.SerializingError.details       : Swift.String? { get }
+        /// ?:  JPEG.Error 
+        ///     Returns a detailed description of this serializing error, if available.
+        public 
+        var details:String? 
+        {
+            switch self 
+            {
+            } 
+        }
+    }
+    /// enum JPEG.EncodingError
+    /// :   JPEG.Error 
+    ///     An encoding error.
+    /// 
+    ///     This enumeration currently has no cases.
+    /// #  [See also](error-types)
+    /// ## (error-types)
+    /// ## (error-handling)
+    public 
+    enum EncodingError:JPEG.Error 
+    {
+        /// static var JPEG.EncodingError.namespace : Swift.String { get }
+        /// ?:  JPEG.Error 
+        ///     Returns the string `"encoding error"`.
+        public static 
+        var namespace:String 
+        {
+            "encoding error"
+        }
+        /// var JPEG.EncodingError.message          : Swift.String { get }
+        /// ?:  JPEG.Error 
+        ///     Returns a basic description of this encoding error.
+        public 
+        var message:String 
+        {
+            switch self 
+            {
+            } 
+        }
+        /// var JPEG.EncodingError.details          : Swift.String? { get }
+        /// ?:  JPEG.Error 
+        ///     Returns a detailed description of this encoding error, if available.
+        public 
+        var details:String? 
+        {
+            switch self 
+            {
+            } 
+        }
+    }
+}

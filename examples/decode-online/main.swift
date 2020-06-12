@@ -159,14 +159,13 @@ func decodeOnline(stream:inout Stream, _ capture:(JPEG.Data.Spectral<JPEG.Common
             break definitions
         
         case .quantization:
-            let parsed:[JPEG.Table.Quantization] = try JPEG.Table.parse(marker.data, 
-                as: JPEG.Table.Quantization.self)
+            let parsed:[JPEG.Table.Quantization] = 
+                try JPEG.Table.parse(quantization: marker.data)
             quanta.append(contentsOf: parsed)
         
         case .huffman:
             let parsed:(dc:[JPEG.Table.HuffmanDC], ac:[JPEG.Table.HuffmanAC]) = 
-                try JPEG.Table.parse(marker.data, 
-                    as: (JPEG.Table.HuffmanDC.self, JPEG.Table.HuffmanAC.self))
+                try JPEG.Table.parse(huffman: marker.data)
             dc.append(contentsOf: parsed.dc)
             ac.append(contentsOf: parsed.ac)
         
@@ -226,15 +225,14 @@ func decodeOnline(stream:inout Stream, _ capture:(JPEG.Data.Spectral<JPEG.Common
         
         case .quantization:
             for table:JPEG.Table.Quantization in 
-                try JPEG.Table.parse(marker.data, as: JPEG.Table.Quantization.self)
+                try JPEG.Table.parse(quantization: marker.data)
             {
                 try context.push(quanta: table)
             }
         
         case .huffman:
             let parsed:(dc:[JPEG.Table.HuffmanDC], ac:[JPEG.Table.HuffmanAC]) = 
-                try JPEG.Table.parse(marker.data, 
-                    as: (JPEG.Table.HuffmanDC.self, JPEG.Table.HuffmanAC.self))
+                try JPEG.Table.parse(huffman: marker.data)
             for table:JPEG.Table.HuffmanDC in parsed.dc 
             {
                 context.push(dc: table)
