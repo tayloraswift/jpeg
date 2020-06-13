@@ -190,7 +190,7 @@ code a.syntax-swift-type
 nav 
 {
     background-color: #222222;
-    padding: 1em 0 0.1em;
+    padding: 0.8em 0 0;
 }
 nav ul 
 {
@@ -203,13 +203,15 @@ nav ul li
     margin-right: 0.75em;
     color: #aaaaaa;
     font-size: 1em;
+    
+    vertical-align: middle;
 }
-nav ul li:after
+nav ul li:before
 {
-    margin-left: 0.75em;
+    margin-right: 0.75em;
     content: '›';
 }
-nav ul li:last-child:after
+nav ul li:first-child:before
 {
     content: '';
 }
@@ -217,6 +219,26 @@ nav ul li a
 {
     color: #eeeeee;
 }
+/* github icon */
+nav li.github-icon-container a 
+{
+    border-radius: 10em;
+    display: inline-block;
+    padding: 4px;
+    border: 1px solid transparent;
+}
+nav li.github-icon-container a:hover 
+{
+    border: 1px solid #eeeeee;
+}
+nav li.github-icon-container .github-icon 
+{
+    display: inline-block;
+    width:  1.25em;
+    height: 1.25em;
+    background-image: url('github-icon.svg');
+}
+
 
 
 .section-container, .navigation-container
