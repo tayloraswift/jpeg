@@ -85,6 +85,8 @@ extension Page.Label
         let text:String 
         switch self 
         {
+        case .framework:
+            text = "Framework"
         case .enumeration:
             text = "Enumeration"
         case .genericEnumeration:
@@ -231,8 +233,11 @@ extension Page.Signature
 }
 extension Page 
 {
-    var htmlBreadcrumbs:HTML.Tag 
+    func breadcrumbs(github:String) -> HTML.Tag 
     {
+        let icon:HTML.Tag = .init("li", ["class": "github-icon-container"], 
+            [.init("a", ["href": github], 
+                [.init("span", ["class": "github-icon", "title": "Github repository"], [])])])
         var breadcrumbs:[HTML.Tag] = self.breadcrumbs.map 
         {
             switch $0.link 
@@ -244,11 +249,11 @@ extension Page
             }
         }
         breadcrumbs.append(.init("li", [:], [.init("span", [:], self.breadcrumb)]))
-        return .init("div", ["class": "navigation-container"], [.init("ul", [:], breadcrumbs)])
+        return .init("div", ["class": "navigation-container"], [.init("ul", [:], [icon] + breadcrumbs)])
     }
-    var html:HTML.Tag
+    func html(github:String) -> HTML.Tag
     {
-        var sections:[HTML.Tag] = [.init("nav", [:], [self.htmlBreadcrumbs])]
+        var sections:[HTML.Tag] = [.init("nav", [:], [self.breadcrumbs(github: github)])]
         func create(class:String, section:[HTML.Tag]) 
         {
             sections.append(

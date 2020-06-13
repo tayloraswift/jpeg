@@ -2,6 +2,8 @@
 ///     A namespace for general library utilities.
 /// #  [Range types](general-range-types)
 /// #  [Integer storage](general-storage-types)
+/// #  [See also](top-level-namespaces)
+/// ## (1:top-level-namespaces)
 public 
 enum General    
 {

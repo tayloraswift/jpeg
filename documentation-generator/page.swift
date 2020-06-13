@@ -3,6 +3,8 @@ class Page
 {
     enum Label 
     {
+        case framework 
+        
         case enumeration 
         case genericEnumeration 
         case structure 
@@ -306,10 +308,14 @@ class Page
         }
         
         let urlpattern:(prefix:String, suffix:String)
-        let path:[String]
         let page:Page 
         let locals:Set<String>, 
             keys:Set<Key>
+        
+        var path:[String] 
+        {
+            self.page.path 
+        }
         
         // needed to uniquify overloaded symbols
         var uniquePath:[String] 
@@ -326,17 +332,16 @@ class Page
         
         var url:String 
         {
-            "\(self.urlpattern.prefix)\(self.uniquePath.map(Self.escape(url:)).joined(separator: "/"))\(self.urlpattern.suffix)"
+            "\(self.urlpattern.prefix)/\(self.uniquePath.map(Self.escape(url:)).joined(separator: "/"))\(self.urlpattern.suffix)"
         }
         var filepath:String 
         {
-            "\(self.uniquePath.joined(separator: "/"))"
+            self.uniquePath.joined(separator: "/")
         }
         
         init(_ page:Page, locals:Set<String>, keys:Set<Key>, urlpattern:(prefix:String, suffix:String)) 
         {
             self.urlpattern = urlpattern
-            self.path       = page.breadcrumbs.map(\.text) + [page.breadcrumb] 
             self.page       = page 
             self.locals     = locals 
             self.keys       = keys 
@@ -394,6 +399,8 @@ class Page
     
     var inheritances:[[String]] 
     let overload:UInt32?
+    
+    let path:[String]
     
     init(label:Label, name:String, signature:[Signature.Token], declaration:[Declaration.Token], 
         fields:Fields, path:[String], inheritances:[[String]] = [], overload:UInt32? = nil)
@@ -471,7 +478,7 @@ class Page
             
             relationships = .parse(sentences.joined(separator: " "))
         
-        case .protocol, .enumerationCase: 
+        case .protocol, .enumerationCase, .framework: 
             relationships = [] 
         }
         
@@ -483,12 +490,19 @@ class Page
             relationships
         )
         self.topics         = fields.topics
-        self.breadcrumbs    = Link.link(path.dropLast().map{ ($0, ()) }).map 
+        
+        var breadcrumbs:[(text:String, link:Link)] = [("Documentation", .unresolved(path: []))]
+        +
+        Link.link(path.map{ ($0, ()) }).map 
         {
             ($0.component.0, $0.link)
         }
-        self.breadcrumb     = path[path.endIndex - 1]
+        
+        self.breadcrumb     = breadcrumbs.removeLast().text 
+        self.breadcrumbs    = breadcrumbs
         self.overload       = overload 
+        
+        self.path           = path
     }
     
     private static 
@@ -941,7 +955,7 @@ extension Page
                     }
                     requirement = field 
                 
-                case .subscript, .function, .member, .type, .typealias:
+                case .subscript, .function, .member, .type, .typealias, .module:
                     fatalError("only one header field per doccomnent allowed")
                     
                 case .separator:
@@ -986,6 +1000,22 @@ extension Page
 }
 extension Page.Binding 
 {
+    static 
+    func create(_ header:Symbol.ModuleField, fields:ArraySlice<Symbol.Field>, 
+        order:Int, urlpattern:(prefix:String, suffix:String)) 
+        -> Self
+    {
+        let fields:Page.Fields = .init(fields, order: order)
+        
+        let page:Page = .init(label: .framework, name: header.identifier, 
+            signature:      [], 
+            declaration:    [.keyword("import"), .whitespace, .identifier(header.identifier)], 
+            fields:         fields, 
+            path:           [], 
+            overload:       nil)
+        return .init(page, locals: [], keys: fields.keys, urlpattern: urlpattern)
+    }
+    
     static 
     func create(_ header:Symbol.SubscriptField, fields:ArraySlice<Symbol.Field>, 
         order:Int, urlpattern:(prefix:String, suffix:String)) 
@@ -1496,6 +1526,8 @@ extension Page.Binding
                 topics.associatedtypes.append(symbol)
             case .subscript:
                 topics.subscripts.append(symbol)
+            case .framework:
+                break
             }
         }
         
@@ -1652,6 +1684,13 @@ extension PageTree.Node
     static 
     func resolve(_ path:ArraySlice<String>, in scopes:[Self]) -> String?
     {
+        if  path.isEmpty, 
+            let root:Self       = scopes.first, 
+            let payload:Payload = root.payloads.first
+        {
+            return payload.url 
+        }
+        
         let debugPath:String = path.joined(separator: "/")
         higher:
         for scope:Self in scopes.reversed() 
@@ -1778,6 +1817,6 @@ extension PageTree
             }
         }
         // print out root 
-        // print(root.describe())
+        print(root.describe())
     }
 }

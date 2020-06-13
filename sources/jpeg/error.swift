@@ -72,7 +72,7 @@ extension JPEG
         /// - _ :Swift.UInt8 
         ///     The first invalid byte encountered by the lexer.
         case invalidMarkerSegmentPrefix(UInt8)
-        /// case JPEG.LexingError.invalidMarkerSegmentPrefix(_:)
+        /// case JPEG.LexingError.invalidMarkerSegmentType(_:)
         ///     The lexer encountered a marker segment with a reserved type indicator 
         ///     code.
         /// - _ :Swift.UInt8 

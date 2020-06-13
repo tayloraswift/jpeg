@@ -8,16 +8,26 @@
 
 #if os(macOS) || os(Linux)
 
-//  A namespace for file IO functionality.
+/// enum System 
+///     A namespace for platform-dependent functionality.
+/// 
+///     These APIs are only available on MacOS and Linux. However, the rest of the 
+///     framework is pure Swift and should support all Swift platforms.
+/// #  [See also](top-level-namespaces)
+/// ## (2:top-level-namespaces)
 public 
 enum System 
 {
+    /// enum System.File 
+    ///     A namespace for file IO functionality.
     public
     enum File
     {
         typealias Descriptor = UnsafeMutablePointer<FILE>
         
-        //  Read data from files on disk.
+        /// struct System.File.Source
+        /// :   JPEG.Bytestream.Source 
+        ///     A type for reading data from files on disk.
         public
         struct Source
         {
@@ -25,7 +35,9 @@ enum System
             let descriptor:Descriptor
         }
         
-        //  Write data to files on disk.
+        /// struct System.File.Destination
+        /// :   JPEG.Bytestream.Destination
+        ///     A type for writing data to files on disk.
         public 
         struct Destination 
         {
@@ -36,24 +48,27 @@ enum System
 }
 extension System.File.Source
 {
-    //  Calls a closure with an interface for reading from the specified file.
-    //  
-    //  This method automatically closes the file when its function argument returns.
-    //  - Parameters:
-    //      - path: A path to the file to open.
-    //      - body: A closure with a `Source` parameter from which data in
-    //          the specified file can be read. This interface is only valid
-    //          for the duration of the method’s execution. The closure is
-    //          only executed if the specified file could be successfully
-    //          opened, otherwise `nil` is returned. If `body` has a return
-    //          value and the specified file could be opened, its return
-    //          value is returned as the return value of the `open(path:body:)`
-    //          method.
-    //  - Returns: `nil` if the specified file could not be opened, or the
-    //      return value of the function argument otherwise.
+    /// static func System.File.Source.open<R>(path:_:)
+    /// rethrows 
+    ///     Calls a closure with an interface for reading from the specified file.
+    /// 
+    ///     This method automatically closes the file when its closure argument returns.
+    /// - path  : Swift.String 
+    ///     The path to the file to open.
+    /// - body  : (inout Self) throws -> R
+    ///     A closure with a [`Source`] parameter from which data in
+    ///     the specified file can be read. This interface is only valid
+    ///     for the duration of the method’s execution. The closure is
+    ///     only executed if the specified file could be successfully
+    ///     opened, otherwise this method will return `nil`. If `body` has a 
+    ///     return value and the specified file could be opened, this method 
+    ///     returns the return value of the closure.
+    /// - ->    : R?
+    ///     The return value of the closure argument, or `nil` if the specified 
+    ///     file could not be opened.
     public static
-    func open<Result>(path:String, _ body:(inout Self) throws -> Result)
-        rethrows -> Result?
+    func open<R>(path:String, _ body:(inout Self) throws -> R)
+        rethrows -> R?
     {
         guard let descriptor:System.File.Descriptor = fopen(path, "rb")
         else
@@ -70,15 +85,17 @@ extension System.File.Source
         return try body(&file)
     }
 
-    //  Read the specified number of bytes from this file interface.
-    //  
-    //  This method only returns an array if the exact number of bytes
-    //  specified could be read. This method advances the file pointer.
-    //  
-    //  - Parameters:
-    //      - capacity: The number of bytes to read.
-    //  - Returns: An array containing the read data, or `nil` if the specified
-    //      number of bytes could not be read.
+    /// func System.File.Source.read(count:)
+    /// ?:  JPEG.Bytestream.Source 
+    ///     Reads the specified number of bytes from this file interface.
+    /// 
+    ///     This method only returns an array if the exact number of bytes
+    ///     specified could be read. This method advances the file pointer.
+    /// - capacity  : Swift.Int 
+    ///     The number of bytes to read.
+    /// - ->        : [Swift.UInt8]?
+    ///     An array containing the read data, or `nil` if the specified
+    ///     number of bytes could not be read.
     public
     func read(count capacity:Int) -> [UInt8]?
     {
@@ -98,7 +115,11 @@ extension System.File.Source
 
         return buffer
     }
-    
+    /// var System.File.Source.count : Swift.Int? { get }
+    ///     The size of the file, in bytes, or `nil` if the file is not a regular 
+    ///     file or a link to a file.
+    /// 
+    ///     This property queries the file size using `stat`.
     public 
     var count:Int? 
     {
@@ -137,24 +158,27 @@ extension System.File.Source
 }
 extension System.File.Destination
 {
-    //  Calls a closure with an interface for writing to the specified file.
-    //  
-    //  This method automatically closes the file when its function argument returns.
-    //  - Parameters:
-    //      - path: A path to the file to open.
-    //      - body: A closure with a `Destination` parameter representing
-    //          the specified file to which data can be written to. This
-    //          interface is only valid for the duration of the method’s
-    //          execution. The closure is only executed if the specified
-    //          file could be successfully opened, otherwise `nil` is returned.
-    //          If `body` has a return value and the specified file could
-    //          be opened, its return value is returned as the return value
-    //          of the `open(path:body:)` method.
-    //  - Returns: `nil` if the specified file could not be opened, or the
-    //      return value of the function argument otherwise.
+    /// static func System.File.Destination.open<R>(path:_:)
+    /// rethrows 
+    ///     Calls a closure with an interface for writing to the specified file.
+    /// 
+    ///     This method automatically closes the file when its closure argument returns.
+    /// - path  : Swift.String 
+    ///     The path to the file to open.
+    /// - body  : (inout Self) throws -> R
+    ///     A closure with a [`Destination`] parameter representing
+    ///     the specified file to which data can be written to. This
+    ///     interface is only valid for the duration of the method’s
+    ///     execution. The closure is only executed if the specified file could 
+    ///     be successfully opened, otherwise this method will return `nil`.
+    ///     If `body` has a return value and the specified file could be opened, 
+    ///     this method returns the return value of the closure.
+    /// - ->    : R? 
+    ///     The return value of the closure argument, or `nil` if the specified 
+    ///     file could not be opened.
     public static
-    func open<Result>(path:String, _ body:(inout Self) throws -> Result)
-        rethrows -> Result?
+    func open<R>(path:String, _ body:(inout Self) throws -> R)
+        rethrows -> R?
     {
         guard let descriptor:System.File.Descriptor = fopen(path, "wb")
         else
@@ -170,16 +194,18 @@ extension System.File.Destination
 
         return try body(&file)
     }
-
-    //  Write the bytes in the given array to this file interface.
-    //  
-    //  This method only returns `()` if the entire array argument could
-    //  be written. This method advances the file pointer.
-    //  
-    //  - Parameters:
-    //      - buffer: The data to write.
-    //  - Returns: `()` if the entire array argument could be written, or
-    //      `nil` otherwise.
+    
+    /// func System.File.Destination.write(_:)
+    /// ?:  JPEG.Bytestream.Destination
+    ///     Write the bytes in the given array to this file interface.
+    /// 
+    ///     This method only returns `()` if the entire array argument could
+    ///     be written. This method advances the file pointer.
+    /// - buffer    : [Swift.UInt8] 
+    ///     The data to write.
+    /// - ->        : Swift.Void? 
+    ///     A [`Swift.Void`] tuple if the entire array argument could be written,
+    ///     or `nil` otherwise.
     public
     func write(_ buffer:[UInt8]) -> Void?
     {
@@ -209,11 +235,40 @@ extension System.File.Destination:JPEG.Bytestream.Destination
 // file-based encoding and decoding apis
 extension JPEG.Data.Spectral 
 {
+    /// static func JPEG.Data.Spectral.decompress(path:) 
+    /// throws 
+    ///     Decompresses a spectral image from the given file path.
+    /// 
+    ///     Calling this function is equivalent to calling [`System.File.Source.open(path:_:)`]
+    ///     with the closure parameter set to [`Self``decompress(stream:)`].
+    ///
+    ///     This function is only available on MacOS and Linux platforms.
+    /// - path      : Swift.String 
+    ///     A file path.
+    /// - ->        : Self?
+    ///     The decompressed image, or `nil` if the file could not be opened at 
+    ///     the given file path.
     public static 
     func decompress(path:String) throws -> Self? 
     {
         return try System.File.Source.open(path: path, Self.decompress(stream:))
     }
+    /// func JPEG.Data.Spectral.compress(path:) 
+    /// throws 
+    ///     Compresses a spectral image to the given file path. 
+    /// 
+    ///     All metadata records in this image will be emitted at the beginning of 
+    ///     the outputted file, in the order they appear in the [`metadata`] array.
+    ///
+    ///     Calling this function is equivalent to calling [`System.File.Destination.open(path:_:)`]
+    ///     with the closure parameter set to [`Self``compress(stream:)`].
+    /// 
+    ///     This function is only available on MacOS and Linux platforms.
+    /// - path      : Swift.String 
+    ///     A file path.
+    /// - ->        : Swift.Void?
+    ///     A [`Swift.Void`] tuple, or `nil` if the file could not be opened at 
+    ///     the given file path.
     public 
     func compress(path:String) throws -> Void?
     {
@@ -222,6 +277,20 @@ extension JPEG.Data.Spectral
 }
 extension JPEG.Data.Planar 
 {
+    /// static func JPEG.Data.Planar.decompress(path:) 
+    /// throws 
+    ///     Decompresses a planar image from the given file path.
+    /// 
+    ///     This function is a convenience function which calls [`Spectral.decompress(path:)`] 
+    ///     to obtain a spectral image, and then calls [`(Spectral).idct()`] on the 
+    ///     output to return a planar image.
+    /// 
+    ///     This function is only available on MacOS and Linux platforms.
+    /// - path      : Swift.String 
+    ///     A file path.
+    /// - ->        : Self?
+    ///     The decompressed image, or `nil` if the file could not be opened at 
+    ///     the given file path.
     public static 
     func decompress(path:String) throws -> Self?
     {
@@ -232,14 +301,58 @@ extension JPEG.Data.Planar
         }
         return spectral.idct()
     }
+    /// func JPEG.Data.Planar.compress(path:quanta:) 
+    /// throws 
+    ///     Compresses a planar image to the given file path. 
+    /// 
+    ///     All metadata records in this image will be emitted at the beginning of 
+    ///     the outputted file, in the order they appear in the [`metadata`] array.
+    /// 
+    ///     This function is a convenience function which calls [`fdct(quanta:)`]
+    ///     to obtain a spectral image, and then calls [`(Spectral).compress(path:)`] 
+    ///     on the output.
+    /// 
+    ///     This function is only available on MacOS and Linux platforms.
+    /// - path      : Swift.String 
+    ///     A file path.
+    /// - quanta: [JPEG.Table.Quantization.Key: [Swift.UInt16]]
+    ///     The quantum values for each quanta key used by this image’s [`layout`], 
+    ///     including quanta keys used only by non-recognized components. Each 
+    ///     array of quantum values must have exactly 64 elements. The quantization 
+    ///     tables created from these values will be encoded using integers with a bit width
+    ///     determined by this image’s [`layout``(Layout).format``(JPEG.Format).precision`],
+    ///     and all the values must be in the correct range for that bit width.
+    /// - ->        : Swift.Void?
+    ///     A [`Swift.Void`] tuple, or `nil` if the file could not be opened at 
+    ///     the given file path.
     public 
     func compress(path:String, quanta:[JPEG.Table.Quantization.Key: [UInt16]]) throws 
+        -> Void?
     {
-        try self.fdct(quanta: quanta).compress(path: path)
+        return try self.fdct(quanta: quanta).compress(path: path)
     }
 }
 extension JPEG.Data.Rectangular 
 {
+    /// static func JPEG.Data.Rectangular.decompress(path:cosite:) 
+    /// throws 
+    ///     Decompresses a rectangular image from the given file path.
+    /// 
+    ///     This function is a convenience function which calls [`Planar.decompress(path:)`] 
+    ///     to obtain a planar image, and then calls [`(Planar).interleaved(cosite:)`] 
+    ///     on the output to return a rectangular image.
+    /// 
+    ///     This function is only available on MacOS and Linux platforms.
+    /// - path      : Swift.String 
+    ///     A file path.
+    /// - cosited : Swift.Bool 
+    ///     The upsampling method to use. Setting this parameter to `true` co-sites 
+    ///     the samples; setting it to `false` centers them instead.
+    /// 
+    ///     The default value is `false`.
+    /// - ->        : Self?
+    ///     The decompressed image, or `nil` if the file could not be opened at 
+    ///     the given file path.
     public static 
     func decompress(path:String, cosite cosited:Bool = false) throws -> Self? 
     {
@@ -251,8 +364,33 @@ extension JPEG.Data.Rectangular
         
         return planar.interleaved(cosite: cosited)
     }
+    /// func JPEG.Data.Rectangular.compress(path:quanta:) 
+    /// throws 
+    ///     Compresses a rectangular image to the given file path. 
+    /// 
+    ///     All metadata records in this image will be emitted at the beginning of 
+    ///     the outputted file, in the order they appear in the [`metadata`] array.
+    /// 
+    ///     This function is a convenience function which calls [`decomposed()`]
+    ///     to obtain a planar image, and then calls [`(Planar).compress(path:quanta:)`] 
+    ///     on the output.
+    ///
+    ///     This function is only available on MacOS and Linux platforms.
+    /// - path      : Swift.String 
+    ///     A file path.
+    /// - quanta: [JPEG.Table.Quantization.Key: [Swift.UInt16]]
+    ///     The quantum values for each quanta key used by this image’s [`layout`], 
+    ///     including quanta keys used only by non-recognized components. Each 
+    ///     array of quantum values must have exactly 64 elements. The quantization 
+    ///     tables created from these values will be encoded using integers with a bit width
+    ///     determined by this image’s [`layout``(Layout).format``(JPEG.Format).precision`],
+    ///     and all the values must be in the correct range for that bit width.
+    /// - ->        : Swift.Void?
+    ///     A [`Swift.Void`] tuple, or `nil` if the file could not be opened at 
+    ///     the given file path.
     public 
     func compress(path:String, quanta:[JPEG.Table.Quantization.Key: [UInt16]]) throws 
+        -> Void?
     {
         try self.decomposed().compress(path: path, quanta: quanta)
     }

@@ -1,3 +1,9 @@
+/// module JPEG 
+///     Decode, inspect, edit, and encode JPEG images.
+/// 
+///     See example programs and library tutorials [here](https://github.com/kelvin13/jpeg/tree/master/examples).
+/// #  [Top level namespaces](top-level-namespaces)
+
 /// protocol JPEG.Format
 ///     A color format, determined by the bit depth and set of component keys in 
 ///     a frame header. 
@@ -92,6 +98,8 @@ protocol _JPEGColor
 /// #  [Image headers](header-types-and-namespace)
 /// #  [Image representations](image-data-types-and-namespace)
 /// #  [Error handling](error-handling)
+/// #  [See also](top-level-namespaces)
+/// ## (0:top-level-namespaces)
 public 
 enum JPEG 
 {
