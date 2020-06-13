@@ -49,13 +49,13 @@ let rgb:[JPEG.RGB] = image.unpack(as: JPEG.RGB.self)
 > *(photo by Shantell Martin)*
 
 
-The pixel unpacking can also be done with the `JPEG.YCbCr` built-in target, to obtain an image in its native [YCbCr](https://en.wikipedia.org/wiki/YCbCr) color space.
+The pixel unpacking can also be done with the [`JPEG.YCbCr`](https://kelvin13.github.io/jpeg/JPEG/YCbCr/) built-in target, to obtain an image in its native [YCbCr](https://en.wikipedia.org/wiki/YCbCr) color space.
 
 ```swift 
 let ycc:[JPEG.YCbCr] = image.unpack(as: JPEG.YCbCr.self)
 ```
 
-The `unpack(as:)` method is [non-mutating](https://docs.swift.org/swift-book/LanguageGuide/Methods.html#ID239), so you can unpack the same image to multiple color targets without having to re-decode the file each time.
+The [`unpack(as:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/unpack%28as:%29/) method is [non-mutating](https://docs.swift.org/swift-book/LanguageGuide/Methods.html#ID239), so you can unpack the same image to multiple color targets without having to re-decode the file each time.
 
 <img src="decode-basic/karlie-kwk-2019.jpg.rgb.png" alt="output (as png)" width=512/>
 
@@ -132,7 +132,7 @@ If you don’t know what subsampling is, or what the colon-separated notation me
 
 The sampling factors are alternative ways of expressing these configurations, indicating the number of samples in a **minimum coded unit** (bolded line).
 
-We will use these settings to initialize a `JPEG.Layout` structure specifying the shape and scan progression of the JPEG file you want to output.
+We will use these settings to initialize a [`JPEG.Layout`](https://kelvin13.github.io/jpeg/JPEG/Layout/) structure specifying the shape and scan progression of the JPEG file you want to output.
 
 ```swift 
 let layout:JPEG.Layout<JPEG.Common> = .init(
@@ -151,22 +151,22 @@ let layout:JPEG.Layout<JPEG.Common> = .init(
     ])
 ```
 
-The `JPEG.Common` generic parameter is the same as the one that appeared in the `JPEG.Data.Rectangular` type in the [basic decoding](#basic-decoding) example. It is the type of the `format:` argument which specifies the color format that you want to save the image in. The `JPEG.Common` enumeration has four cases:
+The [`JPEG.Common`](https://kelvin13.github.io/jpeg/JPEG/Common/) generic parameter is the same as the one that appeared in the [`JPEG.Data.Rectangular`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/) type in the [basic decoding](#basic-decoding) example. It is the type of the `format` argument which specifies the color format that you want to save the image in. The [`JPEG.Common`](https://kelvin13.github.io/jpeg/JPEG/Common/) enumeration has four cases:
 
-* `y8`: (8-bit [grayscale](https://en.wikipedia.org/wiki/Grayscale), *Y*&nbsp;=&nbsp;1)
-* `ycc8`: (8-bit [YCbCr](https://en.wikipedia.org/wiki/YCbCr), *Y*&nbsp;=&nbsp;1, *Cb*&nbsp;=&nbsp;2, *Cr*&nbsp;=&nbsp;3)
-* `nonconforming1x8` `(c1)`: (8-bit [grayscale](https://en.wikipedia.org/wiki/Grayscale), non-conforming scalars)
-* `nonconforming3x8` `(c1, c2, c3)`: (8-bit [YCbCr](https://en.wikipedia.org/wiki/YCbCr), non-conforming triplets)
+* [`y8`](https://kelvin13.github.io/jpeg/JPEG/Common/y8/): (8-bit [grayscale](https://en.wikipedia.org/wiki/Grayscale), *Y*&nbsp;=&nbsp;1)
+* [`ycc8`](https://kelvin13.github.io/jpeg/JPEG/Common/ycc8/): (8-bit [YCbCr](https://en.wikipedia.org/wiki/YCbCr), *Y*&nbsp;=&nbsp;1, *Cb*&nbsp;=&nbsp;2, *Cr*&nbsp;=&nbsp;3)
+* [`nonconforming1x8(_:)`](https://kelvin13.github.io/jpeg/JPEG/Common/nonconforming1x8%28_:%29/): (8-bit [grayscale](https://en.wikipedia.org/wiki/Grayscale), non-conforming scalars)
+* [`nonconforming3x8(_:_:_:)`](https://kelvin13.github.io/jpeg/JPEG/Common/nonconforming3x8%28_:_:_:%29/): (8-bit [YCbCr](https://en.wikipedia.org/wiki/YCbCr), non-conforming triplets)
 
 The last two cases are not standard JPEG color formats, they are provided for compatibility with older, buggy JPEG encoders.
 
-The `process:` argument specifies the JPEG coding process we are going to use to encode the image. Here, we have set it to the `baseline` process, which all browsers and image viewers should be able to display.
+The `process` argument specifies the JPEG coding process we are going to use to encode the image. Here, we have set it to the [`baseline`](https://kelvin13.github.io/jpeg/JPEG/Process/baseline/) process, which all browsers and image viewers should be able to display.
 
-The `components:` argument takes a dictionary mapping `JPEG.Component.Key`s to their sampling factors and `JPEG.Table.Quantization.Key`s. Both key types are [`ExpressibleByIntegerLiteral`](https://developer.apple.com/documentation/swift/expressiblebyintegerliteral)s, so we’ve written them with their integer values. (We need the `as` coercion for the quantization keys in this example because the compiler is having issues inferring the type context here.)
+The `components` argument takes a dictionary mapping [`JPEG.Component.Key`](https://kelvin13.github.io/jpeg/JPEG/Component/Key/)s to their sampling factors and [`JPEG.Table.Quantization.Key`](https://kelvin13.github.io/jpeg/JPEG/Table/Quantization/Key/)s. Both key types are [`ExpressibleByIntegerLiteral`](https://developer.apple.com/documentation/swift/expressiblebyintegerliteral)s, so we’ve written them with their integer values. (We need the `as` coercion for the quantization keys in this example because the compiler is having issues inferring the type context here.)
 
-Because we are using the standard `ycc8` color format, component **1** always represents the *Y* channel; component **2**, the *Cb* channel; and component **3**, the *Cr* channel. As long as we are using the `ycc8` color format, the dictionary must consist of these three component keys. (The quantization table keys can be anything you want.)
+Because we are using the standard [`ycc8`](https://kelvin13.github.io/jpeg/JPEG/Common/ycc8/) color format, component **1** always represents the *Y* channel; component **2**, the *Cb* channel; and component **3**, the *Cr* channel. As long as we are using the [`ycc8`](https://kelvin13.github.io/jpeg/JPEG/Common/ycc8/) color format, the dictionary must consist of these three component keys. (The quantization table keys can be anything you want.)
 
-The `scans:` argument specifies the **scan progression** of the JPEG file, and takes an array of `JPEG.Header.Scan`s. Because we are using the `baseline` coding process, we can only use sequential scans, which we initialize using the `sequential(_:...)` static constructor. Here, we have defined one single-component scan containing the luminance channel, and another two-component interleaved scan containing the two color channels.
+The `scans` argument specifies the **scan progression** of the JPEG file, and takes an array of [`JPEG.Header.Scan`](https://kelvin13.github.io/jpeg/JPEG/Header/Scan/)s. Because we are using the [`baseline`](https://kelvin13.github.io/jpeg/JPEG/Process/baseline/) coding process, we can only use sequential scans, which we initialize using the [`sequential(...:)`](https://kelvin13.github.io/jpeg/JPEG/Header/Scan/sequential%28...:%29/) static constructor. Here, we have defined one single-component scan containing the luminance channel, and another two-component interleaved scan containing the two color channels.
 
 The two [keypaths](https://developer.apple.com/documentation/swift/keypath) in each component tuple specify [huffman table](https://en.wikipedia.org/wiki/Huffman_coding) destinations (DC and AC, respectively); if the AC or DC selectors are the same for each component in a scan, then those components will share the same (AC or DC) huffman table. The interleaved color scan 
 
@@ -182,9 +182,9 @@ will use one shared DC table, and one shared AC tables (two tables total). If we
 
 then the scan will use a separate DC and separate AC table for each component (four tables total). Using separate tables for each component may result in better compression.
 
-There are four possible selectors for each table type (`\.0`, `\.1`, `\.2`, and `\.3`), but since we are using the `baseline` coding process, we are only allowed to use selectors `\.0` and `\.1`. (Other coding processes can use all four.)
+There are four possible selectors for each table type (`\.0`, `\.1`, `\.2`, and `\.3`), but since we are using the [`baseline`](https://kelvin13.github.io/jpeg/JPEG/Process/baseline/) coding process, we are only allowed to use selectors `\.0` and `\.1`. (Other coding processes can use all four.)
 
-Next, we initialize a `JPEG.JFIF` metadata record with some placeholder values.
+Next, we initialize a [`JPEG.JFIF`](https://kelvin13.github.io/jpeg/JPEG/JFIF/) metadata record with some placeholder values.
 
 ```swift 
 let jfif:JPEG.JFIF = .init(version: .v1_2, density: (1, 1, .centimeters))
@@ -192,16 +192,16 @@ let jfif:JPEG.JFIF = .init(version: .v1_2, density: (1, 1, .centimeters))
 
 This step is not really necessary, but some applications may expect [JFIF](https://en.wikipedia.org/wiki/JPEG_File_Interchange_Format) metadata to be present, so we fill out this record with some junk values anyway.
 
-Finally, we combine the layout, metadata, and the image contents into a `JPEG.Data.Rectangular` structure.
+Finally, we combine the layout, metadata, and the image contents into a [`JPEG.Data.Rectangular`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/) structure.
 
 ```swift 
 let image:JPEG.Data.Rectangular<JPEG.Common> = 
     .pack(size: size, layout: layout, metadata: [.jfif(jfif)], pixels: rgb)
 ```
 
-The static `pack(size:layout:metadata:pixels:)` method is generic and can also take an array of native `JPEG.YCbCr` pixels.
+The static [`pack(size:layout:metadata:pixels:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/pack%28size:layout:metadata:pixels:%29/) method is generic and can also take an array of native [`JPEG.YCbCr`](https://kelvin13.github.io/jpeg/JPEG/YCbCr/) pixels.
 
-The next step is to specify the quantum values the encoder will use to compress each of the image components. JPEG has no concept of linear “quality”; the quantization table values are completely independent. Still, the framework provides the `JPEG.CompressionLevel` APIs to generate quantum values from a single “quality” parameter.
+The next step is to specify the quantum values the encoder will use to compress each of the image components. JPEG has no concept of linear “quality”; the quantization table values are completely independent. Still, the framework provides the [`JPEG.CompressionLevel`](https://kelvin13.github.io/jpeg/JPEG/CompressionLevel/) APIs to generate quantum values from a single “quality” parameter.
 
 ```swift 
 enum JPEG.CompressionLevel 
@@ -216,9 +216,9 @@ enum JPEG.CompressionLevel
 }
 ```
 
-The only difference between the `luminance(_:)` and `chrominance(_:)` cases is that one produces quantum values optimized for the *Y* channel while the other produces values optimized for the *Cb* and *Cr* channels.
+The only difference between the [`luminance(_:)`](https://kelvin13.github.io/jpeg/JPEG/CompressionLevel/luminance%28_:%29/) and [`chrominance(_:)`](https://kelvin13.github.io/jpeg/JPEG/CompressionLevel/chrominance%28_:%29/) cases is that one produces quantum values optimized for the *Y* channel while the other produces values optimized for the *Cb* and *Cr* channels.
 
-We then loop through different compression levels and use the `compress(path:quanta:)` method to encode the files. The keys in the dictionary for the `quanta:` argument must match the quantization table keys in the image layout.
+We then loop through different compression levels and use the [`compress(path:quanta:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/compress%28path:quanta:%29/) method to encode the files. The keys in the dictionary for the `quanta` argument must match the quantization table keys in the image layout.
 
 ```swift 
 for level:Double in [0.0, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0] 
@@ -295,7 +295,7 @@ This example program will generate 32 output images. For comparison, the PNG-enc
 > * *convert intra-data unit grid coordinates to zigzag indices*
 > * *access values from a quantization table*
 
-In the [basic decoding](#basic-decoding) tutorial, we used the single-stage `decompress(path:)` function to inflate a JPEG file from disk directly to its `JPEG.Data.Rectangular` representation. This time, we will decompress the file to an intermediate representation modeled by the `JPEG.Data.Spectral` type.
+In the [basic decoding](#basic-decoding) tutorial, we used the single-stage [`decompress(path:cosite:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/decompress%28path:cosite:%29/) function to inflate a JPEG file from disk directly to its [`JPEG.Data.Rectangular`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/) representation. This time, we will decompress the file to an intermediate representation modeled by the [`JPEG.Data.Spectral`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/) type.
 
 ```swift 
 import JPEG 
@@ -314,11 +314,11 @@ else
 > 
 > *(photo by Erik Drost)*
 
-The spectral representation is the native representation of a JPEG image. That means that the image can be re-encoded from a `JPEG.Data.Spectral` structure without any loss of information.
+The spectral representation is the native representation of a JPEG image. That means that the image can be re-encoded from a [`JPEG.Data.Spectral`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/) structure without any loss of information.
 
-We can access the image’s pixel dimensions through the `size` property, which returns a `(x:Int, y:Int)` tuple, and its layout through the `layout` property, which returns a `JPEG.Layout` structure, the same type that we used in the [basic encoding](#basic-encoding) tutorial.
+We can access the image’s pixel dimensions through the [`size`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/size/) property, which returns a `(x:Int, y:Int)` tuple, and its layout through the [`layout`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/layout/) property, which returns a [`JPEG.Layout`](https://kelvin13.github.io/jpeg/JPEG/Layout/) structure, the same type that we used in the [basic encoding](#basic-encoding) tutorial.
 
-The `JPEG.Layout` structure has the following members:
+The [`JPEG.Layout`](https://kelvin13.github.io/jpeg/JPEG/Layout/) structure has the following members:
 
 ```swift 
 struct JPEG.Layout<Format> where Format:JPEG.Format 
@@ -399,7 +399,7 @@ Here we can see that this image:
 * uses 4:2:0 chroma subsampling, and 
 * has one sequential, interleaved scan encoding all three color components.
 
-We can also read (and modify) the image metadata through the `metadata` property, which stores an array of metadata records in the order in which they were encountered in the file. The metadata records are enumerations which come in four cases:
+We can also read (and modify) the image metadata through the [`metadata`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/metadata/) property, which stores an array of metadata records in the order in which they were encountered in the file. The metadata records are enumerations which come in four cases:
 
 ```swift 
 enum JPEG.Metadata 
@@ -411,7 +411,7 @@ enum JPEG.Metadata
 }
 ```
 
-It should be noted that both JFIF and EXIF metadata segments are special types of `application(_:data:)` segments, with JFIF being equivalent to `application(0, data: ... )`, and EXIF being equivalent to `application(1, data: ... )`. The framework will only parse them as `JPEG.JFIF` or `JPEG.EXIF` if it encounters them at the very beginning of the JPEG file, and it will only parse one instance of each per file. This means that if for some reason, a JPEG file contains multiple JFIF segments (for example, to store a thumbnail), the latter segments will get parsed as regular `application(_:data:)` segments.
+It should be noted that both JFIF and EXIF metadata segments are special types of [`application(_:data:)`](https://kelvin13.github.io/jpeg/JPEG/Metadata/application%28_:data:%29/) segments, with JFIF being equivalent to `application(0, data: ... )`, and EXIF being equivalent to `application(1, data: ... )`. The framework will only parse them as [`JPEG.JFIF`](https://kelvin13.github.io/jpeg/JPEG/JFIF/) or [`JPEG.EXIF`](https://kelvin13.github.io/jpeg/JPEG/EXIF/) if it encounters them at the very beginning of the JPEG file, and it will only parse one instance of each per file. This means that if for some reason, a JPEG file contains multiple JFIF segments (for example, to store a thumbnail), the latter segments will get parsed as regular [`application(_:data:)`](https://kelvin13.github.io/jpeg/JPEG/Metadata/application%28_:data:%29/) segments.
 
 We can print out the JFIF, application, and comment segments like this: 
 
@@ -433,7 +433,7 @@ for metadata:JPEG.Metadata in spectral.metadata
         Swift.print(jfif)
 ```
 
-EXIF records can be extremely complex. The library will index the fields in an EXIF segment for you, but it won’t parse them. Nevertheless, it provides a number of APIs to make it easier for you to extract information from it, so long as you know what to look for, and how to parse it. For example, if we want to read the *Artist* field from the EXIF record, we can consult the [EXIF standard](https://www.exif.org/Exif2-2.PDF), which tells us that the **tag number** for that field is **315**. We can plug this identifier into the `[tag:]` subscript on the EXIF structure, to get the type, arity, and payload of the field, if it exists. We also verify that the type is indeed ASCII, as the standard expects. The standard tells us the *Artist* field is stored indirectly, so we interpret the payload as an offset, and attempt to read an ASCII string from that offset in the EXIF structure, using the typed `[_:as:]` subscript.
+EXIF records can be extremely complex. The library will index the fields in an EXIF segment for you, but it won’t parse them. Nevertheless, it provides a number of APIs to make it easier for you to extract information from it, so long as you know what to look for, and how to parse it. For example, if we want to read the *Artist* field from the EXIF record, we can consult the [EXIF standard](https://www.exif.org/Exif2-2.PDF), which tells us that the **tag number** for that field is **315**. We can plug this identifier into the [`[tag:]`](https://kelvin13.github.io/jpeg/JPEG/EXIF/[tag:]/) subscript on the EXIF structure, to get the type, arity, and payload of the field, if it exists. We also verify that the type is indeed ASCII, as the standard expects. The standard tells us the *Artist* field is stored indirectly, so we interpret the payload as an offset, and attempt to read an ASCII string from that offset in the EXIF structure, using the typed [`[_:as:]`](https://kelvin13.github.io/jpeg/JPEG/EXIF/1383-[_:as:]/) subscript.
 
 ```swift 
     case .exif(let exif):
@@ -466,7 +466,7 @@ metadata (application 2, 538 bytes)
 
 We can see that this image contains an EXIF segment which uses big-endian byte order. (JPEG data is always big-endian, but EXIF data can be big-endian or little-endian.) It also contains a [Flashpix EXIF extension](https://en.wikipedia.org/wiki/Exif#FlashPix_extensions) segment, which shows up here as an unparsed 538-byte APP2 segment. Within the EXIF segment, we were able to read the photographer’s name: `'Erik Drost'`.
 
-The `size`, `layout`, and `metadata` properties are available on all image representations, including `JPEG.Data.Rectangular`, so you don’t need to go through this multistep decompression process to access them. However, the spectral representation is unique in that it also provides access to the quantization tables used by the image.
+The `size`, `layout`, and `metadata` properties are available on all image representations, including [`JPEG.Data.Rectangular`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/), so you don’t need to go through this multistep decompression process to access them. However, the spectral representation is unique in that it also provides access to the quantization tables used by the image.
 
 First we uniquify the quanta keys used by the all the planes in the image, since some planes may reference the same quantization table.
 
@@ -474,7 +474,7 @@ First we uniquify the quanta keys used by the all the planes in the image, since
 let keys:Set<JPEG.Table.Quantization.Key> = .init(spectral.layout.planes.map(\.qi))
 ```
 
-Then, for each of the quanta keys, we use the `index(forKey:)` method on the `quanta` member of the `JPEG.Data.Spectral` structure to obtain an integer index we can subscript the quanta storage with to get the table. (Accessing quantization tables with an index is a little more efficient than doing a new key lookup each time.)
+Then, for each of the quanta keys, we use the [`index(forKey:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/Quanta/index%28forKey:%29/) method on the [`quanta`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/quanta/) member of the [`JPEG.Data.Spectral`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/) structure to obtain an integer index we can subscript the quanta storage with to get the table. (Accessing quantization tables with an index is a little more efficient than doing a new key lookup each time.)
 
 ```swift
 let q:Int                           = spectral.quanta.index(forKey: qi) 
@@ -506,7 +506,7 @@ The quantum values (and the spectral coefficients) are stored in a special **zig
 └────┴────┴────┴────┴────┴────┴────┴────┘  h
 ```
 
-To obtain the zigzag coordinate from a 2D grid coordinate, you use the static `JPEG.Table.Quantization.z(k:h:)` function, where `k` is the column index and `h` is the row index.
+To obtain the zigzag coordinate from a 2D grid coordinate, you use the static [`JPEG.Table.Quantization.z(k:h:)`](https://kelvin13.github.io/jpeg/JPEG/Table/Quantization/z%28k:h:%29/) function, where `k` is the column index and `h` is the row index.
 
 We can print out the quantum values as a matrix like this:
 
@@ -562,15 +562,15 @@ quantization table [1]:
 └                                  ┘
 ```
 
-We can convert the spectral representation into a planar spatial representation, modeled by the `JPEG.Data.Planar` structure, using the `idct()` method. This function performs an **inverse frequency transform** (or **i**nverse **d**iscrete **c**osine **t**ransform) on the spectral data.
+We can convert the spectral representation into a planar spatial representation, modeled by the [`JPEG.Data.Planar`](https://kelvin13.github.io/jpeg/JPEG/Data/Planar/) structure, using the [`idct()`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/idct%28%29/) method. This function performs an **inverse frequency transform** (or **i**nverse **d**iscrete **c**osine **t**ransform) on the spectral data.
 
 ```swift
 let planar:JPEG.Data.Planar<JPEG.Common> = spectral.idct()
 ```
 
-The size of the planes in a `JPEG.Data.Planar` structure (and a `JPEG.Data.Spectral` structure as well) always corresponds to a whole number of pixel blocks, which may not match the declared size of the image given by the `size` property. In addition, if the image uses chroma subsampling, the planes will not all be the same size.
+The size of the planes in a [`JPEG.Data.Planar`](https://kelvin13.github.io/jpeg/JPEG/Data/Planar/) structure (and a [`JPEG.Data.Spectral`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/) structure as well) always corresponds to a whole number of pixel blocks, which may not match the declared size of the image given by the `size` property. In addition, if the image uses chroma subsampling, the planes will not all be the same size.
 
-Both `JPEG.Data.Spectral` and `JPEG.Data.Planar` structures are `RandomAccessCollection`s of their `Plane` types. The `Plane` types provide 2D index iterators which traverse their index spaces in row-major order.
+Both [`JPEG.Data.Spectral`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/) and [`JPEG.Data.Planar`](https://kelvin13.github.io/jpeg/JPEG/Data/Planar/) structures are `RandomAccessCollection`s of their `Plane` types. The `Plane` types provide 2D index iterators which traverse their index spaces in row-major order.
 
 ```swift 
 for (p, plane):(Int, JPEG.Data.Planar<JPEG.Common>.Plane) in planar.enumerated()
@@ -605,7 +605,7 @@ for (p, plane):(Int, JPEG.Data.Planar<JPEG.Common>.Plane) in planar.enumerated()
 | 320x216 pixels        |
 |<img width=256 src="decode-advanced/karlie-2019.jpg-2.320x216.gray.png"/>|
 
-The last step is to convert the planar representation into rectangular representation using the `interleaved(cosite:)` method. **Cositing** refers to the positioning of color samples relative to the pixel grid. If samples are not cosited, then they are **centered**. The default setting is centered, meaning `cosite:` is `false`.
+The last step is to convert the planar representation into rectangular representation using the [`interleaved(cosite:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Planar/interleaved%28cosite:%29/) method. **Cositing** refers to the positioning of color samples relative to the pixel grid. If samples are not cosited, then they are **centered**. The default setting is centered, meaning `cosite` is `false`.
 
 ```
         centered                             cosited 
@@ -673,7 +673,7 @@ let path:String          = "examples/encode-advanced/karlie-cfdas-2011.png.rgb",
 > 
 > *(photo by John “hugo971”)*
 
-To make the code a little more readable, we will give names to the three YCbCr component keys in the `ycc8` format this image is going to use. The `components` property of the color format returns an array containing the component keys in the format, in canonical order.
+To make the code a little more readable, we will give names to the three YCbCr component keys in the [`ycc8`](https://kelvin13.github.io/jpeg/JPEG/Common/ycc8/) format this image is going to use. The [`components`](https://kelvin13.github.io/jpeg/JPEG/Common/components/) property of the color format returns an array containing the component keys in the format, in canonical order.
 
 ```swift 
 let format:JPEG.Common              = .ycc8
@@ -682,9 +682,9 @@ let Y:JPEG.Component.Key            = format.components[0],
     Cr:JPEG.Component.Key           = format.components[2]
 ```
 
-Note that if the format case was `y8`, then we would only be able to subscript up to index `0`. There is also no guarantee that `components[0]` is the same in all cases, though for `y8` and `ycc8`, they are.
+Note that if the format case was [`y8`](https://kelvin13.github.io/jpeg/JPEG/Common/y8/), then we would only be able to subscript up to index `0`. There is also no guarantee that `components[0]` is the same in all cases, though for [`y8`](https://kelvin13.github.io/jpeg/JPEG/Common/y8/) and [`ycc8`](https://kelvin13.github.io/jpeg/JPEG/Common/ycc8/), they are.
 
-We begin to initialize a `JPEG.Layout` structure just as we did in the [basic encoding](#basic-encoding) tutorial, only this time we specify the `progressive(coding:differential:)` coding process. The only supported values for the `coding:` and `differential:` parameters are `huffman` and `false`, respectively, but they are defined because other library APIs can still recognize images using arithmetic (`arithmetic`) coding and hierarchical (differential) modes of operation.
+We begin to initialize a [`JPEG.Layout`](https://kelvin13.github.io/jpeg/JPEG/Layout/) structure just as we did in the [basic encoding](#basic-encoding) tutorial, only this time we specify the [`progressive(coding:differential:)`](https://kelvin13.github.io/jpeg/JPEG/Process/progressive%28coding:differential:%29/) coding process. The only supported values for the `coding` and `differential` parameters are [`huffman`](https://kelvin13.github.io/jpeg/JPEG/Process/Coding/huffman/) and `false`, respectively, but they are defined because other library APIs can still recognize images using arithmetic ([`arithmetic`](https://kelvin13.github.io/jpeg/JPEG/Process/Coding/arithmetic/)) coding and hierarchical (differential) modes of operation.
 
 ```swift 
 let layout:JPEG.Layout<JPEG.Common> = .init(
@@ -698,13 +698,13 @@ let layout:JPEG.Layout<JPEG.Common> = .init(
     ], 
 ```
 
-The scan progression rules for progressive JPEGs are different than for sequential (`baseline` or `extended(coding:differential:)`) JPEGs. A sequential scan encodes all bits (0 to infinity) of all coefficients (0 to 63) for each channel, and are always allowed to contain multiple channels. A progressive scan subsets bits in a process called **successive approximation**, and coefficients in a process called **spectral selection**. (In an analogy to signal processing, a coefficient subset is also called a **band**.) Only progressive scans which encode the DC coefficient only (band indices `0 ..< 1`) are allowed to encode multiple channels.
+The scan progression rules for progressive JPEGs are different than for sequential ([`baseline`](https://kelvin13.github.io/jpeg/JPEG/Process/baseline/) or [`extended(coding:differential:)`](https://kelvin13.github.io/jpeg/JPEG/Process/extended%28coding:differential:%29/)) JPEGs. A sequential scan encodes all bits (0 to infinity) of all coefficients (0 to 63) for each channel, and are always allowed to contain multiple channels. A progressive scan subsets bits in a process called **successive approximation**, and coefficients in a process called **spectral selection**. (In an analogy to signal processing, a coefficient subset is also called a **band**.) Only progressive scans which encode the DC coefficient only (band indices `0 ..< 1`) are allowed to encode multiple channels.
 
 Progressive scans using successive approximation can be either **initial scans** or **refining scans**. An initial scan encodes all the bits from some starting index to infinity. A refining scan encodes a single bit. One valid successive approximation sequence is `(3..., 2 ..< 3, 1 ..< 2, 0 ..< 1)`, which contains one initial scan, and three refining scans. It is possible for there to be no refining scans, in which case, the initial scan will simply encode bits `0...`.
 
 The progressive coding process is not backwards compatible with the sequential processes — progressive images always have to encode AC bands and the DC coefficient in separate scans, so a sequential scan, which contains coefficients 0 through 63, is not a valid progressive scan. It would have to be broken up into a scan encoding coefficient 0, and at least one scan encoding coefficients 1 through 63.
 
-There are several more rules that have to be followed, or else the `JPEG.Layout` initializer will suffer a [precondition failure](https://developer.apple.com/documentation/swift/1539374-preconditionfailure):
+There are several more rules that have to be followed, or else the [`JPEG.Layout`](https://kelvin13.github.io/jpeg/JPEG/Layout/) initializer will suffer a [precondition failure](https://developer.apple.com/documentation/swift/1539374-preconditionfailure):
 
 * The first scan for a particular component must be an initial DC scan, which can be interleaved with other components.
 * Refining DC scans can be interleaved, but not refining AC scans.
@@ -738,27 +738,27 @@ The following is an example of a valid scan progression, which we will be using 
 
 The library provides four progressive scan header constructors:
 
-1. `progressive(_:... bits:)`
+1. [`progressive(...:bits:)`](https://kelvin13.github.io/jpeg/JPEG/Header/Scan/progressive%28...:bits:%29/)
 
  Returns an initial DC scan header. The variadic argument takes tuples of component keys and huffman table selectors; components with the same huffman table selector will share the same huffman table.
 
-2. `progressive(_:... bit:)`
+2. [`progressive(...:bit:)`](https://kelvin13.github.io/jpeg/JPEG/Header/Scan/progressive%28...:bit:%29/)
 
  Returns a refining DC scan header. The variadic argument takes scalar component keys with no huffman table selectors, because refining DC scans do not use entropy coding.
 
-3. `progressive(_:band:bits:)`
+3. [`progressive(_:band:bits:)`](https://kelvin13.github.io/jpeg/JPEG/Header/Scan/progressive%28_:band:bits:%29/)
 
  Returns an initial AC scan header. For flexibility, you can specify the huffman table selector you want the scan in the encoded JPEG file to use, though this will have no discernable effect on image compression.
 
-4. `progressive(_:band:bit:)`
+4. [`progressive(_:band:bit:)`](https://kelvin13.github.io/jpeg/JPEG/Header/Scan/progressive%28_:band:bit:%29/)
 
  Returns a refining AC scan header. The huffman table selector has the same significance that it does in the initial AC scan headers.
 
-All the scan header constructors, including `sequential(_:... )` return the same type, `JPEG.Header.Scan`, but using a sequential constructor to define a scan for a progressive image will always produce an error.
+All the scan header constructors, including [`sequential(...:)`](https://kelvin13.github.io/jpeg/JPEG/Header/Scan/sequential%28...:%29/) return the same type, [`JPEG.Header.Scan`](https://kelvin13.github.io/jpeg/JPEG/Header/Scan/), but using a sequential constructor to define a scan for a progressive image will always produce an error.
 
 When you initialize a layout, it will automatically assign quantization tables to table selectors and generate the sequence of JPEG declarations needed to associate the right table resources with the right scans. This can sometimes fail (with a fatal error) if the scan progression you provided requires more tables to be referenced at once than there are selectors for them to be attached to. The lifetime of a table extends from the first scan that contains a component using it, to the last scan containing such a component. (It does not have to be the same component.) 
 
-Just as with the limits on the number of simultaneously referenced huffman tables, the `baseline` coding process allows for up to two simultaneously referenced quantization tables, while all other coding processes allow for up to four. In practice, since each component can only use one quantization table, the total number of quantization tables in a JPEG image can never exceed the number of components in the image, so these limitations are rarely encountered.
+Just as with the limits on the number of simultaneously referenced huffman tables, the [`baseline`](https://kelvin13.github.io/jpeg/JPEG/Process/baseline) coding process allows for up to two simultaneously referenced quantization tables, while all other coding processes allow for up to four. In practice, since each component can only use one quantization table, the total number of quantization tables in a JPEG image can never exceed the number of components in the image, so these limitations are rarely encountered.
 
 We can view the generated declarations and selector assignments with the following code: 
 
@@ -829,15 +829,15 @@ let rectangular:JPEG.Data.Rectangular<JPEG.Common> =
 
 Here, we have stored a string encoded as [UTF-8](https://en.wikipedia.org/wiki/UTF-8) data into the comment body. The text encoding is irrelevant to JPEG, but many metadata viewers will display JPEG comments as UTF-8 text, so this is how we will store it.
 
-When we created the rectangular data structure, we used the `pack(size:layout:metadata:pixels:)` constructor, but we could also have used the regular `init(size:layout:metadata:values:)` initializer, which takes a `[UInt16]` array of (row-major) interleaved color samples. This initializer assumes you already have the image data stored in the right order and format, so it’s a somewhat lower-level API.
+When we created the rectangular data structure, we used the [`pack(size:layout:metadata:pixels:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/pack%28size:layout:metadata:pixels:%29/) constructor, but we could also have used the regular [`init(size:layout:metadata:values:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/init%28size:layout:metadata:values:%29/) initializer, which takes a `[UInt16]` array of (row-major) interleaved color samples. This initializer assumes you already have the image data stored in the right order and format, so it’s a somewhat lower-level API.
 
-The next step is to convert the rectangular data into planar data. The method which returns the planar representation is the `decomposed()` method.
+The next step is to convert the rectangular data into planar data. The method which returns the planar representation is the [`decomposed()`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/decompose%28%29/) method.
 
 ```swift 
 let planar:JPEG.Data.Planar<JPEG.Common> = rectangular.decomposed()
 ```
 
-If the image layout uses subsampling, this method will downsample the image data with a basic box filter for the appropriate image planes. There is no concept of cositing or centering when downsampling, so this method takes no arguments. The box filter the library applies is a pretty bad low-pass filter, so it may be beneficial for you to implement your own subsampling filter and construct the planar data structure “manually” if you are trying to squeeze some extra quality into a subsampled JPEG. The `init(size:layout:metadata:initializingWith:)` initializer can be used for this. It has the following signature:
+If the image layout uses subsampling, this method will downsample the image data with a basic box filter for the appropriate image planes. There is no concept of cositing or centering when downsampling, so this method takes no arguments. The box filter the library applies is a pretty bad low-pass filter, so it may be beneficial for you to implement your own subsampling filter and construct the planar data structure “manually” if you are trying to squeeze some extra quality into a subsampled JPEG. The [`init(size:layout:metadata:initializingWith:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Planar/init%28size:layout:metadata:initializingWith:%29/) initializer can be used for this. It has the following signature:
 
 ```swift 
 init(size:(x:Int, y:Int), 
@@ -849,9 +849,9 @@ init(size:(x:Int, y:Int),
 
 The first closure argument is the component index (also the plane index), the second closure argument is the dimensions of the plane in 8x8 unit blocks, the third closure argument is the sampling factor of the plane, and the last closure argument is the uninitialized (row-major) plane buffer. It stores 64*XY* elements, where (*X*,&nbsp;*Y*) are the dimensions of the plane in unit blocks.
 
-The `JPEG.Data.Planar` type also has a plain `init(size:layout:metadata:)` initializer with no data argument which initializes all planes to a neutral color. You can read and modify sample values through the 2D subscript `[x:y:]` available on the plane type. 
+The [`JPEG.Data.Planar`](https://kelvin13.github.io/jpeg/JPEG/Data/Planar/) type also has a plain [`init(size:layout:metadata:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Planar/init%28size:layout:metadata:%29/) initializer with no data argument which initializes all planes to a neutral color. You can read and modify sample values through the 2D subscript [`[x:y:]`](https://kelvin13.github.io/jpeg/JPEG/Data/Planar/Plane/[x:y:]/) available on the plane type. 
 
-To convert the planar data to spectral representation, we have to do a **forward frequency transform** (or **f**orward **d**iscrete **c**osine **t**ransform) using the `fdct(quanta:)` method. It is at this point where you have to provide the actual quantum values for each quantization table used in the image. In the [basic encoding](#basic-encoding) tutorial, we used the parameterized quality API to generate quantum values for us, but you can also specify the quanta yourself. Usually, it’s a good idea to pick smaller values for the earlier coefficients, and larger values for the later coefficients.
+To convert the planar data to spectral representation, we have to do a **forward frequency transform** (or **f**orward **d**iscrete **c**osine **t**ransform) using the [`fdct(quanta:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Planar/fdct%28quanta:%29/) method. It is at this point where you have to provide the actual quantum values for each quantization table used in the image. In the [basic encoding](#basic-encoding) tutorial, we used the parameterized quality API to generate quantum values for us, but you can also specify the quanta yourself. Usually, it’s a good idea to pick smaller values for the earlier coefficients, and larger values for the later coefficients.
 
 ```swift 
 let spectral:JPEG.Data.Spectral<JPEG.Common> = planar.fdct(quanta:     
@@ -861,7 +861,7 @@ let spectral:JPEG.Data.Spectral<JPEG.Common> = planar.fdct(quanta:
     ])
 ```
 
-Like the `JPEG.Data.Planar` type, the `JPEG.Data.Spectral` type has a plain `init(size:layout:metadata:quanta:)` initializer which initializes all AC coefficients to zero, and all DC coefficients to a neutral gray.
+Like the [`JPEG.Data.Planar`](https://kelvin13.github.io/jpeg/JPEG/Data/Planar/) type, the [`JPEG.Data.Spectral`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/) type has a plain [`init(size:layout:metadata:quanta:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/init%28size:layout:metadata:quanta:%29/) initializer which initializes all coefficients to zero.
     
 We can use the file system-aware compression API to encode the image and write it to disk.
 
