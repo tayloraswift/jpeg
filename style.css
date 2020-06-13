@@ -202,6 +202,7 @@ nav li.github-icon-container a
     display: inline-block;
     padding: 4px;
     border: 1px solid transparent;
+    line-height: 0;
 }
 nav li.github-icon-container a:hover 
 {
@@ -362,4 +363,16 @@ a
     {
         border: none;
     }
+}
+
+/* 404 page */ 
+.introduction .error-404-message > *
+{
+    text-align: center;
+    padding-left: 0;
+    padding-right: 0;
+}
+.introduction .error-404-message 
+{
+    border-bottom: none;
 }
