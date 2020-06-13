@@ -12,8 +12,6 @@ body
     background-color: #f4f4f4;
     color: #222222;
     padding-bottom: 8em;
-    
-    text-underline-offset: 0.3em;
 }
 nav 
 {
@@ -57,7 +55,6 @@ h3
 .topic-required, .topic-symbol-required
 {
     font-size: 1.05em;
-    /* text-underline-offset: 0.3em; */
     color: #555555;
 }
 
@@ -80,7 +77,6 @@ code.declaration > * , code.signature > *
 {
     font-size: 1.33em;
     line-height: 1.33em;
-    /* text-underline-offset: 0.3em; */
 }
 code span.signature-group, code span.syntax-group
 {
@@ -89,13 +85,11 @@ code span.signature-group, code span.syntax-group
 }
 code span.signature-group:after
 {
-    content: '\200b';
-    letter-spacing: 0.2em;
+    content: '\2006';
 }
 code span.signature-group:last-child:after
 {
-    content: '';
-    letter-spacing: 0;
+    content: none;
 }
 code.signature, code.declaration 
 {
@@ -106,10 +100,6 @@ code.signature, code.declaration
 code .syntax-keyword, code .signature-highlight, p a
 {
     color: #ff4086;
-}
-code.signature a span
-{
-    text-decoration-color: #ff4086;
 }
 code.signature a
 {
@@ -134,13 +124,11 @@ code .syntax-punctuation
 
 code span.syntax-group:after
 {
-    content: '\200b';
-    letter-spacing: 0.175em;
+    content: '\2006';
 }
 code span.syntax-group:last-child:after
 {
     content: '';
-    letter-spacing: 0;
 }
 
 code .syntax-whitespace 
@@ -158,24 +146,12 @@ code .syntax-punctuation
 
 code .signature-punctuation:before, code .signature-punctuation:after
 {
-    content: '\200b';
-}
-code .signature-punctuation:before, code .signature-punctuation:after
-{
-    letter-spacing: 0.15em;
+    content: '\2009';
 }
 
-a
-{
-    text-decoration: none;
-}
 a:focus 
 {
     outline-style: dashed;
-}
-a:hover, a:hover span
-{
-    text-decoration: underline;
 }
 code a.syntax-type
 {
@@ -326,21 +302,64 @@ p code
 {
     wrap: pre;
     margin: 0 0.15em;
-    /* padding: 0.05em 0.4em 0.15em; */
     letter-spacing: 0.025em;
-    /* background-color: rgba(255, 88, 0, 0.03); */
-    /* border-radius: 0.5em; */
-    text-decoration: underline;
-    text-decoration-style: dashed;
-    
     color: #444444;
-}
-p code a 
-{
-    text-decoration: underline;
-    text-decoration-style: dashed;
 }
 p strong 
 {
     font-weight: 600;
+}
+
+/* underlining */
+a
+{
+    text-decoration: none;
+}
+@supports (text-decoration-thickness: 1px) and (text-underline-offset: 0.3em)
+{
+    body 
+    {
+        text-underline-offset: 0.3em;
+        text-decoration-thickness: 1px;
+    }
+    a:hover, a:hover span
+    {
+        text-decoration: underline;
+    }
+    /* makes all signature underlines pink, even the gray parts */
+    code.signature a span
+    {
+        text-decoration-color: #ff4086;
+    }
+    /* underline style for inline code */
+    p code, p code a
+    {
+        text-decoration: underline;
+        text-decoration-style: dashed;
+    }
+}
+@supports not ((text-decoration-thickness: 1px) and (text-underline-offset: 0.3em)) 
+{
+    a:hover, a:hover span 
+    {
+        border-bottom: 1px solid;
+    }
+    code.signature a:hover span
+    {
+        text-decoration: none;
+        border: none;
+    }
+    code.signature a:hover 
+    {
+        border-bottom: 1px solid #ff4086;
+    }
+    p code, p code a
+    {
+        border-bottom: 1px dashed;
+    }
+    /* prevent github icon from getting second border */
+    nav li.github-icon-container a:hover span 
+    {
+        border: none;
+    }
 }
