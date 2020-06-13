@@ -91,7 +91,7 @@ protocol _JPEGColor
 }
 
 /// enum JPEG 
-///     A library namespace containing all JPEG-related APIs. 
+///     A namespace for JPEG-related functionality. 
 /// #  [Color spaces](color-space-apis)
 /// #  [Image metadata](metadata-types)
 /// #  [Image headers](header-types-and-namespace)

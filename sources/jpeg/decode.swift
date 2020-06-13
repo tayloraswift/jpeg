@@ -1380,6 +1380,12 @@ extension JPEG.Data
     ///     The spectral representation is a lossless representation. JPEG 
     ///     images that have been decoded to this representation can be re-encoded 
     ///     without loss of information or compression.
+    /// #  [Creating an image](spectral-create-image)
+    /// #  [Saving an image](spectral-save-image)
+    /// #  [Querying an image](spectral-query-image)
+    /// #  [Editing an image](spectral-edit-image)
+    /// #  [Changing representations](spectral-change-representation)
+    /// #  [Accessing planes](spectral-accessing-planes)
     /// #  [See also](image-data-types)
     /// ## (image-data-types)
     /// ## (image-data-types-and-namespace)
@@ -1472,6 +1478,8 @@ extension JPEG.Data
         ///     The size of this image, in pixels. 
         /// 
         ///     In general, this size is not the same as the size of the image planes.
+        /// #  [See also](spectral-query-image)
+        /// ## (0:spectral-query-image)
         public private(set)
         var size:(x:Int, y:Int), 
         /// var JPEG.Data.Spectral.blocks   : (x:Swift.Int, y:Swift.Int) { get }
@@ -1480,18 +1488,26 @@ extension JPEG.Data
         /// 
         ///     The size of the minimum-coded unit, in 8×8 blocks of pixels, 
         ///     is given by [`layout``(Layout).scale`]. 
+        /// #  [See also](spectral-query-image)
+        /// ## (1:spectral-query-image)
             blocks:(x:Int, y:Int)
         /// var JPEG.Data.Spectral.layout   : JPEG.Layout<Format> { get }
         ///     The layout of this image.
+        /// #  [See also](spectral-query-image)
+        /// ## (2:spectral-query-image)
         public private(set)
         var layout:JPEG.Layout<Format>
         /// var JPEG.Data.Spectral.metadata : [JPEG.Metadata]
         ///     The metadata records in this image.
+        /// #  [See also](spectral-query-image)
+        /// ## (4:spectral-query-image)
         public 
         var metadata:[JPEG.Metadata]
         
         /// var JPEG.Data.Spectral.quanta   : Quanta { get }
         ///     The quantization tables used by this image.
+        /// #  [See also](spectral-query-image)
+        /// ## (3:spectral-query-image)
         public private(set) 
         var quanta:Quanta
         private 
@@ -1511,6 +1527,11 @@ extension JPEG.Data
     ///     transformation* to a spectral image. It can be converted back into a spectral 
     ///     image (with some floating point error) with a *forward discrete cosine 
     ///     transformation*.
+    /// #  [Creating an image](planar-create-image)
+    /// #  [Saving an image](planar-save-image)
+    /// #  [Querying an image](planar-query-image)
+    /// #  [Changing representations](planar-change-representation)
+    /// #  [Accessing planes](planar-accessing-planes)
     /// #  [See also](image-data-types)
     /// ## (image-data-types)
     /// ## (image-data-types-and-namespace)
@@ -1575,14 +1596,20 @@ extension JPEG.Data
         ///     The size of this image, in pixels. 
         /// 
         ///     In general, this size is not the same as the size of the image planes.
+        /// #  [See also](planar-query-image)
+        /// ## (planar-query-image)
         public 
         let size:(x:Int, y:Int)
         /// let JPEG.Data.Planar.layout     : JPEG.Layout<Format>
         ///     The layout of this image.
+        /// #  [See also](planar-query-image)
+        /// ## (planar-query-image)
         public 
         let layout:JPEG.Layout<Format>, 
         /// let JPEG.Data.Planar.metadata   : [JPEG.Metadata]
         ///     The metadata records in this image.
+        /// #  [See also](planar-query-image)
+        /// ## (planar-query-image)
             metadata:[JPEG.Metadata]
         
         private 
@@ -1607,6 +1634,11 @@ extension JPEG.Data
     ///     giving a rectangular array of interleaved samples.
     /// 
     ///     It can be unpacked to various color targets to get a pixel color array.
+    /// #  [Creating an image](rectangular-create-image)
+    /// #  [Saving an image](rectangular-save-image)
+    /// #  [Querying an image](rectangular-query-image)
+    /// #  [Changing representations](rectangular-change-representation)
+    /// #  [Accessing samples](rectangular-accessing-samples)
     /// #  [See also](image-data-types)
     /// ## (image-data-types)
     /// ## (image-data-types-and-namespace)
@@ -1615,13 +1647,19 @@ extension JPEG.Data
     {
         /// let JPEG.Data.Rectangular.size      : (x:Swift.Int, y:Swift.Int)
         ///     The size of this image, in pixels. 
+        /// #  [See also](rectangular-query-image)
+        /// ## (rectangular-query-image)
         public 
         let size:(x:Int, y:Int), 
         /// let JPEG.Data.Rectangular.layout    : JPEG.Layout<Format>
         ///     The layout of this image.
+        /// #  [See also](rectangular-query-image)
+        /// ## (rectangular-query-image)
             layout:JPEG.Layout<Format>, 
         /// let JPEG.Data.Rectangular.metadata  : [JPEG.Metadata]
         ///     The metadata records in this image.
+        /// #  [See also](rectangular-query-image)
+        /// ## (rectangular-query-image)
             metadata:[JPEG.Metadata]
         
         var values:[UInt16]
@@ -1631,6 +1669,8 @@ extension JPEG.Data
         ///     This value is analogous to the plane `count` of a planar or spectral image.
         ///     For example, the rectangular representation of a planar YCbCr image
         ///     with 3 planes would have a stride of 3.
+        /// #  [See also](rectangular-accessing-samples)
+        /// ## (1:rectangular-accessing-samples)
         public 
         var stride:Int 
         {
@@ -1655,6 +1695,8 @@ extension JPEG.Data
         ///     Each [`Swift.UInt16`] is one sample. The samples should not be 
         ///     normalized, so an image with a [`layout``(Layout).format``(Format).precision`] of 
         ///     8 should only have samples in the range `0 ... 255`. 
+        /// #  [See also](rectangular-create-image)
+        /// ## (0:rectangular-create-image)
         public 
         init(size:(x:Int, y:Int), 
             layout:JPEG.Layout<Format>, 
@@ -1798,6 +1840,8 @@ extension JPEG.Data.Spectral:RandomAccessCollection
     ///     The index of the first plane in this image. 
     /// 
     ///     This index is always 0.
+    /// #  [See also](spectral-accessing-planes)
+    /// ## (1:spectral-accessing-planes)
     public 
     var startIndex:Int 
     {
@@ -1809,6 +1853,8 @@ extension JPEG.Data.Spectral:RandomAccessCollection
     /// 
     ///     This index is always the number of recognized components in the image’s 
     ///     [`layout``(JPEG.Layout).format`].
+    /// #  [See also](spectral-accessing-planes)
+    /// ## (2:spectral-accessing-planes)
     public 
     var endIndex:Int 
     {
@@ -1825,6 +1871,8 @@ extension JPEG.Data.Spectral:RandomAccessCollection
     ///     bounds of this [`Swift.RandomAccessCollection`].
     /// - ->    : Plane
     ///     The plane.
+    /// #  [See also](spectral-accessing-planes)
+    /// ## (0:spectral-accessing-planes)
     public 
     subscript(p:Int) -> Plane 
     {
@@ -1846,6 +1894,8 @@ extension JPEG.Data.Spectral:RandomAccessCollection
     /// - ->    : Swift.Int? 
     ///     The integer index of the plane, or `nil`. If not `nil`, this index 
     ///     can be used with the [`[_:]`] subscript.
+    /// #  [See also](spectral-accessing-planes)
+    /// ## (3:spectral-accessing-planes)
     public 
     func index(forKey ci:JPEG.Component.Key) -> Int? 
     {
@@ -1859,6 +1909,8 @@ extension JPEG.Data.Planar:RandomAccessCollection
     ///     The index of the first plane in this image. 
     /// 
     ///     This index is always 0.
+    /// #  [See also](planar-accessing-planes)
+    /// ## (1:planar-accessing-planes)
     public 
     var startIndex:Int 
     {
@@ -1870,6 +1922,8 @@ extension JPEG.Data.Planar:RandomAccessCollection
     /// 
     ///     This index is always the number of recognized components in the image’s 
     ///     [`layout``(JPEG.Layout).format`].
+    /// #  [See also](planar-accessing-planes)
+    /// ## (2:planar-accessing-planes)
     public 
     var endIndex:Int 
     {
@@ -1886,6 +1940,8 @@ extension JPEG.Data.Planar:RandomAccessCollection
     ///     bounds of this [`Swift.RandomAccessCollection`].
     /// - ->    : Plane
     ///     The plane.
+    /// #  [See also](planar-accessing-planes)
+    /// ## (0:planar-accessing-planes)
     public 
     subscript(p:Int) -> Plane 
     {
@@ -1907,6 +1963,8 @@ extension JPEG.Data.Planar:RandomAccessCollection
     /// - ->    : Swift.Int? 
     ///     The integer index of the plane, or `nil`. If not `nil`, this index 
     ///     can be used with the [`[_:]`] subscript.
+    /// #  [See also](planar-accessing-planes)
+    /// ## (3:planar-accessing-planes)
     public 
     func index(forKey ci:JPEG.Component.Key) -> Int? 
     {
@@ -1927,6 +1985,8 @@ extension JPEG.Data.Rectangular
     ///     plane index in the planar image representations.
     /// - ->: Swift.UInt16 
     ///     The sample.
+    /// #  [See also](rectangular-accessing-samples)
+    /// ## (0:rectangular-accessing-samples)
     public 
     subscript(x x:Int, y y:Int, p:Int) -> UInt16 
     {
@@ -1948,6 +2008,8 @@ extension JPEG.Data.Rectangular
     /// - ->    : Swift.Int? 
     ///     The interleaved offset of the channel, or `nil`. If not `nil`, this offset 
     ///     can be used as the `p` parameter to the [`[x:y:p:]`] subscript.
+    /// #  [See also](rectangular-accessing-samples)
+    /// ## (2:rectangular-accessing-samples)
     public 
     func offset(forKey ci:JPEG.Component.Key) -> Int? 
     {
@@ -2000,6 +2062,8 @@ extension JPEG.Data.Spectral
     ///     Its return value is the return value of the surrounding function.
     /// - ->    : R 
     ///     The return value of the given closure.
+    /// #  [See also](spectral-accessing-planes)
+    /// ## (4:spectral-accessing-planes)
     public 
     func read<R>(ci:JPEG.Component.Key, 
         _ body:(Plane, JPEG.Table.Quantization) throws -> R) 
@@ -2029,6 +2093,8 @@ extension JPEG.Data.Spectral
     ///     Its return value is the return value of the surrounding function.
     /// - ->    : R 
     ///     The return value of the given closure.
+    /// #  [See also](spectral-accessing-planes)
+    /// ## (5:spectral-accessing-planes)
     public mutating 
     func with<R>(ci:JPEG.Component.Key, 
         _ body:(inout Plane, JPEG.Table.Quantization) throws -> R) 
@@ -2055,6 +2121,8 @@ extension JPEG.Data.Planar
     ///     Its return value is the return value of the surrounding function.
     /// - ->    : R 
     ///     The return value of the given closure.
+    /// #  [See also](planar-accessing-planes)
+    /// ## (4:planar-accessing-planes)
     public 
     func read<R>(ci:JPEG.Component.Key, 
         body:(Plane) throws -> R) 
@@ -2081,6 +2149,8 @@ extension JPEG.Data.Planar
     ///     Its return value is the return value of the surrounding function.
     /// - ->    : R 
     ///     The return value of the given closure.
+    /// #  [See also](planar-accessing-planes)
+    /// ## (5:planar-accessing-planes)
     public mutating 
     func with<R>(ci:JPEG.Component.Key, 
         body:(inout Plane) throws -> R) 
@@ -2333,6 +2403,8 @@ extension JPEG.Data.Spectral
     ///     for that bit width.
     /// 
     ///     Passing an invalid quanta dictionary will result in a precondition failure.
+    /// #  [See also](spectral-create-image)
+    /// ## (0:spectral-create-image)
     public 
     init(size:(x:Int, y:Int), layout:JPEG.Layout<Format>, 
         metadata:[JPEG.Metadata], 
@@ -2374,6 +2446,8 @@ extension JPEG.Data.Spectral
     ///     The new width of this image, in pixels. This width is measured from the 
     ///     left side of the image. Passing a negative or zero value will result 
     ///     in a precondition failure.
+    /// #  [See also](spectral-edit-image)
+    /// ## (spectral-edit-image)
     public mutating 
     func set(width x:Int) 
     {
@@ -2400,6 +2474,8 @@ extension JPEG.Data.Spectral
     ///     The new height of this image, in pixels. This height is measured from the 
     ///     top of the image. Passing a negative value will result 
     ///     in a precondition failure.
+    /// #  [See also](spectral-edit-image)
+    /// ## (spectral-edit-image)
     public mutating 
     func set(height y:Int) 
     {
@@ -2424,6 +2500,8 @@ extension JPEG.Data.Spectral
     ///     tables created from these values will be encoded using integers with a bit width
     ///     determined by this image’s [`layout``(Layout).format``(JPEG.Format).precision`],
     ///     and all the values must be in the correct range for that bit width.
+    /// #  [See also](spectral-edit-image)
+    /// ## (spectral-edit-image)
     public mutating 
     func set(quanta:[JPEG.Table.Quantization.Key: [UInt16]])
     {
@@ -2506,6 +2584,8 @@ extension JPEG.Data.Planar
     ///     samples in the plane, in row-major order. This buffer contains 
     ///     64\ *x*\ *y* samples, where (*x*,\ *y*) is the size of the plane, 
     ///     in data units.
+    /// #  [See also](planar-create-image)
+    /// ## (0:planar-create-image)
     public 
     init(size:(x:Int, y:Int), layout:JPEG.Layout<Format>, metadata:[JPEG.Metadata], 
         initializingWith initializer:
@@ -2554,6 +2634,8 @@ extension JPEG.Data.Planar
     ///     The layout of the image.
     /// - metadata      : [JPEG.Metadata]
     ///     The metadata records in the image.
+    /// #  [See also](planar-create-image)
+    /// ## (1:planar-create-image)
     public 
     init(size:(x:Int, y:Int), layout:JPEG.Layout<Format>, metadata:[JPEG.Metadata])
     {
@@ -2580,6 +2662,8 @@ extension JPEG.Data.Rectangular
     ///     The layout of the image.
     /// - metadata      : [JPEG.Metadata]
     ///     The metadata records in the image.
+    /// #  [See also](rectangular-create-image)
+    /// ## (1:rectangular-create-image)
     public 
     init(size:(x:Int, y:Int), layout:JPEG.Layout<Format>, metadata:[JPEG.Metadata])
     {
@@ -4060,6 +4144,8 @@ extension JPEG.Data.Spectral
     ///     Converts this spectral image into its planar, spatial representation. 
     /// - ->    : JPEG.Data.Planar<Format> 
     ///     The output of an inverse discrete cosine transform performed on this image.
+    /// #  [See also](spectral-change-representation)
+    /// ## (0:spectral-change-representation)
     public 
     func idct() -> JPEG.Data.Planar<Format> 
     {
@@ -4086,6 +4172,8 @@ extension JPEG.Data.Planar
     /// - ->    : JPEG.Data.Rectangular<Format> 
     ///     A rectangular image created by upsampling all planes in the input to 
     ///     the same sampling factor.
+    /// #  [See also](planar-change-representation)
+    /// ## (0:planar-change-representation)
     public 
     func interleaved(cosite cosited:Bool = false) -> JPEG.Data.Rectangular<Format> 
     {
@@ -4194,6 +4282,8 @@ extension JPEG.Data.Rectangular
     ///     The color target.
     /// - ->: [Color]
     ///     A row-major array containing pixels of the image in the specified color space.
+    /// #  [See also](rectangular-change-representation)
+    /// ## (0:rectangular-change-representation)
     @_specialize(where Color == JPEG.YCbCr, Format == JPEG.Common)
     @_specialize(where Color == JPEG.RGB, Format == JPEG.Common)
     public 
@@ -4215,6 +4305,8 @@ extension JPEG.Data.Spectral
     ///     A source bytestream.
     /// - ->        : Self
     ///     The decompressed image.
+    /// #  [See also](spectral-create-image)
+    /// ## (1:spectral-create-image)
     public static 
     func decompress<Source>(stream:inout Source) throws -> Self
         where Source:JPEG.Bytestream.Source 
@@ -4236,6 +4328,8 @@ extension JPEG.Data.Planar
     ///     A source bytestream.
     /// - ->        : Self
     ///     The decompressed image.
+    /// #  [See also](planar-create-image)
+    /// ## (2:planar-create-image)
     public static 
     func decompress<Source>(stream:inout Source) throws -> Self
         where Source:JPEG.Bytestream.Source 
@@ -4263,6 +4357,8 @@ extension JPEG.Data.Rectangular
     ///     The default value is `false`.
     /// - ->        : Self
     ///     The decompressed image.
+    /// #  [See also](rectangular-create-image)
+    /// ## (3:rectangular-create-image)
     public static 
     func decompress<Source>(stream:inout Source, cosite cosited:Bool = false) throws -> Self
         where Source:JPEG.Bytestream.Source 

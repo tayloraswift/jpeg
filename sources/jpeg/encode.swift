@@ -342,6 +342,8 @@ extension JPEG.Data.Planar
     ///     and all the values must be in the correct range for that bit width.
     /// - ->    : JPEG.Data.Spectral<Format> 
     ///     The output of a forward discrete cosine transform performed on this image.
+    /// #  [See also](planar-change-representation)
+    /// ## (1:planar-change-representation)
     public 
     func fdct(quanta:[JPEG.Table.Quantization.Key: [UInt16]]) 
         -> JPEG.Data.Spectral<Format>
@@ -376,6 +378,8 @@ extension JPEG.Data.Rectangular
     /// - ->    : JPEG.Data.Planar<Format> 
     ///     A planar image created by resampling all components in the input 
     ///     according to their sampling factors in the image [`layout`].
+    /// #  [See also](rectangular-change-representation)
+    /// ## (1:rectangular-change-representation)
     public 
     func decomposed() -> JPEG.Data.Planar<Format>
     {
@@ -439,6 +443,8 @@ extension JPEG.Data.Rectangular
     ///     padding. The array must have exactly [`size`x`]\ ×\ [`size`y`] pixels.
     /// - ->        : Self 
     ///     A rectangular image.
+    /// #  [See also](rectangular-create-image)
+    /// ## (2:rectangular-create-image)
     @_specialize(where Color == JPEG.YCbCr, Format == JPEG.Common)
     @_specialize(where Color == JPEG.RGB, Format == JPEG.Common)
     public static 
@@ -471,6 +477,8 @@ extension JPEG.Data.Spectral
     ///     with a [`(JPEG.Header).HeightRedefinition`] header).
     /// - -> : JPEG.Header.Frame 
     ///     The encoded frame header.
+    /// #  [See also](spectral-change-representation)
+    /// ## (1:spectral-change-representation)
     public 
     func encode() -> JPEG.Header.Frame 
     {
@@ -1899,6 +1907,8 @@ extension JPEG.Data.Spectral
     ///     the outputted file, in the order they appear in the [`metadata`] array.
     /// - stream    : inout Destination 
     ///     A destination bytestream.
+    /// #  [See also](spectral-save-image)
+    /// ## (1:spectral-save-image)
     public 
     func compress<Destination>(stream:inout Destination) throws 
         where Destination:JPEG.Bytestream.Destination
@@ -1978,6 +1988,8 @@ extension JPEG.Data.Planar
     ///     tables created from these values will be encoded using integers with a bit width
     ///     determined by this image’s [`layout``(Layout).format``(JPEG.Format).precision`],
     ///     and all the values must be in the correct range for that bit width.
+    /// #  [See also](planar-save-image)
+    /// ## (0:planar-save-image)
     public 
     func compress<Destination>(stream:inout Destination, 
         quanta:[JPEG.Table.Quantization.Key: [UInt16]]) throws 
@@ -2008,6 +2020,8 @@ extension JPEG.Data.Rectangular
     ///     tables created from these values will be encoded using integers with a bit width
     ///     determined by this image’s [`layout``(Layout).format``(JPEG.Format).precision`],
     ///     and all the values must be in the correct range for that bit width.
+    /// #  [See also](rectangular-save-image)
+    /// ## (0:rectangular-save-image)
     public 
     func compress<Destination>(stream:inout Destination, 
         quanta:[JPEG.Table.Quantization.Key: [UInt16]]) throws 

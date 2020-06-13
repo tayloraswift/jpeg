@@ -1,5 +1,5 @@
 /// enum General 
-///     A namespace for general library utilities.
+///     A namespace for general functionality.
 /// #  [Range types](general-range-types)
 /// #  [Integer storage](general-storage-types)
 /// #  [See also](top-level-namespaces)

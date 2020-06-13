@@ -42,7 +42,9 @@ cd .entrapta/
 if ! [ -d entrapta ]; then
     git clone https://github.com/kelvin13/entrapta 
 else 
+    cd entrapta 
     git pull 
+    cd ..
 fi 
 
 cd entrapta/ 

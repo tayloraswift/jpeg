@@ -13,6 +13,7 @@
 /// 
 ///     These APIs are only available on MacOS and Linux. However, the rest of the 
 ///     framework is pure Swift and should support all Swift platforms.
+/// #  [File IO](system-file-io)
 /// #  [See also](top-level-namespaces)
 /// ## (2:top-level-namespaces)
 public 
@@ -20,6 +21,7 @@ enum System
 {
     /// enum System.File 
     ///     A namespace for file IO functionality.
+    /// ## (system-file-io)
     public
     enum File
     {
@@ -28,6 +30,7 @@ enum System
         /// struct System.File.Source
         /// :   JPEG.Bytestream.Source 
         ///     A type for reading data from files on disk.
+        /// ## (system-file-io)
         public
         struct Source
         {
@@ -38,6 +41,7 @@ enum System
         /// struct System.File.Destination
         /// :   JPEG.Bytestream.Destination
         ///     A type for writing data to files on disk.
+        /// ## (system-file-io)
         public 
         struct Destination 
         {
@@ -248,6 +252,8 @@ extension JPEG.Data.Spectral
     /// - ->        : Self?
     ///     The decompressed image, or `nil` if the file could not be opened at 
     ///     the given file path.
+    /// #  [See also](spectral-create-image)
+    /// ## (2:spectral-create-image)
     public static 
     func decompress(path:String) throws -> Self? 
     {
@@ -269,6 +275,8 @@ extension JPEG.Data.Spectral
     /// - ->        : Swift.Void?
     ///     A [`Swift.Void`] tuple, or `nil` if the file could not be opened at 
     ///     the given file path.
+    /// #  [See also](spectral-save-image)
+    /// ## (2:spectral-save-image)
     public 
     func compress(path:String) throws -> Void?
     {
@@ -291,6 +299,8 @@ extension JPEG.Data.Planar
     /// - ->        : Self?
     ///     The decompressed image, or `nil` if the file could not be opened at 
     ///     the given file path.
+    /// #  [See also](planar-create-image)
+    /// ## (3:planar-create-image)
     public static 
     func decompress(path:String) throws -> Self?
     {
@@ -325,6 +335,8 @@ extension JPEG.Data.Planar
     /// - ->        : Swift.Void?
     ///     A [`Swift.Void`] tuple, or `nil` if the file could not be opened at 
     ///     the given file path.
+    /// #  [See also](planar-save-image)
+    /// ## (1:planar-save-image)
     public 
     func compress(path:String, quanta:[JPEG.Table.Quantization.Key: [UInt16]]) throws 
         -> Void?
@@ -353,6 +365,8 @@ extension JPEG.Data.Rectangular
     /// - ->        : Self?
     ///     The decompressed image, or `nil` if the file could not be opened at 
     ///     the given file path.
+    /// #  [See also](rectangular-create-image)
+    /// ## (4:rectangular-create-image)
     public static 
     func decompress(path:String, cosite cosited:Bool = false) throws -> Self? 
     {
@@ -388,6 +402,8 @@ extension JPEG.Data.Rectangular
     /// - ->        : Swift.Void?
     ///     A [`Swift.Void`] tuple, or `nil` if the file could not be opened at 
     ///     the given file path.
+    /// #  [See also](rectangular-save-image)
+    /// ## (1:rectangular-save-image)
     public 
     func compress(path:String, quanta:[JPEG.Table.Quantization.Key: [UInt16]]) throws 
         -> Void?
