@@ -15,9 +15,7 @@ jobs:
     # uses .swift-version
     - uses: YOCKOW/Action-setup-swift@master
       
-    - run: | 
-        swift build -c release --product documentation-generator
-        .build/release/documentation-generator sources/jpeg/*.swift --url-prefix https://kelvin13.github.io/jpeg --github https://github.com/kelvin13/jpeg
+    - run: utils/generate-documentation
     
     - uses: JamesIves/github-pages-deploy-action@releases/v3
       with:

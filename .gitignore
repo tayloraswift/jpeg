@@ -7,3 +7,4 @@
 /tests/integration/decode/*.rgb
 /tests/integration/encode/*.jpg
 /documentation
+/.entrapta
