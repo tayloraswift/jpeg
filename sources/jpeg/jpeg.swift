@@ -94,9 +94,14 @@ protocol _JPEGColor
 ///     A library namespace containing all JPEG-related APIs. 
 /// #  [Color spaces](color-space-apis)
 /// #  [Image metadata](metadata-types)
-/// #  [Image tables](table-types-and-protocols)
 /// #  [Image headers](header-types-and-namespace)
+/// #  [Image tables](table-types-and-protocols)
+/// #  [Entropy coding](entropy-coding)
 /// #  [Image representations](image-data-types-and-namespace)
+/// #  [Data IO and file structure](lexing-and-formatting)
+/// #  [Image layout and decomposition](image-structure-and-decomposition)
+/// #  [Image quality](image-quality)
+/// #  [Manual decoding](manual-decoding)
 /// #  [Error handling](error-handling)
 /// #  [See also](top-level-namespaces)
 /// ## (0:top-level-namespaces)
@@ -605,6 +610,7 @@ extension JPEG
     ///     [`(Process.Coding).huffman`] entropy coding and the `differential` flag 
     ///     set to `false`.
     /// # [Coding processes](coding-processes)
+    /// ## (4:lexing-and-formatting)
     public 
     enum Process 
     {
@@ -669,6 +675,7 @@ extension JPEG
     
     /// enum JPEG.Marker 
     ///     A marker type indicator.
+    /// ## (3:lexing-and-formatting)
     public 
     enum Marker
     {
@@ -1021,6 +1028,7 @@ extension JPEG
             ///     in their numerical representation are written in **boldface**.
             /// #  [See also](key-types)
             /// ## (key-types)
+            /// ## (0:image-quality)
             public 
             struct Key:Hashable, Comparable  
             {
@@ -1067,6 +1075,7 @@ extension JPEG
 {
     /// struct JPEG.Component 
     ///     A color channel in an image.
+    /// ## (1:image-structure-and-decomposition)
     public 
     struct Component
     {
@@ -1089,6 +1098,7 @@ extension JPEG
         ///     representation are written in **boldface**.
         /// #  [See also](key-types)
         /// ## (key-types)
+        /// ## (2:image-structure-and-decomposition)
         public 
         struct Key:Hashable, Comparable 
         {
@@ -1116,11 +1126,13 @@ extension JPEG
     ///     This type contains essentially the same information as [`(JPEG).Header.Scan`], 
     ///     but has been validated against the global image parameters and has its 
     ///     component keys pre-resolved to integer indices.
+    /// ## (4:image-structure-and-decomposition)
     public 
     struct Scan
     {
         /// struct JPEG.Scan.Component 
         ///     A descriptor for a component encoded within a scan. 
+        /// ## (5:image-structure-and-decomposition)
         public 
         struct Component 
         {
@@ -1200,7 +1212,8 @@ extension JPEG
     /// # [Creating a layout](layout-creation)
     /// # [Image modes](layout-image-format)
     /// # [Component membership](layout-component-membership)
-    /// # [File structure](layout-image-structure)
+    /// # [Image structure](layout-image-structure)
+    /// ## (0:image-structure-and-decomposition)
     public 
     struct Layout<Format> where Format:JPEG.Format 
     {
@@ -1840,6 +1853,8 @@ extension JPEG
     /// struct JPEG.Bitstream 
     /// :   Swift.ExpressibleByArrayLiteral
     ///     A padded bitstream.
+    /// #  [Symbol types](entropy-coding-symbols)
+    /// ## (0:entropy-coding)
     public 
     struct Bitstream 
     {

@@ -6,6 +6,9 @@
 ///     To implement a custom data source type, conform it to this protocol by 
 ///     implementing [`(Source).read(count:)`]. It can 
 ///     then be used with the library’s core decompression interfaces.
+/// #  [See also](file-io-protocols)
+/// ## (1:file-io-protocols)
+/// ## (1:lexing-and-formatting)
 public 
 protocol _JPEGBytestreamSource 
 {
@@ -31,6 +34,9 @@ extension JPEG
 {
     /// enum JPEG.Bytestream 
     ///     A namespace for bytestream utilities.
+    /// #  [File IO](file-io-protocols)
+    /// ## (0:file-io-protocols)
+    /// ## (0:lexing-and-formatting)
     public 
     enum Bytestream 
     {
@@ -185,6 +191,9 @@ extension JPEG.Bytestream.Source
 /// protocol JPEG.Bitstream.AnySymbol 
 /// :   Swift.Hashable 
 ///     Functionality common to all bitstream symbols.
+/// #  [Symbol types](entropy-coding-symbols)
+/// ## (3:entropy-coding-symbols)
+/// ## (4:entropy-coding)
 public 
 protocol _JPEGBitstreamAnySymbol:Hashable
 {
@@ -207,12 +216,18 @@ extension JPEG.Bitstream
     typealias AnySymbol = _JPEGBitstreamAnySymbol
     /// enum JPEG.Bitstream.Symbol
     ///     A namespace for bitstream symbol types.
+    /// #  [Symbol types](entropy-coding-symbols)
+    /// ## (0:entropy-coding-symbols)
+    /// ## (1:entropy-coding)
     public 
     enum Symbol 
     {
         /// enum JPEG.Bitstream.Symbol.DC
         /// :   JPEG.Bitstream.AnySymbol
         ///     A DC symbol.
+        /// #  [See also](entropy-coding-symbols)
+        /// ## (1:entropy-coding-symbols)
+        /// ## (2:entropy-coding)
         public 
         struct DC:AnySymbol
         {
@@ -235,6 +250,9 @@ extension JPEG.Bitstream
         /// enum JPEG.Bitstream.Symbol.AC
         /// :   JPEG.Bitstream.AnySymbol
         ///     An AC symbol.
+        /// #  [See also](entropy-coding-symbols)
+        /// ## (2:entropy-coding-symbols)
+        /// ## (3:entropy-coding)
         public 
         struct AC:AnySymbol
         {
@@ -3454,6 +3472,7 @@ extension JPEG
     ///     The main use case for this type is to observe the visual state of a 
     ///     partially-decoded image, for example, when performing 
     ///     [online decoding](https://github.com/kelvin13/jpeg/tree/master/examples#online-decoding).
+    /// ##  (manual-decoding)
     public 
     struct Context<Format> where Format:JPEG.Format
     {

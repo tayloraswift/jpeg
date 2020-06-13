@@ -250,6 +250,7 @@ extension JPEG
     ///     This is a toy API which generates acceptable defaults for a range of 
     ///     quality settings. For finer-grained control, specify coefficient-wise 
     ///     quantum values manually.
+    /// ## (1:image-quality)
     public 
     enum CompressionLevel 
     {
@@ -1789,6 +1790,9 @@ extension JPEG.Header.Scan
 ///     To implement a custom data destination type, conform it to this protocol by 
 ///     implementing [`(Destination).write(_:)`]. It can 
 ///     then be used with the library’s core compression interfaces.
+/// #  [See also](file-io-protocols)
+/// ## (2:file-io-protocols)
+/// ## (2:lexing-and-formatting)
 public 
 protocol _JPEGBytestreamDestination 
 {
