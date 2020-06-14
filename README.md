@@ -1,20 +1,46 @@
 # jpeg
 
 [![platforms](https://img.shields.io/badge/platforms-linux%20%7C%20macos-lightgrey.svg)](https://swift.org)
+[![releases](https://img.shields.io/github/v/release/kelvin13/jpeg)](https://github.com/kelvin13/jpeg/releases)
 [![build](https://img.shields.io/github/workflow/status/kelvin13/jpeg/build/master)](https://github.com/kelvin13/jpeg/actions?query=workflow%3Abuild)
 [![build documentation](https://img.shields.io/github/workflow/status/kelvin13/jpeg/documentation/master?label=build%20docs)](https://github.com/kelvin13/jpeg/actions?query=workflow%3Adocumentation)
+[![issues](https://img.shields.io/github/issues/kelvin13/jpeg)](https://github.com/kelvin13/jpeg/issues?state=open)
 [![language](https://img.shields.io/badge/version-swift_5-ffa020.svg)](https://swift.org)
-[![license](https://img.shields.io/badge/license-GPL3-ff3079.svg)](https://github.com/kelvin13/png/blob/master/COPYING)
+[![license](https://img.shields.io/badge/license-GPL3-ff3079.svg)](https://github.com/kelvin13/jpeg/blob/master/COPYING)
 
-Swift *JPEG* is a cross-platform pure Swift framework which provides a full-featured JPEG encoding and decoding API. The core framework has no external dependencies, including *Foundation*, and should compile and provide consistent behavior on *all* Swift platforms. The framework supports additional features, such as file system support, on Linux and MacOS. Swift *JPEG* is available under the [GPL3 open source license](https://choosealicense.com/licenses/gpl-3.0/).
+Swift *JPEG* is a cross-platform pure Swift framework for decoding, inspecting, editing, and encoding JPEG images. The core framework has no external dependencies, including *Foundation*, and should compile and provide consistent behavior on *all* Swift platforms. The framework supports additional features, such as file system support, on Linux and MacOS. 
 
-[**tutorials and example programs**](examples/)
+Swift *JPEG* is available under the [GPL3 open source license](https://choosealicense.com/licenses/gpl-3.0/).
 
-[**api reference**](https://kelvin13.github.io/jpeg/JPEG/)
+## [tutorials and example programs](examples/)
+
+* [basic decoding](examples#basic-decoding) ([sources](decode-basic/))
+* [basic encoding](examples#basic-encoding) ([sources](encode-basic/))
+* [advanced decoding](examples#advanced-decoding) ([sources](decode-advanced/))
+* [advanced encoding](examples#advanced-encoding) ([sources](encode-advanced/))
+* [using in-memory images](examples#using-in-memory-images) ([sources](in-memory/))
+* [online decoding](examples#online-decoding) ([sources](decode-online/))
+* [requantizing images](examples#requantizing-images) ([sources](recompress/))
+* [lossless rotations](examples#lossless-rotations) ([sources](rotate/))
+* [custom color formats](examples#custom-color-formats) ([sources](custom-color/))
+
+## [api reference](https://kelvin13.github.io/jpeg/)
+
+* [`JPEG.JPEG`](https://kelvin13.github.io/jpeg/JPEG/)
+* [`JPEG.General`](https://kelvin13.github.io/jpeg/General/)
+* [`JPEG.System`](https://kelvin13.github.io/jpeg/System/)
 
 ## getting started 
 
-decode an image:
+To Swift *JPEG* in a project, add this descriptor to the `dependencies` list in your `Package.swift`:
+
+```swift 
+.package(url: "https://github.com/kelvin13/jpeg", .exact("1.0.0")) 
+```
+
+## basic usage
+
+Decode an image:
 
 ```swift 
 import JPEG
@@ -32,7 +58,7 @@ func decode(jpeg path:String) throws
 }
 ```
 
-encode an image: 
+Encode an image: 
 
 ```swift 
 import JPEG
