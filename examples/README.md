@@ -433,7 +433,7 @@ for metadata:JPEG.Metadata in spectral.metadata
         Swift.print(jfif)
 ```
 
-EXIF records can be extremely complex. The library will index the fields in an EXIF segment for you, but it won’t parse them. Nevertheless, it provides a number of APIs to make it easier for you to extract information from it, so long as you know what to look for, and how to parse it. For example, if we want to read the *Artist* field from the EXIF record, we can consult the [EXIF standard](https://www.exif.org/Exif2-2.PDF), which tells us that the **tag number** for that field is **315**. We can plug this identifier into the [`[tag:]`](https://kelvin13.github.io/jpeg/JPEG/EXIF/[tag:]/) subscript on the EXIF structure, to get the type, arity, and payload of the field, if it exists. We also verify that the type is indeed ASCII, as the standard expects. The standard tells us the *Artist* field is stored indirectly, so we interpret the payload as an offset, and attempt to read an ASCII string from that offset in the EXIF structure, using the typed [`[_:as:]`](https://kelvin13.github.io/jpeg/JPEG/EXIF/1383-[_:as:]/) subscript.
+EXIF records can be extremely complex. The library will index the fields in an EXIF segment for you, but it won’t parse them. Nevertheless, it provides a number of APIs to make it easier for you to extract information from it, so long as you know what to look for, and how to parse it. For example, if we want to read the *Artist* field from the EXIF record, we can consult the [EXIF standard](https://www.exif.org/Exif2-2.PDF), which tells us that the **tag number** for that field is **315**. We can plug this identifier into the [`[tag:]`](https://kelvin13.github.io/jpeg/JPEG/EXIF/%5Btag:%5D/) subscript on the EXIF structure, to get the type, arity, and payload of the field, if it exists. We also verify that the type is indeed ASCII, as the standard expects. The standard tells us the *Artist* field is stored indirectly, so we interpret the payload as an offset, and attempt to read an ASCII string from that offset in the EXIF structure, using the typed [`[_:as:]`](https://kelvin13.github.io/jpeg/JPEG/EXIF/1383-%5B_:as:%5D/) subscript.
 
 ```swift 
     case .exif(let exif):
@@ -758,7 +758,7 @@ All the scan header constructors, including [`sequential(...:)`](https://kelvin1
 
 When you initialize a layout, it will automatically assign quantization tables to table selectors and generate the sequence of JPEG declarations needed to associate the right table resources with the right scans. This can sometimes fail (with a fatal error) if the scan progression you provided requires more tables to be referenced at once than there are selectors for them to be attached to. The lifetime of a table extends from the first scan that contains a component using it, to the last scan containing such a component. (It does not have to be the same component.) 
 
-Just as with the limits on the number of simultaneously referenced huffman tables, the [`baseline`](https://kelvin13.github.io/jpeg/JPEG/Process/baseline) coding process allows for up to two simultaneously referenced quantization tables, while all other coding processes allow for up to four. In practice, since each component can only use one quantization table, the total number of quantization tables in a JPEG image can never exceed the number of components in the image, so these limitations are rarely encountered.
+Just as with the limits on the number of simultaneously referenced huffman tables, the [`baseline`](https://kelvin13.github.io/jpeg/JPEG/Process/baseline/) coding process allows for up to two simultaneously referenced quantization tables, while all other coding processes allow for up to four. In practice, since each component can only use one quantization table, the total number of quantization tables in a JPEG image can never exceed the number of components in the image, so these limitations are rarely encountered.
 
 We can view the generated declarations and selector assignments with the following code: 
 
@@ -831,7 +831,7 @@ Here, we have stored a string encoded as [UTF-8](https://en.wikipedia.org/wiki/U
 
 When we created the rectangular data structure, we used the [`pack(size:layout:metadata:pixels:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/pack%28size:layout:metadata:pixels:%29/) constructor, but we could also have used the regular [`init(size:layout:metadata:values:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/init%28size:layout:metadata:values:%29/) initializer, which takes a `[UInt16]` array of (row-major) interleaved color samples. This initializer assumes you already have the image data stored in the right order and format, so it’s a somewhat lower-level API.
 
-The next step is to convert the rectangular data into planar data. The method which returns the planar representation is the [`decomposed()`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/decompose%28%29/) method.
+The next step is to convert the rectangular data into planar data. The method which returns the planar representation is the [`decomposed()`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/decomposed%28%29/) method.
 
 ```swift 
 let planar:JPEG.Data.Planar<JPEG.Common> = rectangular.decomposed()
@@ -890,7 +890,7 @@ else
 
 Up to this point we have been using the built-in file system-based API that the library provides on Linux and MacOS platforms. These APIs are built atop of the library’s core data stream APIs, which are available on all Swift platforms. (The core library is universally portable because it is written in pure Swift, with no dependencies, even [Foundation](https://developer.apple.com/documentation/foundation).) In this tutorial, we will use this lower-level interface to implement reading and writing JPEG files in memory.
 
-Our basic data type modeling a memory blob is incredibly simple; it consists of a Swift array containing the data buffer, and a file position pointer in the form of an integer. Here, we have namespaced it under the libary’s `System` namespace to parallel the built-in file system APIs. 
+Our basic data type modeling a memory blob is incredibly simple; it consists of a Swift array containing the data buffer, and a file position pointer in the form of an integer. Here, we have namespaced it under the libary’s [`System`](https://kelvin13.github.io/jpeg/System/) namespace to parallel the built-in file system APIs. 
 
 ```swift 
 import JPEG 
@@ -906,7 +906,7 @@ extension System
 }
 ```
 
-There are two protocols a custom data stream type can support: `JPEG.Bytestream.Source`, and `JPEG.Bytestream.Destination`. The first one enables image decoding, while the second one enables image encoding. We can conform to both with the following implementations:
+There are two protocols a custom data stream type can support: [`JPEG.Bytestream.Source`](https://kelvin13.github.io/jpeg/JPEG/Bytestream/Source/), and [`JPEG.Bytestream.Destination`](https://kelvin13.github.io/jpeg/JPEG/Bytestream/Destination/). The first one enables image decoding, while the second one enables image encoding. We can conform to both with the following implementations:
 
 ```swift 
 extension System.Blob:JPEG.Bytestream.Source, JPEG.Bytestream.Destination 
@@ -972,7 +972,7 @@ var blob:System.Blob = .init(data)
 >
 > (photo by John “hugo971”)
 
-To decode using our `System.Blob` type, we use the `decompress(stream:)` functions, which are part of the core library, and do essentially the same things as the file system-aware `decompress(path:)` functions.
+To decode using our `System.Blob` type, we use the [`decompress(stream:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/decompress%28stream:%29/) functions, which are part of the core library, and do essentially the same things as the file system-aware [`decompress(path:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/decompress%28path:%29/) functions.
 
 ```swift 
 let spectral:JPEG.Data.Spectral<JPEG.Common>    = try .decompress(stream: &blob)
@@ -980,13 +980,13 @@ let image:JPEG.Data.Rectangular<JPEG.Common>    = spectral.idct().interleaved()
 let rgb:[JPEG.RGB]                              = image.unpack(as: JPEG.RGB.self)
 ```
 
-Here, we have saved the intermediate `JPEG.Data.Spectral` representation, because we will be using it later to encode the image back into an in-memory JPEG.
+Here, we have saved the intermediate [`JPEG.Data.Spectral`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/) representation, because we will be using it later to encode the image back into an in-memory JPEG.
 
 <img width=300 src="in-memory/karlie-2011.jpg.rgb.png"/>
 
 > Decoded JPEG, saved in PNG format.
 
-Just as with the decompression APIs, the `compress(path:)`/`compress(path:quanta:)` functions have generic `compress(stream:)`/`compress(stream:quanta:)` versions. Here, we have cleared the blob storage, and written the spectral image we saved earlier to it:
+Just as with the decompression APIs, the [`compress(path:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/compress%28path:%29/)/[`compress(path:quanta:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/compress%28path:quanta:%29/) functions have generic [`compress(stream:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/compress%28stream:%29/)/[`compress(stream:quanta:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/compress%28stream:quanta:%29/) versions. Here, we have cleared the blob storage, and written the spectral image we saved earlier to it:
 
 ```swift 
 blob = .init([])
@@ -1115,14 +1115,14 @@ else
 var stream:Stream = .init(data)
 ```
 
-The key to making this work is understanding that, if the `read(count:)` call on the data stream returns `nil` (due to there not being enough data available), then one of four library errors will get thrown:
+The key to making this work is understanding that, if the [`read(count:)`](https://kelvin13.github.io/jpeg/JPEG/Bytestream/Source/read%28count:%29/) call on the data stream returns `nil` (due to there not being enough data available), then one of four library errors will get thrown:
 
-* `JPEG.LexingError.truncatedMarkerSegmentType`
-* `JPEG.LexingError.truncatedMarkerSegmentHeader`
-* `JPEG.LexingError.truncatedMarkerSegmentBody`
-* `JPEG.LexingError.truncatedEntropyCodedSegment`
+* [`JPEG.LexingError.truncatedMarkerSegmentType`](https://kelvin13.github.io/jpeg/JPEG/LexingError/truncatedMarkerSegmentType/)
+* [`JPEG.LexingError.truncatedMarkerSegmentHeader`](https://kelvin13.github.io/jpeg/JPEG/LexingError/truncatedMarkerSegmentHeader/)
+* [`JPEG.LexingError.truncatedMarkerSegmentBody(expected:)`](https://kelvin13.github.io/jpeg/JPEG/LexingError/truncatedMarkerSegmentBody%28expected:%29/)
+* [`JPEG.LexingError.truncatedEntropyCodedSegment`](https://kelvin13.github.io/jpeg/JPEG/LexingError/truncatedEntropyCodedSegment/)
 
-These errors get thrown from the library’s lexer functions, which lex JPEG marker and entropy-coded segments out of a raw bytestream. (The lexer functions are provided as extensions on the `JPEG.Bytestream.Source` protocol, so they are available on any conforming data stream type.)
+These errors get thrown from the library’s lexer functions, which lex JPEG marker and entropy-coded segments out of a raw bytestream. (The lexer functions are provided as extensions on the [`JPEG.Bytestream.Source`](https://kelvin13.github.io/jpeg/JPEG/Bytestream/Source/) protocol, so they are available on any conforming data stream type.)
 
 ```swift 
 mutating 
@@ -1144,7 +1144,7 @@ Entropy-Coded Segment   ::= data:[UInt8]
 Marker Segment          ::= type:JPEG.Marker data:[UInt8]
 ```
 
-The `segment(prefix:)` method returns either a prefixed or regular marker segment; the `segment()` method is a convenience method which always expects a regular marker segment with no prefixed entropy-coded segment.
+The [`segment(prefix:)`](https://kelvin13.github.io/jpeg/JPEG/Bytestream/Source/segment%28prefix:%29/) method returns either a prefixed or regular marker segment; the [`segment()`](https://kelvin13.github.io/jpeg/JPEG/Bytestream/Source/segment%28%29/) method is a convenience method which always expects a regular marker segment with no prefixed entropy-coded segment.
 
 To allow the lexing functions to recover on end-of-stream instead of crashing the application, we wrap them in the following `waitSegment(stream:)` and `waitSegmentPrefix(stream:)` functions, making sure to reset the file position if end-of-stream is encountered:
 
@@ -1295,7 +1295,7 @@ The next section lexes segments in a loop, parsing and saving table and restart 
     }
 ```
 
-Fortunately for us, the library provides the `JPEG.Context` state manager which will handle table selector bindings, restart intervals, scan progression validation, and other details. It also stores an instance of `JPEG.Data.Spectral` and keeps it in a good state as we progressively build up the image. We can initialize the state manager once we have the frame header parsed:
+Fortunately for us, the library provides the [`JPEG.Context`](https://kelvin13.github.io/jpeg/JPEG/Context/) state manager which will handle table selector bindings, restart intervals, scan progression validation, and other details. It also stores an instance of [`JPEG.Data.Spectral`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/) and keeps it in a good state as we progressively build up the image. We can initialize the state manager once we have the frame header parsed:
 
 ```swift 
     // can use `!` here, previous loop cannot exit without initializing `frame`
@@ -1382,7 +1382,7 @@ The scan parsing looks more complex than it is. After parsing the scan header, i
                 {
 ```
 
-The exit clause of the guard statement pushes the entropy-coded segments to the state manager, which invokes the decoder on them. The `extend:` argument of the `push(scan:ecss:extend:)` method reflects the fact that the image height is not fully known at this point, which means that the image dimensions are flexible, and so can be *extend*ed.
+The exit clause of the guard statement pushes the entropy-coded segments to the state manager, which invokes the decoder on them. The `extend` argument of the [`push(scan:ecss:extend:)`](https://kelvin13.github.io/jpeg/JPEG/Context/push%28scan:ecss:extend:%29/) method reflects the fact that the image height is not fully known at this point, which means that the image dimensions are flexible, and so can be *extend*ed.
 
 ```swift 
                     try context.push(scan: scan, ecss: ecss, extend: first)
@@ -1523,7 +1523,7 @@ let layout:JPEG.Layout<JPEG.Common> = .init(
     ])
 ```
 
-Next, we create an empty spectral image using the `init(size:layout:metadata:quanta:)` initializer. For the quantum values, we use the quanta from the original image, multiplied by 3, reflecting an increase in quantization, and therefore compression. We don’t scale the quantum for the DC coefficient, since posterizing the base colors of an image is a lot more noticable than dropping a few AC coefficients. It is important that we clamp the scaled quantum values to the range `0 ... 255`, since the `ycc8` color format stores quantum values as 8-bit unsigned integers.
+Next, we create an empty spectral image using the [`init(size:layout:metadata:quanta:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/init%28size:layout:metadata:quanta:%29/) initializer. For the quantum values, we use the quanta from the original image, multiplied by 3, reflecting an increase in quantization, and therefore compression. We don’t scale the quantum for the DC coefficient, since posterizing the base colors of an image is a lot more noticable than dropping a few AC coefficients. It is important that we clamp the scaled quantum values to the range `0 ... 255`, since the [`ycc8`](https://kelvin13.github.io/jpeg/JPEG/Common/ycc8/) color format stores quantum values as 8-bit unsigned integers.
 
 ```swift 
 var recompressed:JPEG.Data.Spectral<JPEG.Common> = .init(
@@ -1539,7 +1539,7 @@ var recompressed:JPEG.Data.Spectral<JPEG.Common> = .init(
     })
 ```
 
-We can use the `read(ci:_:)` method on the spectral image to access the spectral plane and its associated quantization table for its component key argument. The `with(ci:_:)` method does the same thing, except it allows you to mutate the plane coefficients. (It does not allow you to change the quantization tables — editing quantization tables by plane is a bad idea because doing so would affect all of the other planes using that quantization table.) 
+We can use the [`read(ci:_:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/read%28ci:_:%29/) method on the spectral image to access the spectral plane and its associated quantization table for its component key argument. The [`with(ci:_:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/with%28ci:_:%29/) method does the same thing, except it allows you to mutate the plane coefficients. (It does not allow you to change the quantization tables — editing quantization tables by plane is a bad idea because doing so would affect all of the other planes using that quantization table.) 
 
 ```swift 
 for ci:JPEG.Component.Key in recompressed.layout.recognized 
@@ -1552,7 +1552,7 @@ for ci:JPEG.Component.Key in recompressed.layout.recognized
         {
 ```
 
-We *could* access the planes and quanta by performing index lookups for the component and quantization keys, and then using the integer subscripts on `self` and `quanta`, but the `read(ci:_:)` and `with(ci:_:)` APIs provide a more convenient interface, with fewer spurious optionals. The `JPEG.Data.Planar` type also has `read(ci:_:)` and `with(ci:_:)` methods, but their closures don’t recieve quantization table arguments, since the coefficients have already been premultiplied in the planar representation.
+We *could* access the planes and quanta by performing index lookups for the component and quantization keys, and then using the integer subscripts on `self` and [`quanta`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/quanta/), but the [`read(ci:_:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/read%28ci:_:%29/) and [`with(ci:_:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/with%28ci:_:%29/) APIs provide a more convenient interface, with fewer spurious optionals. The [`JPEG.Data.Planar`](https://kelvin13.github.io/jpeg/JPEG/Data/Planar/) type also has [`read(ci:_:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Planar/read%28ci:_:%29/) and [`with(ci:_:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Planar/with%28ci:_:%29/) methods, but their closures don’t recieve quantization table arguments, since the coefficients have already been premultiplied in the planar representation.
 
 Transferring the spectral data from the original image to the recompressed image is then a matter of iterating through the coefficient blocks, multiplying coefficients by the old quanta, and then dividing them by the new quanta.
 
@@ -1573,7 +1573,7 @@ When writing the coefficients back to the recompressed image, we use a trick to 
 
 This will also improve the compression ratio of the encoded image, since JPEGs encode zero coefficients very efficiently.
 
-Then, we encode and save the image using the `compress(path:)` method:
+Then, we encode and save the image using the [`compress(path:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/compress%28path:%29/) method:
 
 ```swift 
                 }
@@ -1614,7 +1614,7 @@ A 90° counterclockwise rotation (quadrant II) is a transposition followed by a 
 
 In the frequency domain, a transposition is just that, a transposition. To do a horizontal reflection, you negate the odd columns of the coefficient matrix. To do a vertical reflection, you negate the odd rows of the coefficient matrix. (Reflections never affect the even frequencies, since they are [symmetric](https://en.wikipedia.org/wiki/Even_and_odd_functions).)
 
-The coefficient mappings are simple enough that they could be hardcoded into an array literal. However, we can also generate them procedurally. Since none of the operations we are going to use mix coefficients, we can model a coefficient mapping with an source coefficient identifier *z* and a multiplier *s*. Because each coefficient has a unique zigzag index, we can use the zigzag index as a coefficient identifier. We store the multiplier as an `Int16`, since this is the type the coefficients themselves are stored as in a `JPEG.Data.Spectral` image.
+The coefficient mappings are simple enough that they could be hardcoded into an array literal. However, we can also generate them procedurally. Since none of the operations we are going to use mix coefficients, we can model a coefficient mapping with an source coefficient identifier *z* and a multiplier *s*. Because each coefficient has a unique zigzag index, we can use the zigzag index as a coefficient identifier. We store the multiplier as an `Int16`, since this is the type the coefficients themselves are stored as in a [`JPEG.Data.Spectral`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/) image.
 
 ```swift 
 import JPEG 
@@ -1674,7 +1674,7 @@ It is straightforward to express the three basic operations on a row-major matri
     }
 ```
 
-We can define a static function `transform(_:)` that flattens a sequence of coefficient transformations into a single source-to-destination mapping. This function generates an identity mapping using `JPEG.Table.Quantization.z(k:h:)`, invokes the closure argument on the blank mapping, and then rearranges it into zigzag order so that the *z*th mapping in the resulting array indicates the source coefficient and multiplier for the *z*th coefficient in zigzag order.
+We can define a static function `transform(_:)` that flattens a sequence of coefficient transformations into a single source-to-destination mapping. This function generates an identity mapping using [`JPEG.Table.Quantization.z(k:h:)`](https://kelvin13.github.io/jpeg/JPEG/Table/Quantization/z%28k:h:%29/), invokes the closure argument on the blank mapping, and then rearranges it into zigzag order so that the *z*th mapping in the resulting array indicates the source coefficient and multiplier for the *z*th coefficient in zigzag order.
 
 ```swift 
     static 
@@ -1706,7 +1706,7 @@ We can define a static function `transform(_:)` that flattens a sequence of coef
     }
 ```
 
-Our rotation function, `rotate(_:input:output:)` will take a quadrant and two file paths as arguments, and open the input JPEG as a `JPEG.Data.Spectral` image.
+Our rotation function, `rotate(_:input:output:)` will take a quadrant and two file paths as arguments, and open the input JPEG as a [`JPEG.Data.Spectral`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/) image.
 
 
 ```swift 
@@ -1736,7 +1736,7 @@ Depending on the target quadrant, this function needs to pick:
 * a transformation matrix ((*x*<sub>destination</sub>,&nbsp;*y*<sub>destination</sub>)&nbsp;←&nbsp;(*x*<sub>source</sub>,&nbsp;*y*<sub>source</sub>)), and
 * cropped image dimensions.
 
-The last one is important because JPEG images only allow partial blocks on their bottom and right edges. If either of those edges would become a top or left edge after rotating, then that edge must be cropped to an integer multiple of the image’s minimum coded unit. The size of the minimum coded unit is the value of the `scale` property of the image layout, multiplied by 8.
+The last one is important because JPEG images only allow partial blocks on their bottom and right edges. If either of those edges would become a top or left edge after rotating, then that edge must be cropped to an integer multiple of the image’s minimum coded unit. The size of the minimum coded unit is the value of the [`scale`](https://kelvin13.github.io/jpeg/JPEG/Layout/scale/) property of the image layout, multiplied by 8.
 
 ```swift 
     let scale:(x:Int, y:Int) = original.layout.scale 
@@ -1746,7 +1746,7 @@ The last one is important because JPEG images only allow partial blocks on their
     let size:(x:Int, y:Int)
 ```
 
-To perform the crops, we use the mutating `set(width:)` and `set(height:)` methods on the spectral image. These methods can set the image dimensions to *any* value, but for the rotations to work correctly, we need to round the image dimensions down to a multiple of the minimum coded unit. Not all the rotations require both image dimensions to be cropped.
+To perform the crops, we use the mutating [`set(width:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/set%28width:%29/) and [`set(height:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/set%28height:%29/) methods on the spectral image. These methods can set the image dimensions to *any* value, but for the rotations to work correctly, we need to round the image dimensions down to a multiple of the minimum coded unit. Not all the rotations require both image dimensions to be cropped.
 
 ```swift 
     switch rotation 
@@ -1845,7 +1845,7 @@ All of the coefficients in the output image were initialized to zero; to populat
     }
 ```
 
-We write the output to disk using the `compress(path:)` method. 
+We write the output to disk using the [`compress(path:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Spectral/compress%28path:%29/) method. 
 
 ```swift 
     guard let _:Void = try rotated.compress(path: output)
@@ -1878,7 +1878,7 @@ We write the output to disk using the `compress(path:)` method.
 > * *implement conforming custom color target types*
 > * *encode and decode deep-color images*
 
-So far, we have only ever used image layouts with the built-in `JPEG.Common` type parameter. As you might expect from the generic nature of this API and other APIs, the library allows you to go beyond the 8-bit built-in YCbCr color formats and implement your own color formats. Subject to a few constraints, images using such custom color formats are compliant JPEG files, but are not compliant JFIF or EXIF images. Virtually no consumer image viewers support such JPEG images, but they can still be useful in medical and scientific applications that want to use specialized color formats, but still want to take advantage of JPEG compression. For example, some applications may want to augment a YCbCr image with an alpha or infrared channel, or use a completely different color space such as RGB. Other applications may want to increase the bit-depth to work with deep-color images.
+So far, we have only ever used image layouts with the built-in [`JPEG.Common`](https://kelvin13.github.io/jpeg/JPEG/Common/) type parameter. As you might expect from the generic nature of this API and other APIs, the library allows you to go beyond the 8-bit built-in YCbCr color formats and implement your own color formats. Subject to a few constraints, images using such custom color formats are compliant JPEG files, but are not compliant JFIF or EXIF images. Virtually no consumer image viewers support such JPEG images, but they can still be useful in medical and scientific applications that want to use specialized color formats, but still want to take advantage of JPEG compression. For example, some applications may want to augment a YCbCr image with an alpha or infrared channel, or use a completely different color space such as RGB. Other applications may want to increase the bit-depth to work with deep-color images.
 
 In this tutorial, we will implement a custom 12-bit color format, `JPEG.Deep`, and define two color targets, `JPEG.RGB12` and `JPEG.RGBA12` that it can be used with. The `JPEG.Deep` format will have one case, `rgba12`, representing a 12-bit RGBA native format.
 
@@ -1924,7 +1924,7 @@ extension JPEG
 }
 ```
 
-To make these user-defined types work with the library APIs, we need to conform them to the `JPEG.Format` and `JPEG.Color` protocols, respectively. For the library to use a custom color format type, it must implement the following requirements:
+To make these user-defined types work with the library APIs, we need to conform them to the [`JPEG.Format`](https://kelvin13.github.io/jpeg/JPEG/Format/) and [`JPEG.Color`](https://kelvin13.github.io/jpeg/JPEG/Color/) protocols, respectively. For the library to use a custom color format type, it must implement the following requirements:
 
 ```swift 
 protocol JPEG.Format
@@ -1944,13 +1944,13 @@ protocol JPEG.Format
 }
 ```
 
-The static `recognize(_:precision:)` function takes a set of component keys and a bit precision and returns an instance of `Self`, or `nil` if the arguments don’t match any case of this color format. (The arguments are assumed to have been read from a JPEG frame header.)
+The static [`recognize(_:precision:)`](https://kelvin13.github.io/jpeg/JPEG/Format/recognize%28_:precision:%29/) function takes a set of component keys and a bit precision and returns an instance of `Self`, or `nil` if the arguments don’t match any case of this color format. (The arguments are assumed to have been read from a JPEG frame header.)
 
-The `components` property returns an array containing the *recognized* components of the color format, in the same order that the planes of an image with a layout using this format would be arranged in. This does *not* have to be the same as the set of components passed to `recognize(_:precision:)` constructor earlier, but it should be a subset of it. If the frame header declared components that don’t appear in this array, the decoder won’t allocate planes for them and will skip over those components when decoding scans. (This implies the decoder still expects those components to be present in the file.) Only components in this array will get encoded by the encoder.
+The [`components`](https://kelvin13.github.io/jpeg/JPEG/Format/components/) property returns an array containing the *recognized* components of the color format, in the same order that the planes of an image with a layout using this format would be arranged in. This does *not* have to be the same as the set of components passed to [`recognize(_:precision:)`](https://kelvin13.github.io/jpeg/JPEG/Format/recognize%28_:precision:%29/) constructor earlier, but it should be a subset of it. If the frame header declared components that don’t appear in this array, the decoder won’t allocate planes for them and will skip over those components when decoding scans. (This implies the decoder still expects those components to be present in the file.) Only components in this array will get encoded by the encoder.
 
-The `precision` property should return the same precision that was passed to the constructor; in other words, bit-depths in custom color formats should have read-write semantics.
+The [`precision`](https://kelvin13.github.io/jpeg/JPEG/Format/precision/) property should return the same precision that was passed to the constructor; in other words, bit-depths in custom color formats should have read-write semantics.
 
-We conform the `JPEG.Deep` type to `JPEG.Format` like this:
+We conform the `JPEG.Deep` type to [`JPEG.Format`](https://kelvin13.github.io/jpeg/JPEG/Format/) like this:
 
 ```swift 
 extension JPEG.Deep:JPEG.Format 
@@ -2002,7 +2002,7 @@ protocol JPEG.Color
 }
 ```
 
-The static `unpack(_:of:)` and `pack(_:as:)` provide the functionality for the `unpack(as:)` and `pack(size:layout:metadata:pixels:)` APIs. We conform our `JPEG.RGB12` and `JPEG.RGBA12` types like this:
+The static [`unpack(_:of:)`](https://kelvin13.github.io/jpeg/JPEG/Color/unpack%28_:of:%29/) and [`pack(_:as:)`](https://kelvin13.github.io/jpeg/JPEG/Color/pack%28_:as:%29/) provide the functionality for the [`unpack(as:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/unpack%28as:%29/) and [`pack(size:layout:metadata:pixels:)`](https://kelvin13.github.io/jpeg/JPEG/Data/Rectangular/pack%28size:layout:metadata:pixels:%29/) APIs. We conform our `JPEG.RGB12` and `JPEG.RGBA12` types like this:
 
 ```swift 
 extension JPEG.RGB12:JPEG.Color 
@@ -2089,7 +2089,7 @@ let gradient:[JPEG.RGBA12] = stride(from: 0.0, to: 1.0, by: 0.005).flatMap
 }
 ```
 
-The code to construct the image layout, and encode the test image to disk should look familiar, only we have substituted our custom `JPEG.Deep` color format type for the usual `JPEG.Common` type:
+The code to construct the image layout, and encode the test image to disk should look familiar, only we have substituted our custom `JPEG.Deep` color format type for the usual [`JPEG.Common`](https://kelvin13.github.io/jpeg/JPEG/Common/) type:
 
 ```swift 
 let format:JPEG.Deep     = .rgba12 
