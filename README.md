@@ -6,11 +6,11 @@
 [![build documentation](https://img.shields.io/github/workflow/status/kelvin13/jpeg/documentation/master?label=build%20docs)](https://github.com/kelvin13/jpeg/actions?query=workflow%3Adocumentation)
 [![issues](https://img.shields.io/github/issues/kelvin13/jpeg)](https://github.com/kelvin13/jpeg/issues?state=open)
 [![language](https://img.shields.io/badge/version-swift_5-ffa020.svg)](https://swift.org)
-[![license](https://img.shields.io/badge/license-GPL3-ff3079.svg)](https://github.com/kelvin13/jpeg/blob/master/COPYING)
+[![license](https://img.shields.io/badge/license-MPL2-ff3079.svg)](https://github.com/kelvin13/jpeg/blob/master/COPYING)
 
 Swift *JPEG* is a cross-platform pure Swift framework for decoding, inspecting, editing, and encoding JPEG images. The core framework has no external dependencies, including *Foundation*, and should compile and provide consistent behavior on *all* Swift platforms. The framework supports additional features, such as file system support, on Linux and MacOS. 
 
-Swift *JPEG* is available under the [GPL3 open source license](https://choosealicense.com/licenses/gpl-3.0/).
+Swift *JPEG* is available under the [Mozilla Public License 2.0](https://www.mozilla.org/en-US/MPL/2.0/). The [example programs](examples/) are public domain and can be adapted freely.
 
 ## [tutorials and example programs](examples/)
 
