@@ -64,7 +64,7 @@ enum Block
     {
         let blank:[Coefficient] = (0 ..< 8).flatMap 
         {
-            (y:Int) in 
+            (y:Int) -> [Coefficient] in 
             (0 ..< 8).map 
             {
                 (x:Int) in 

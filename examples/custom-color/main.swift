@@ -133,7 +133,7 @@ func sin(_ x:Double) -> UInt16
 } 
 let gradient:[JPEG.RGBA12] = stride(from: 0.0, to: 1.0, by: 0.005).flatMap 
 {
-    (phase:Double) in 
+    (phase:Double) -> [JPEG.RGBA12] in 
     stride(from: 0.0, to: 1.0, by: 0.001).map
     {
         .init(sin(phase + $0 - 0.15), sin(phase + $0), sin(phase + $0 + 0.15), 0x0fff)
