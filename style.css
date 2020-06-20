@@ -152,6 +152,7 @@ code .signature-punctuation:before, code .signature-punctuation:after
 a:focus 
 {
     outline-style: dashed;
+    outline-width: 1px;
 }
 code a.syntax-type
 {
