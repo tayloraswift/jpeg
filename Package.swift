@@ -1,11 +1,10 @@
-// swift-tools-version:5.1
+// swift-tools-version:5.2
 import PackageDescription
 
 let package = Package(
-    name: "JPEG",
-    products: 
-    [
-        .library(   name: "jpeg",               targets: ["JPEG"]), 
+    name: "jpeg",
+    products: [
+        .library(   name: "JPEG",               targets: ["JPEG"]),
         .executable(name: "fuzzer",             targets: ["JPEGFuzzer"]),
         .executable(name: "comparator",         targets: ["JPEGComparator"]),
         .executable(name: "unit-test",          targets: ["JPEGUnitTests"]),
@@ -22,8 +21,7 @@ let package = Package(
         .executable(name: "rotate",             targets: ["JPEGRotate"]),
         .executable(name: "custom-color",       targets: ["JPEGCustomColor"]),
     ],
-    targets: 
-    [
+    targets: [
         .target(name: "JPEG",                                           path: "sources/jpeg"),
         .target(name: "JPEGFuzzer",             dependencies: ["JPEG"], path: "tests/fuzz"),
         .target(name: "JPEGComparator",         dependencies: ["JPEG"], path: "tests/compare"),
