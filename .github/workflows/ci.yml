@@ -12,7 +12,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     # reads .swift-version
-    - uses: YOCKOW/Action-setup-swift@master
+    - uses: YOCKOW/Action-setup-swift@v1.1.14
     - run: | 
         brew install imagemagick
         utils/tests
@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - uses: YOCKOW/Action-setup-swift@master
+    - uses: YOCKOW/Action-setup-swift@v1.1.14
     - run: | 
         utils/tests
         utils/examples -c release
