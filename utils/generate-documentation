@@ -49,6 +49,9 @@ fi
 
 cd entrapta/ 
 
+# lock to entrapta 0.1.0
+git checkout tags/0.1.0
+
 swift build -c release
 
 if [ -z $local ]; then 
