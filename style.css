@@ -52,7 +52,7 @@ h3
 .topic-blurb 
 {
 }
-.topic-required, .topic-symbol-required
+.topic-relationships, .topic-symbol-relationships
 {
     font-size: 1.05em;
     color: #555555;
@@ -147,6 +147,10 @@ code .syntax-punctuation
 code .signature-punctuation:before, code .signature-punctuation:after
 {
     content: '\2009';
+}
+code .signature-operator:after, code .syntax-operator:after
+{
+    content: '\00A0';
 }
 
 a:focus 
