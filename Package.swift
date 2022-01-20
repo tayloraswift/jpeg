@@ -1,11 +1,11 @@
-// swift-tools-version:5.1
+// swift-tools-version:5.5
 import PackageDescription
 
 let package = Package(
-    name: "JPEG",
+    name: "jpeg",
     products: 
     [
-        .library(   name: "jpeg",               targets: ["JPEG"]), 
+        .library(   name: "JPEG",               targets: ["JPEG"]), 
         .executable(name: "fuzzer",             targets: ["JPEGFuzzer"]),
         .executable(name: "comparator",         targets: ["JPEGComparator"]),
         .executable(name: "unit-test",          targets: ["JPEGUnitTests"]),
@@ -24,22 +24,22 @@ let package = Package(
     ],
     targets: 
     [
-        .target(name: "JPEG",                                           path: "sources/jpeg"),
-        .target(name: "JPEGFuzzer",             dependencies: ["JPEG"], path: "tests/fuzz"),
-        .target(name: "JPEGComparator",         dependencies: ["JPEG"], path: "tests/compare"),
-        .target(name: "JPEGUnitTests",          dependencies: ["JPEG"], path: "tests/unit"),
-        .target(name: "JPEGRegressionTests",    dependencies: ["JPEG"], path: "tests/regression"),
-        .target(name: "JPEGIntegrationTests",   dependencies: ["JPEG"], path: "tests/integration"),
+        .target(          name: "JPEG",                                           path: "sources/jpeg"),
+        .executableTarget(name: "JPEGFuzzer",             dependencies: ["JPEG"], path: "tests/fuzz"),
+        .executableTarget(name: "JPEGComparator",         dependencies: ["JPEG"], path: "tests/compare"),
+        .executableTarget(name: "JPEGUnitTests",          dependencies: ["JPEG"], path: "tests/unit"),
+        .executableTarget(name: "JPEGRegressionTests",    dependencies: ["JPEG"], path: "tests/regression"),
+        .executableTarget(name: "JPEGIntegrationTests",   dependencies: ["JPEG"], path: "tests/integration"),
         
-        .target(name: "JPEGDecodeBasic",        dependencies: ["JPEG"], path: "examples/decode-basic"),
-        .target(name: "JPEGEncodeBasic",        dependencies: ["JPEG"], path: "examples/encode-basic"),
-        .target(name: "JPEGDecodeAdvanced",     dependencies: ["JPEG"], path: "examples/decode-advanced"),
-        .target(name: "JPEGEncodeAdvanced",     dependencies: ["JPEG"], path: "examples/encode-advanced"),
-        .target(name: "JPEGInMemory",           dependencies: ["JPEG"], path: "examples/in-memory"),
-        .target(name: "JPEGDecodeOnline",       dependencies: ["JPEG"], path: "examples/decode-online"),
-        .target(name: "JPEGRecompress",         dependencies: ["JPEG"], path: "examples/recompress"),
-        .target(name: "JPEGRotate",             dependencies: ["JPEG"], path: "examples/rotate"),
-        .target(name: "JPEGCustomColor",        dependencies: ["JPEG"], path: "examples/custom-color"),
+        .executableTarget(name: "JPEGDecodeBasic",        dependencies: ["JPEG"], path: "examples/decode-basic"),
+        .executableTarget(name: "JPEGEncodeBasic",        dependencies: ["JPEG"], path: "examples/encode-basic"),
+        .executableTarget(name: "JPEGDecodeAdvanced",     dependencies: ["JPEG"], path: "examples/decode-advanced"),
+        .executableTarget(name: "JPEGEncodeAdvanced",     dependencies: ["JPEG"], path: "examples/encode-advanced"),
+        .executableTarget(name: "JPEGInMemory",           dependencies: ["JPEG"], path: "examples/in-memory"),
+        .executableTarget(name: "JPEGDecodeOnline",       dependencies: ["JPEG"], path: "examples/decode-online"),
+        .executableTarget(name: "JPEGRecompress",         dependencies: ["JPEG"], path: "examples/recompress"),
+        .executableTarget(name: "JPEGRotate",             dependencies: ["JPEG"], path: "examples/rotate"),
+        .executableTarget(name: "JPEGCustomColor",        dependencies: ["JPEG"], path: "examples/custom-color"),
     ], 
     swiftLanguageVersions: [.v4_2, .v5]
 )
