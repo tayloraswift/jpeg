@@ -220,17 +220,18 @@ extension JPEG.Data.Spectral.Plane
             {
                 let g:Block8x8<Float> = plane.load(x: x, y: y, limit: limit), 
                     h:Block8x8<Float> = Self.fdct8x8(g, shift: level)
-                for (z, v):(SIMD8<Int>, SIMD8<Float>) in 
+                let t: [(SIMD8<Int>, SIMD8<Float>)] =
                 [
-                    (z.0, h.0 / q.0), 
-                    (z.1, h.1 / q.1), 
-                    (z.2, h.2 / q.2), 
-                    (z.3, h.3 / q.3), 
-                    (z.4, h.4 / q.4), 
-                    (z.5, h.5 / q.5), 
-                    (z.6, h.6 / q.6), 
+                    (z.0, h.0 / q.0),
+                    (z.1, h.1 / q.1),
+                    (z.2, h.2 / q.2),
+                    (z.3, h.3 / q.3),
+                    (z.4, h.4 / q.4),
+                    (z.5, h.5 / q.5),
+                    (z.6, h.6 / q.6),
                     (z.7, h.7 / q.7)
                 ]
+                for (z, v):(SIMD8<Int>, SIMD8<Float>) in t
                 {
                     let w:SIMD8<Int16> = .init(v, rounding: .toNearestOrAwayFromZero)
                     for j:Int in 0 ..< 8 
