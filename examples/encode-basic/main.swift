@@ -21,7 +21,7 @@ else
     fatalError("failed to open file '\(path).rgb'")
 }
 
-for factor:(luminance:(x:Int, y:Int), chrominance:(x:Int, y:Int), name:String) in 
+for factor:(luminance:(Int, Int), chrominance:(Int, Int), name:String) in
 [
     ((1, 1), (1, 1), "4:4:4"),
     ((1, 2), (1, 1), "4:4:0"),
