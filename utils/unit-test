@@ -1,5 +1,5 @@
 #!/bin/bash
-TOOL_NAME="unit-test"
+TOOL_NAME="JPEG-unit-test"
 error()
 {
     echo $1 
