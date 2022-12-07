@@ -157,7 +157,7 @@ enum Parameter:String
 
 var parameter:Parameter?    = nil 
 var count:Int               = 16 
-var prefix:String           = "tests/fuzz/data/jpeg"
+var prefix:String           = "tests/fuzz/data"
 for argument:String in CommandLine.arguments.dropFirst()
 {
     if argument.prefix(2) == "--"
