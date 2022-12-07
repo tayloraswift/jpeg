@@ -1,6 +1,6 @@
 #!/bin/bash
 DEFAULT_BUILD_CONFIGURATION="debug"
-TOOL_NAME="regression-test"
+TOOL_NAME="JPEG-regression-test"
 
 usage() 
 {

@@ -50,38 +50,38 @@ done
 
 # run `decode-basic` example
 check   "error: runtime error" \
-        .build/$build_configuration/decode-basic 
+        .build/$build_configuration/JPEG-decode-basic 
 
-for file in examples/decode-basic/*.jpg ; do 
+for file in examples/JPEG-decode-basic/*.jpg ; do 
     size=$(identify -format "%wx%h" jpg:$file)
     convert -depth 8 -size $size "rgb:$file.rgb" "png:$file.rgb.png"
 done 
 
 # run `encode-basic` example
 check   "error: runtime error" \
-        .build/$build_configuration/encode-basic 
+        .build/$build_configuration/JPEG-encode-basic 
 
 # run `decode-advanced` example
 check   "error: runtime error" \
-        .build/$build_configuration/decode-advanced 
+        .build/$build_configuration/JPEG-decode-advanced 
 
-for file in examples/decode-advanced/*.gray ; do 
+for file in examples/JPEG-decode-advanced/*.gray ; do 
     size=$(echo $file | sed -r 's/.*\.([0-9]+)x([0-9]+)\.gray/\1x\2/')
     convert -depth 8 -size $size "gray:$file" "png:$file.png"
 done 
-for file in examples/decode-advanced/*.jpg ; do 
+for file in examples/JPEG-decode-advanced/*.jpg ; do 
     size=$(identify -format "%wx%h" jpg:$file)
     convert -depth 8 -size $size "rgb:$file.rgb" "png:$file.rgb.png"
 done 
 
 # run `encode-advanced` example 
 check   "error: runtime error" \
-        .build/$build_configuration/encode-advanced 
+        .build/$build_configuration/JPEG-encode-advanced 
 
 # run `in-memory` example 
 check   "error: runtime error" \
-        .build/$build_configuration/in-memory 
-for file in examples/in-memory/*.jpg ; do 
+        .build/$build_configuration/JPEG-in-memory 
+for file in examples/JPEG-in-memory/*.jpg ; do 
     if [ -f $file.rgb ]; then
         size=$(identify -format "%wx%h" jpg:$file)
         convert -depth 8 -size $size "rgb:$file.rgb" "png:$file.rgb.png"
@@ -90,30 +90,30 @@ done
 
 # run `decode-online` example 
 check   "error: runtime error" \
-        .build/$build_configuration/decode-online
-for file in examples/decode-online/*.jpg ; do 
+        .build/$build_configuration/JPEG-decode-online
+for file in examples/JPEG-decode-online/*.jpg ; do 
     size=$(identify -format "%wx%h" jpg:$file)
 done 
-for file in examples/decode-online/*.rgb ; do 
+for file in examples/JPEG-decode-online/*.rgb ; do 
     convert -depth 8 -size $size "rgb:$file" "png:$file.png"
 done 
 
 # run `recompress` example
 check   "error: runtime error" \
-        .build/$build_configuration/recompress
+        .build/$build_configuration/JPEG-recompress
 
 # run `rotate` example
 check   "error: runtime error" \
-        .build/$build_configuration/rotate examples/rotate/karlie-kwk-wwdc-2017.jpg examples/rotate/karlie-kwk-wwdc-2017-ii.jpg --rotation ii
+        .build/$build_configuration/JPEG-rotate examples/JPEG-rotate/karlie-kwk-wwdc-2017.jpg examples/JPEG-rotate/karlie-kwk-wwdc-2017-ii.jpg --rotation ii
 check   "error: runtime error" \
-        .build/$build_configuration/rotate examples/rotate/karlie-kwk-wwdc-2017.jpg examples/rotate/karlie-kwk-wwdc-2017-iii.jpg --rotation iii
+        .build/$build_configuration/JPEG-rotate examples/JPEG-rotate/karlie-kwk-wwdc-2017.jpg examples/JPEG-rotate/karlie-kwk-wwdc-2017-iii.jpg --rotation iii
 check   "error: runtime error" \
-        .build/$build_configuration/rotate examples/rotate/karlie-kwk-wwdc-2017.jpg examples/rotate/karlie-kwk-wwdc-2017-iv.jpg --rotation iv
+        .build/$build_configuration/JPEG-rotate examples/JPEG-rotate/karlie-kwk-wwdc-2017.jpg examples/JPEG-JPEG-rotate/karlie-kwk-wwdc-2017-iv.jpg --rotation iv
 
 # run `custom-color` example
 check   "error: runtime error" \
-        .build/$build_configuration/custom-color
-for file in examples/custom-color/*.rgb ; do 
+        .build/$build_configuration/JPEG-custom-color
+for file in examples/JPEG-custom-color/*.rgb ; do 
     convert -depth 16 -endian msb -size 1000x200 rgb:$file -depth 16 png:$file-16.png
     convert -depth 16 -endian msb -size 1000x200 rgb:$file -depth 8  png:$file-8.png
 done 
