@@ -238,48 +238,48 @@ This example program will generate 32 output images. For comparison, the PNG-enc
 | *l* = 0.0  | *l* = 0.125 | *l* = 0.25 | *l* = 0.5 |
 | ---------- | ----------- | ---------- | --------- |
 | 365.772 KB | 136.063 KB  | 98.233 KB  | 66.457 KB |
-|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:4:4-0.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:4:4-0.125.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:4:4-0.25.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:4:4-0.5.jpg"/>
+|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-4-4-0.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-4-4-0.125.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-4-4-0.25.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-4-4-0.5.jpg"/>
 
 | *l* = 1.0 | *l* = 2.0 | *l* = 4.0 | *l* = 8.0 |
 | --------- | --------- | --------- | --------- |
 | 46.548 KB | 32.378 KB | 22.539 KB | 15.708 KB |  
-|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:4:4-1.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:4:4-2.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:4:4-4.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:4:4-8.0.jpg"/>|
+|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-4-4-1.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-4-4-2.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-4-4-4.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-4-4-8.0.jpg"/>|
 
 ***4:4:0 subsampling***
 
 | *l* = 0.0  | *l* = 0.125 | *l* = 0.25 | *l* = 0.5 |
 | ---------- | ----------- | ---------- | --------- |
 | 290.606 KB | 116.300 KB  | 84.666 KB  | 58.284 KB | 
-|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:4:0-0.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:4:0-0.125.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:4:0-0.25.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:4:0-0.5.jpg"/>|
+|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-4-0-0.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-4-0-0.125.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-4-0-0.25.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-4-0-0.5.jpg"/>|
 
 | *l* = 1.0 | *l* = 2.0 | *l* = 4.0 | *l* = 8.0 |
 | --------- | --------- | --------- | --------- |
 | 41.301 KB | 28.362 KB | 18.986 KB | 12.367 KB | 
-|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:4:0-1.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:4:0-2.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:4:0-4.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:4:0-8.0.jpg"/>|
+|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-4-0-1.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-4-0-2.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-4-0-4.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-4-0-8.0.jpg"/>|
 
 ***4:2:2 subsampling***
 
 | *l* = 0.0  | *l* = 0.125 | *l* = 0.25 | *l* = 0.5 |
 | ---------- | ----------- | ---------- | --------- |
 | 288.929 KB | 116.683 KB  | 85.089 KB  | 58.816 KB |
-|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:2:2-0.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:2:2-0.125.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:2:2-0.25.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:2:2-0.5.jpg"/>|
+|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-2-2-0.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-2-2-0.125.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-2-2-0.25.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-2-2-0.5.jpg"/>|
 
 | *l* = 1.0 | *l* = 2.0 | *l* = 4.0 | *l* = 8.0 |
 | --------- | --------- | --------- | --------- |
 | 41.759 KB | 28.694 KB | 19.173 KB | 12.463 KB | 
-|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:2:2-1.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:2:2-2.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:2:2-4.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:2:2-8.0.jpg"/>|
+|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-2-2-1.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-2-2-2.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-2-2-4.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-2-2-8.0.jpg"/>|
 
 ***4:2:0 subsampling***
 
 | *l* = 0.0  | *l* = 0.125 | *l* = 0.25 | *l* = 0.5 |
 | ---------- | ----------- | ---------- | --------- |
 | 247.604 KB | 106.800 KB  | 78.437 KB  | 54.693 KB |
-|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:2:0-0.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:2:0-0.125.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:2:0-0.25.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:2:0-0.5.jpg"/>|
+|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-2-0-0.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-2-0-0.125.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-2-0-0.25.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-2-0-0.5.jpg"/>|
 
 | *l* = 1.0 | *l* = 2.0 | *l* = 4.0 | *l* = 8.0 |
 | --------- | --------- | --------- | --------- |
 | 38.912 KB | 26.466 KB | 17.299 KB | 10.744 KB | 
-|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:2:0-1.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:2:0-2.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:2:0-4.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4:2:0-8.0.jpg"/>|
+|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-2-0-1.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-2-0-2.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-2-0-4.0.jpg"/>|<img width=256 src="encode-basic/karlie-milan-sp12-2011-4-2-0-8.0.jpg"/>|
 
 ---
 
