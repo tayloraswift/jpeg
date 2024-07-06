@@ -329,7 +329,7 @@ extension JPEG.Table.Huffman
         let n:Int      = 256 - interior 
         var z:Int      = n
         // finish validating the tree 
-        for (i, leaves):(Int, Int) in levels[8 ..< 16].enumerated()
+        for (i, leaves):(offset:Int, element:Int) in levels[8 ..< 16].enumerated()
         {
             guard interior > 0 
             else 
@@ -3010,7 +3010,7 @@ extension JPEG.Data.Spectral.Plane
                         Swift.min(blocks.upperBound / self.units.x, self.units.y)
         let bits:JPEG.Bitstream = .init(data)
         var b:Int               = 0
-        for (x, y):(Int, Int) in (0, rows.lowerBound) ..< (self.units.x, rows.upperBound)
+        for (x, y):(x:Int, y:Int) in (0, rows.lowerBound) ..< (self.units.x, rows.upperBound)
         {
             let refinement:Int16    = try bits.refinement(&b)
             self[x: x, y: y, z: 0] |= refinement << a
@@ -3033,7 +3033,7 @@ extension JPEG.Data.Spectral.Plane
         let bits:JPEG.Bitstream = .init(data)
         var b:Int               = 0, 
             skip:Int            = 0
-        for (x, y):(Int, Int) in (0, rows.lowerBound) ..< (self.units.x, rows.upperBound)
+        for (x, y):(x:Int, y:Int) in (0, rows.lowerBound) ..< (self.units.x, rows.upperBound)
         {
             var z:Int = band.lowerBound
             frequency: 
@@ -3084,7 +3084,7 @@ extension JPEG.Data.Spectral.Plane
         let bits:JPEG.Bitstream = .init(data)
         var b:Int               = 0, 
             skip:Int            = 0
-        for (x, y):(Int, Int) in (0, rows.lowerBound) ..< (self.units.x, rows.upperBound)
+        for (x, y):(x:Int, y:Int) in (0, rows.lowerBound) ..< (self.units.x, rows.upperBound)
         {
             var z:Int = band.lowerBound
             frequency:
@@ -3242,7 +3242,7 @@ extension JPEG.Data.Spectral
                 {
                     let start:(x:Int, y:Int) = (     mx * factor.x,      my * factor.y), 
                         end:(x:Int, y:Int)   = (start.x + factor.x, start.y + factor.y) 
-                    for (x, y):(Int, Int) in start ..< end 
+                    for (x, y):(x:Int, y:Int) in start ..< end 
                     {
                         // dc 
                         let composite:JPEG.Bitstream.Composite.DC = 
@@ -3372,7 +3372,7 @@ extension JPEG.Data.Spectral
                 {
                     let start:(x:Int, y:Int) = (     mx * factor.x,      my * factor.y), 
                         end:(x:Int, y:Int)   = (start.x + factor.x, start.y + factor.y) 
-                    for (x, y):(Int, Int) in start ..< end 
+                    for (x, y):(x:Int, y:Int) in start ..< end 
                     {
                         let composite:JPEG.Bitstream.Composite.DC = 
                             try bits.composite(&b, table: table)
@@ -3422,13 +3422,13 @@ extension JPEG.Data.Spectral
                         Swift.min(blocks.upperBound / self.blocks.x, self.blocks.y)
         let bits:JPEG.Bitstream = .init(data)
         var b:Int               = 0
-        for (mx, my):(Int, Int) in (0, rows.lowerBound) ..< (self.blocks.x, rows.upperBound)
+        for (mx, my):(x:Int, y:Int) in (0, rows.lowerBound) ..< (self.blocks.x, rows.upperBound)
         {
             for (p, factor):Descriptor in descriptors
             {
                 let start:(x:Int, y:Int) = (     mx * factor.x,      my * factor.y), 
                     end:(x:Int, y:Int)   = (start.x + factor.x, start.y + factor.y) 
-                for (x, y):(Int, Int) in start ..< end 
+                for (x, y):(x:Int, y:Int) in start ..< end 
                 {
                     let refinement:Int16 = try bits.refinement(&b) 
                     
@@ -4111,11 +4111,11 @@ extension JPEG.Data.Spectral.Plane
                 .init(sign: .plus, exponent: precision - 1, significand: 1)  + 0.5
             let limit:SIMD8<Float>  = .init(repeating: 
                 .init(sign: .plus, exponent: precision    , significand: 1)) - 1
-            for (x, y):(Int, Int) in (0, 0) ..< self.units 
+            for (x, y):(x:Int, y:Int) in (0, 0) ..< self.units 
             {
                 let h:Block8x8<Float> = self.load(x: x, y: y, quanta: q),
                     g:Block8x8<Float> = Self.idct8x8(h, shift: level)
-                for (i, t):(Int, SIMD8<Float>) in 
+                for (i, t):(offset:Int, element:SIMD8<Float>) in
                     [g.0, g.1, g.2, g.3, g.4, g.5, g.6, g.7].enumerated()
                 {
                     let u:SIMD8<UInt16> = 
@@ -4187,7 +4187,7 @@ extension JPEG.Data.Planar
             let count:Int   = self.size.x * self.size.y
             interleaved     = .init(unsafeUninitializedCapacity: count)
             {
-                for (x, y):(Int, Int) in (0, 0) ..< self.size 
+                for (x, y):(x:Int, y:Int) in (0, 0) ..< self.size
                 {
                     $0[y * self.size.x + x] = self[0][x: x, y: y] 
                 }
@@ -4207,7 +4207,7 @@ extension JPEG.Data.Planar
                     else 
                     {
                         // fast path 
-                        for (x, y):(Int, Int) in (0, 0) ..< self.size 
+                        for (x, y):(x:Int, y:Int) in (0, 0) ..< self.size 
                         {
                             $0[(y * self.size.x + x) * self.count + p] = plane[x: x, y: y]
                         }
@@ -4233,7 +4233,7 @@ extension JPEG.Data.Planar
                         c = (2 * scale.x,        2 * scale.y)
                     }
                     let d:(x:Int, y:Int) = (plane.size.x - 1,   plane.size.y - 1)
-                    for (x, y):(Int, Int) in (0, 0) ..< self.size 
+                    for (x, y):(x:Int, y:Int) in (0, 0) ..< self.size 
                     {
                         let i:(x:Int, y:Int), 
                             f:(x:Int, y:Int)
