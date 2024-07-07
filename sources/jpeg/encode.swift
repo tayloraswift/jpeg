@@ -216,7 +216,7 @@ extension JPEG.Data.Spectral.Plane
                 .init(sign: .plus, exponent: precision - 1, significand: 1) * scale
             let limit:SIMD8<Float>  = .init(repeating: 
                 .init(sign: .plus, exponent: precision    , significand: 1)) - 1
-            for (x, y):(Int, Int) in (0, 0) ..< plane.units
+            for (x, y):(x:Int, y:Int) in (0, 0) ..< plane.units
             {
                 let g:Block8x8<Float> = plane.load(x: x, y: y, limit: limit), 
                     h:Block8x8<Float> = Self.fdct8x8(g, shift: level)
@@ -323,7 +323,7 @@ extension JPEG.CompressionLevel
         }
         return .init(unsafeUninitializedCapacity: 64)
         {
-            for (k, h):(Int, Int) in (0, 0) ..< (8, 8) 
+            for (k, h):(x:Int, y:Int) in (0, 0) ..< (8, 8) 
             {
                 $0[JPEG.Table.Quantization.z(k: k, h: h)] = interpolated[8 * h + k]
             }
@@ -402,7 +402,7 @@ extension JPEG.Data.Rectangular
             let scale:(x:Int, y:Int)    = self.layout.scale
             let response:(x:Int, y:Int) = (scale.x / factor.x, scale.y / factor.y)
             let magnitude:Float         = .init(response.x * response.y)
-            for (x, y):(Int, Int) in (0, 0) ..< (8 * units.x, 8 * units.y)
+            for (x, y):(x:Int, y:Int) in (0, 0) ..< (8 * units.x, 8 * units.y)
             {
                 let base:(x:Int, y:Int) = 
                 (
@@ -1267,11 +1267,11 @@ extension JPEG.Data.Spectral
                     .init(repeating: 0, count: 256)
                 )
                 var predecessor:Int16 = 0
-                for (mx, my):(Int, Int) in (0, 0) ..< self.blocks 
+                for (mx, my):(x:Int, y:Int) in (0, 0) ..< self.blocks 
                 {
                     let start:(x:Int, y:Int) = (     mx * factor.x,      my * factor.y), 
                         end:(x:Int, y:Int)   = (start.x + factor.x, start.y + factor.y) 
-                    for (i, (x, y)):(Int, (x:Int, y:Int)) in (start ..< end).enumerated() 
+                    for (i, (x, y)):(offset:Int, element:(x:Int, y:Int)) in (start ..< end).enumerated()
                     {
                         let composite:JPEG.Bitstream.Composite.DC, 
                             ac:[JPEG.Bitstream.Composite.AC]
@@ -1428,11 +1428,11 @@ extension JPEG.Data.Spectral
             {
                 var frequencies:[Int]   = .init(repeating: 0, count: 256)
                 var predecessor:Int16   = 0
-                for (mx, my):(Int, Int) in (0, 0) ..< self.blocks 
+                for (mx, my):(x:Int, y:Int) in (0, 0) ..< self.blocks 
                 {
                     let start:(x:Int, y:Int) = (     mx * factor.x,      my * factor.y), 
                         end:(x:Int, y:Int)   = (start.x + factor.x, start.y + factor.y) 
-                    for (i, (x, y)):(Int, (x:Int, y:Int)) in (start ..< end).enumerated() 
+                    for (i, (x, y)):(offset:Int, element:(x:Int, y:Int)) in (start ..< end).enumerated() 
                     {
                         let high:Int16  = self[p][x: x, y: y, z: 0] >> a.lowerBound
                         let composite:JPEG.Bitstream.Composite.DC   = 
@@ -1541,7 +1541,7 @@ extension JPEG.Data.Spectral
         }
         
         var bits:JPEG.Bitstream = []
-        for (mx, my):(Int, Int) in (0, 0) ..< self.blocks 
+        for (mx, my):(x:Int, y:Int) in (0, 0) ..< self.blocks 
         {
             for (p, factor):Descriptor in descriptors 
             {
