@@ -25,7 +25,12 @@ let package = Package(
     targets: 
     [
         .target(          name: "JPEG",                                           path: "sources/jpeg"),
-        .executableTarget(name: "JPEGFuzzer",             dependencies: ["JPEG"], path: "tests/fuzz"),
+        .executableTarget(name: "JPEGFuzzer",             dependencies: ["JPEG"], path: "tests/fuzz",
+            exclude:
+            [
+                "data/",
+            ]
+        ),
         .executableTarget(name: "JPEGComparator",         dependencies: ["JPEG"], path: "tests/compare"),
         .executableTarget(name: "JPEGUnitTests",          dependencies: ["JPEG"], path: "tests/unit"),
         .executableTarget(name: "JPEGRegressionTests",    dependencies: ["JPEG"], path: "tests/regression",
