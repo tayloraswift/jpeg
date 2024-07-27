@@ -681,7 +681,7 @@ extension JPEG
     ///     A marker type indicator.
     /// ## (3:lexing-and-formatting)
     public 
-    enum Marker
+    enum Marker:Sendable
     {
         /// case JPEG.Marker.start 
         ///     A start-of-image (SOI) marker.
