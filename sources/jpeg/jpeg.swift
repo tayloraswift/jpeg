@@ -1057,7 +1057,7 @@ extension JPEG
             /// enum JPEG.Table.Quantization.Precision 
             ///     The integer width of the quantum values in this quantization table.
             public 
-            enum Precision  
+            enum Precision:Sendable
             {
                 /// case JPEG.Table.Quantization.Precision.uint8 
                 ///     The quantum values are encoded as 8-bit unsigned integers.
