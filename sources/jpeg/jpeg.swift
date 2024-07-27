@@ -1034,7 +1034,7 @@ extension JPEG
             /// ## (key-types)
             /// ## (0:image-quality)
             public 
-            struct Key:Hashable, Comparable  
+            struct Key:Hashable, Comparable, Sendable
             {
                 let value:Int 
                 
@@ -1104,7 +1104,7 @@ extension JPEG
         /// ## (key-types)
         /// ## (2:image-structure-and-decomposition)
         public 
-        struct Key:Hashable, Comparable 
+        struct Key:Hashable, Comparable, Sendable
         {
             let value:Int 
             
