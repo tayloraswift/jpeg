@@ -14,9 +14,9 @@ extension String
 enum Highlight 
 {
     static 
-    var bold:String     = "\u{1B}[1m"
-    static 
-    var reset:String    = "\u{1B}[0m"
+    let bold:String     = "\u{1B}[1m"
+    static
+    let reset:String    = "\u{1B}[0m"
     
     static 
     func fg(_ color:(r:UInt8, g:UInt8, b:UInt8)?) -> String 
