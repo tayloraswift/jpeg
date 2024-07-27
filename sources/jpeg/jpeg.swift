@@ -616,12 +616,12 @@ extension JPEG
     /// # [Coding processes](coding-processes)
     /// ## (4:lexing-and-formatting)
     public 
-    enum Process 
+    enum Process:Sendable
     {
         /// enum JPEG.Process.Coding 
         ///     An entropy coding method.
         public 
-        enum Coding 
+        enum Coding:Sendable
         {
             /// case JPEG.Process.Coding.huffman
             ///     Huffman entropy coding.
