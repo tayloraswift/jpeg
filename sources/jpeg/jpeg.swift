@@ -616,12 +616,12 @@ extension JPEG
     /// # [Coding processes](coding-processes)
     /// ## (4:lexing-and-formatting)
     public 
-    enum Process 
+    enum Process:Sendable
     {
         /// enum JPEG.Process.Coding 
         ///     An entropy coding method.
         public 
-        enum Coding 
+        enum Coding:Sendable
         {
             /// case JPEG.Process.Coding.huffman
             ///     Huffman entropy coding.
@@ -681,7 +681,7 @@ extension JPEG
     ///     A marker type indicator.
     /// ## (3:lexing-and-formatting)
     public 
-    enum Marker
+    enum Marker:Sendable
     {
         /// case JPEG.Marker.start 
         ///     A start-of-image (SOI) marker.
@@ -1034,7 +1034,7 @@ extension JPEG
             /// ## (key-types)
             /// ## (0:image-quality)
             public 
-            struct Key:Hashable, Comparable  
+            struct Key:Hashable, Comparable, Sendable
             {
                 let value:Int 
                 
@@ -1057,7 +1057,7 @@ extension JPEG
             /// enum JPEG.Table.Quantization.Precision 
             ///     The integer width of the quantum values in this quantization table.
             public 
-            enum Precision  
+            enum Precision:Sendable
             {
                 /// case JPEG.Table.Quantization.Precision.uint8 
                 ///     The quantum values are encoded as 8-bit unsigned integers.
@@ -1104,7 +1104,7 @@ extension JPEG
         /// ## (key-types)
         /// ## (2:image-structure-and-decomposition)
         public 
-        struct Key:Hashable, Comparable 
+        struct Key:Hashable, Comparable, Sendable
         {
             let value:Int 
             
